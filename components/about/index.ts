@@ -1,0 +1,9 @@
+export { default as AboutContent } from "./AboutContent";
+export { default as AboutCTA } from "./AboutCTA";
+export { default as AboutHero } from "./AboutHero";
+export { default as CustomerPromise } from "./CustomerPromise";
+export { default as MissionVision } from "./MissionVision";
+export { default as OurStory } from "./OurStory";
+export { default as Process } from "./Process";
+export { default as Specialties } from "./Specialties";
+export { default as WhyChooseUs } from "./WhyChooseUs";
