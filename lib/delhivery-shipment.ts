@@ -172,7 +172,8 @@ function normalizeRequiredString(
   value: string,
   fieldName: string,
 ) {
-  const normalized = value.trim();
+  const normalized =
+    value.trim();
 
   if (!normalized) {
     throw new Error(
@@ -186,9 +187,14 @@ function normalizeRequiredString(
 function normalizePincode(
   value: string,
 ) {
-  const pincode = value.trim();
+  const pincode =
+    value.trim();
 
-  if (!/^\d{6}$/.test(pincode)) {
+  if (
+    !/^\d{6}$/.test(
+      pincode,
+    )
+  ) {
     throw new Error(
       "Destination pincode must contain exactly 6 digits.",
     );
@@ -200,10 +206,11 @@ function normalizePincode(
 function normalizePhone(
   value: string,
 ) {
-  const phone = value.replace(
-    /\D/g,
-    "",
-  );
+  const phone =
+    value.replace(
+      /\D/g,
+      "",
+    );
 
   if (
     phone.length < 10 ||
@@ -263,13 +270,17 @@ function normalizeMoney(
   }
 
   return (
-    Math.round(value * 100) / 100
+    Math.round(value * 100) /
+    100
   );
 }
 
 function isRecord(
   value: unknown,
-): value is Record<string, unknown> {
+): value is Record<
+  string,
+  unknown
+> {
   return (
     value !== null &&
     typeof value === "object" &&
@@ -281,8 +292,12 @@ function findFirstString(
   value: unknown,
   keys: string[],
 ): string | null {
-  if (Array.isArray(value)) {
-    for (const item of value) {
+  if (
+    Array.isArray(value)
+  ) {
+    for (
+      const item of value
+    ) {
       const result =
         findFirstString(
           item,
@@ -301,7 +316,9 @@ function findFirstString(
     return null;
   }
 
-  for (const key of keys) {
+  for (
+    const key of keys
+  ) {
     const candidate =
       value[key];
 
@@ -316,15 +333,20 @@ function findFirstString(
     if (
       typeof candidate ===
         "number" &&
-      Number.isFinite(candidate)
+      Number.isFinite(
+        candidate,
+      )
     ) {
-      return String(candidate);
+      return String(
+        candidate,
+      );
     }
   }
 
-  for (const nestedValue of Object.values(
-    value,
-  )) {
+  for (
+    const nestedValue of
+      Object.values(value)
+  ) {
     const result =
       findFirstString(
         nestedValue,
@@ -346,11 +368,13 @@ function findBooleanSuccess(
     return null;
   }
 
-  for (const key of [
-    "success",
-    "Success",
-    "status",
-  ]) {
+  for (
+    const key of [
+      "success",
+      "Success",
+      "status",
+    ]
+  ) {
     const candidate =
       value[key];
 
@@ -376,7 +400,9 @@ function findBooleanSuccess(
           "success",
           "created",
           "ok",
-        ].includes(normalized)
+        ].includes(
+          normalized,
+        )
       ) {
         return true;
       }
@@ -387,7 +413,9 @@ function findBooleanSuccess(
           "fail",
           "failed",
           "error",
-        ].includes(normalized)
+        ].includes(
+          normalized,
+        )
       ) {
         return false;
       }
@@ -397,23 +425,42 @@ function findBooleanSuccess(
   return null;
 }
 
+function safelySerializeForLogs(
+  value: unknown,
+) {
+  try {
+    return JSON.stringify(
+      value,
+      null,
+      2,
+    );
+  } catch {
+    return (
+      "[Unable to serialize Delhivery response]"
+    );
+  }
+}
+
 function getErrorMessage(
   data: unknown,
   fallback: string,
 ) {
   return (
-    findFirstString(data, [
-      "error",
-      "Error",
-      "message",
-      "Message",
-      "remark",
-      "remarks",
-      "rmk",
-      "detail",
-      "reason",
-      "Reason",
-    ]) ||
+    findFirstString(
+      data,
+      [
+        "error",
+        "Error",
+        "message",
+        "Message",
+        "remark",
+        "remarks",
+        "rmk",
+        "detail",
+        "reason",
+        "Reason",
+      ],
+    ) ||
     fallback
   );
 }
@@ -428,27 +475,42 @@ function getPackageErrorMessage(
   const packages =
     data.packages;
 
-  if (!Array.isArray(packages)) {
+  if (
+    !Array.isArray(
+      packages,
+    )
+  ) {
     return null;
   }
 
   for (
     let index = 0;
-    index < packages.length;
+    index <
+    packages.length;
     index += 1
   ) {
     const packageResult =
       packages[index];
 
-    /*
-     * Log each package response as a single serialized
-     * string so Vercel does not collapse it to [Object].
-     */
     console.error(
       `Delhivery package result ${index + 1}: ${safelySerializeForLogs(
         packageResult,
       )}`,
     );
+
+    if (
+      isRecord(
+        packageResult,
+      )
+    ) {
+      console.error(
+        `Delhivery package remarks ${index + 1}: ${safelySerializeForLogs(
+          packageResult
+            .remarks ??
+            null,
+        )}`,
+      );
+    }
 
     const message =
       findFirstString(
@@ -472,10 +534,13 @@ function getPackageErrorMessage(
     }
 
     if (
-      isRecord(packageResult)
+      isRecord(
+        packageResult,
+      )
     ) {
       const status =
-        packageResult.status;
+        packageResult
+          .status;
 
       if (
         typeof status ===
@@ -504,7 +569,9 @@ function getSafeShipmentErrorMessage(
   fallback: string,
 ) {
   const packageMessage =
-    getPackageErrorMessage(data);
+    getPackageErrorMessage(
+      data,
+    );
 
   const rawMessage =
     packageMessage ||
@@ -518,10 +585,6 @@ function getSafeShipmentErrorMessage(
       .trim()
       .toLowerCase();
 
-  /*
-   * A package status of only "Fail" is not useful
-   * to the administrator.
-   */
   if (
     normalized === "fail" ||
     normalized === "failed"
@@ -532,10 +595,6 @@ function getSafeShipmentErrorMessage(
     );
   }
 
-  /*
-   * Do not expose carrier support information or generic
-   * internal server messages directly in the admin interface.
-   */
   if (
     normalized.includes(
       "client.support@delhivery.com",
@@ -556,22 +615,6 @@ function getSafeShipmentErrorMessage(
   return rawMessage;
 }
 
-function safelySerializeForLogs(
-  value: unknown,
-) {
-  try {
-    return JSON.stringify(
-      value,
-      null,
-      2,
-    );
-  } catch {
-    return (
-      "[Unable to serialize Delhivery response]"
-    );
-  }
-}
-
 function formatOrderDate(
   value: Date,
 ) {
@@ -586,14 +629,18 @@ function formatOrderDate(
   return value
     .toISOString()
     .slice(0, 19)
-    .replace("T", " ");
+    .replace(
+      "T",
+      " ",
+    );
 }
 
 export async function createDelhiveryShipment(
   input: CreateDelhiveryShipmentInput,
   signal?: AbortSignal,
 ): Promise<DelhiveryShipmentResult> {
-  const config = getConfig();
+  const config =
+    getConfig();
 
   const orderId =
     normalizeRequiredString(
@@ -639,7 +686,10 @@ export async function createDelhiveryShipment(
     normalizeRequiredString(
       input.productDescription,
       "Product description",
-    ).slice(0, 500);
+    ).slice(
+      0,
+      500,
+    );
 
   const quantity =
     normalizePositiveInteger(
@@ -673,7 +723,8 @@ export async function createDelhiveryShipment(
     );
 
   const codAmount =
-    input.paymentMode === "COD"
+    input.paymentMode ===
+    "COD"
       ? normalizeMoney(
           input.codAmount,
         )
@@ -729,8 +780,10 @@ export async function createDelhiveryShipment(
 
     cod_amount:
       input.paymentMode ===
-        "COD"
-        ? String(codAmount)
+      "COD"
+        ? String(
+            codAmount,
+          )
         : "0",
 
     order_date:
@@ -740,7 +793,9 @@ export async function createDelhiveryShipment(
       ),
 
     total_amount:
-      String(totalAmount),
+      String(
+        totalAmount,
+      ),
 
     seller_add:
       input.sellerAddress
@@ -758,22 +813,26 @@ export async function createDelhiveryShipment(
       "",
 
     quantity:
-      String(quantity),
+      String(
+        quantity,
+      ),
 
-    /*
-     * A blank waybill asks Delhivery to allocate
-     * a waybill automatically.
-     */
     waybill: "",
 
     shipment_width:
-      String(widthCm),
+      String(
+        widthCm,
+      ),
 
     shipment_height:
-      String(heightCm),
+      String(
+        heightCm,
+      ),
 
     weight:
-      String(weightGrams),
+      String(
+        weightGrams,
+      ),
 
     seller_gst_tin:
       input.sellerGstTin
@@ -795,24 +854,30 @@ export async function createDelhiveryShipment(
 
     pickup_location: {
       name:
-        config.pickupLocation,
+        config
+          .pickupLocation,
 
       add:
-        config.pickupAddress,
+        config
+          .pickupAddress,
 
       city:
-        config.pickupCity,
+        config
+          .pickupCity,
 
       pin_code:
         Number(
-          config.pickupPincode,
+          config
+            .pickupPincode,
         ),
 
       country:
-        config.pickupCountry,
+        config
+          .pickupCountry,
 
       phone:
-        config.pickupPhone,
+        config
+          .pickupPhone,
     },
   };
 
@@ -826,7 +891,9 @@ export async function createDelhiveryShipment(
 
   formBody.set(
     "data",
-    JSON.stringify(payload),
+    JSON.stringify(
+      payload,
+    ),
   );
 
   const endpoint =
@@ -838,7 +905,8 @@ export async function createDelhiveryShipment(
     await fetch(
       endpoint,
       {
-        method: "POST",
+        method:
+          "POST",
 
         headers: {
           Authorization:
@@ -854,7 +922,8 @@ export async function createDelhiveryShipment(
         body:
           formBody.toString(),
 
-        cache: "no-store",
+        cache:
+          "no-store",
 
         signal,
       },
@@ -872,28 +941,25 @@ export async function createDelhiveryShipment(
       ? await response
           .json()
           .catch(
-            () => null,
+            () =>
+              null,
           )
       : await response
           .text()
           .catch(
-            () => null,
+            () =>
+              null,
           );
 
   const successFlag =
-    findBooleanSuccess(data);
+    findBooleanSuccess(
+      data,
+    );
 
-  /*
-   * Log rejected responses safely. This deliberately excludes:
-   * - the API token
-   * - customer phone
-   * - customer name
-   * - customer address
-   * - pickup address and phone
-   */
   if (
     !response.ok ||
-    successFlag === false
+    successFlag ===
+      false
   ) {
     console.error(
       "Delhivery shipment API response:",
@@ -906,6 +972,7 @@ export async function createDelhiveryShipment(
       "Delhivery shipment request summary:",
       safelySerializeForLogs({
         endpoint,
+
         httpStatus:
           response.status,
 
@@ -921,10 +988,12 @@ export async function createDelhiveryShipment(
           pincode,
 
         pickupLocation:
-          config.pickupLocation,
+          config
+            .pickupLocation,
 
         pickupPincode:
-          config.pickupPincode,
+          config
+            .pickupPincode,
 
         quantity,
 
@@ -937,10 +1006,6 @@ export async function createDelhiveryShipment(
     );
   }
 
-  /*
-   * Log every package result separately. This is done even
-   * when Delhivery returns HTTP 200 with success: false.
-   */
   if (
     isRecord(data) &&
     Array.isArray(
@@ -957,11 +1022,27 @@ export async function createDelhiveryShipment(
             packageResult,
           )}`,
         );
+
+        if (
+          isRecord(
+            packageResult,
+          )
+        ) {
+          console.error(
+            `Delhivery package remarks ${index + 1}: ${safelySerializeForLogs(
+              packageResult
+                .remarks ??
+                null,
+            )}`,
+          );
+        }
       },
     );
   }
 
-  if (!response.ok) {
+  if (
+    !response.ok
+  ) {
     throw new DelhiveryShipmentError(
       getSafeShipmentErrorMessage(
         data,
@@ -1030,7 +1111,9 @@ export async function createDelhiveryShipment(
 
   const success =
     successFlag ??
-    Boolean(waybill);
+    Boolean(
+      waybill,
+    );
 
   if (
     !success ||
