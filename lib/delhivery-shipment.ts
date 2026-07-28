@@ -409,6 +409,84 @@ function getErrorMessage(
   );
 }
 
+function getPackageErrorMessage(
+  data: unknown,
+): string | null {
+  if (!isRecord(data)) {
+    return null;
+  }
+
+  const packages = data.packages;
+
+  if (!Array.isArray(packages)) {
+    return null;
+  }
+
+  for (const packageResult of packages) {
+    const message = findFirstString(
+      packageResult,
+      [
+        "error",
+        "Error",
+        "message",
+        "Message",
+        "remark",
+        "remarks",
+        "rmk",
+        "status",
+      ],
+    );
+
+    if (message) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
+function getSafeShipmentErrorMessage(
+  data: unknown,
+  fallback: string,
+) {
+  const packageMessage =
+    getPackageErrorMessage(data);
+
+  const rawMessage =
+    packageMessage ||
+    getErrorMessage(data, fallback);
+
+  const normalized =
+    rawMessage.toLowerCase();
+
+  if (
+    normalized.includes(
+      "client.support@delhivery.com",
+    ) ||
+    normalized.includes(
+      "an internal error has occurred",
+    )
+  ) {
+    return "Shipment creation failed. Verify the delivery address, pickup location and shipment details, then try again.";
+  }
+
+  return rawMessage;
+}
+
+function safelySerializeForLogs(
+  value: unknown,
+) {
+  try {
+    return JSON.stringify(
+      value,
+      null,
+      2,
+    );
+  } catch {
+    return "[Unable to serialize response]";
+  }
+}
+
 function formatOrderDate(
   value: Date,
 ) {
@@ -684,11 +762,42 @@ export async function createDelhiveryShipment(
           .text()
           .catch(() => null);
 
+  if (
+    !response.ok ||
+    findBooleanSuccess(data) === false
+  ) {
+    console.error(
+      "Delhivery shipment API response:",
+      safelySerializeForLogs(data),
+    );
+
+    console.error(
+      "Delhivery shipment request summary:",
+      safelySerializeForLogs({
+        orderId,
+        paymentMode:
+          input.paymentMode,
+        shippingMode:
+          input.shippingMode,
+        destinationPincode:
+          pincode,
+        pickupLocation:
+          config.pickupLocation,
+        pickupPincode:
+          config.pickupPincode,
+        quantity,
+        weightGrams,
+        widthCm,
+        heightCm,
+      }),
+    );
+  }
+
   if (!response.ok) {
     throw new DelhiveryShipmentError(
-      getErrorMessage(
+      getSafeShipmentErrorMessage(
         data,
-        `Delhivery shipment request failed with status ${response.status}.`,
+        `Shipment request failed with status ${response.status}.`,
       ),
       response.status,
       data,
@@ -744,9 +853,9 @@ export async function createDelhiveryShipment(
 
   if (!success || !waybill) {
     throw new DelhiveryShipmentError(
-      getErrorMessage(
+      getSafeShipmentErrorMessage(
         data,
-        "Delhivery did not create the shipment or return a waybill.",
+        "The shipment could not be created.",
       ),
       502,
       data,
