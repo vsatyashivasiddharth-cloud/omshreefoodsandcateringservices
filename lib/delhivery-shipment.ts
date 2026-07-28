@@ -19,8 +19,7 @@ export interface CreateDelhiveryShipmentInput {
   country?: string;
   phone: string;
 
-  paymentMode:
-    | DelhiveryPaymentMode;
+  paymentMode: DelhiveryPaymentMode;
   codAmount: number;
   totalAmount: number;
 
@@ -31,8 +30,7 @@ export interface CreateDelhiveryShipmentInput {
   widthCm: number;
   heightCm: number;
 
-  shippingMode:
-    DelhiveryShippingMode;
+  shippingMode: DelhiveryShippingMode;
 
   addressType?: "home" | "office";
   orderDate?: Date;
@@ -102,6 +100,9 @@ function requireEnvironmentVariable(
 
 function getConfig(): DelhiveryConfig {
   const pickupPincode =
+    process.env
+      .DELHIVERY_PICKUP_PINCODE
+      ?.trim() ||
     requireEnvironmentVariable(
       "DELHIVERY_ORIGIN_PINCODE",
     );
@@ -112,7 +113,7 @@ function getConfig(): DelhiveryConfig {
     )
   ) {
     throw new Error(
-      "DELHIVERY_ORIGIN_PINCODE must contain exactly 6 digits.",
+      "The Delhivery pickup pincode must contain exactly 6 digits.",
     );
   }
 
@@ -126,11 +127,14 @@ function getConfig(): DelhiveryConfig {
       process.env
         .DELHIVERY_API_BASE_URL
         ?.trim() ||
-      "https://staging-express.delhivery.com",
+      "https://track.delhivery.com",
 
     pickupLocation:
+      process.env
+        .DELHIVERY_PICKUP_LOCATION
+        ?.trim() ||
       requireEnvironmentVariable(
-        "DELHIVERY_PICKUP_LOCATION",
+        "DELHIVERY_PICKUP_NAME",
       ),
 
     pickupAddress:
@@ -148,7 +152,8 @@ function getConfig(): DelhiveryConfig {
     pickupCountry:
       process.env
         .DELHIVERY_PICKUP_COUNTRY
-        ?.trim() || "India",
+        ?.trim() ||
+      "India",
 
     pickupPhone:
       requireEnvironmentVariable(
@@ -351,14 +356,14 @@ function findBooleanSuccess(
 
     if (
       typeof candidate ===
-      "boolean"
+        "boolean"
     ) {
       return candidate;
     }
 
     if (
       typeof candidate ===
-      "string"
+        "string"
     ) {
       const normalized =
         candidate
@@ -379,6 +384,7 @@ function findBooleanSuccess(
       if (
         [
           "false",
+          "fail",
           "failed",
           "error",
         ].includes(normalized)
@@ -405,7 +411,10 @@ function getErrorMessage(
       "remarks",
       "rmk",
       "detail",
-    ]) || fallback
+      "reason",
+      "Reason",
+    ]) ||
+    fallback
   );
 }
 
@@ -416,29 +425,74 @@ function getPackageErrorMessage(
     return null;
   }
 
-  const packages = data.packages;
+  const packages =
+    data.packages;
 
   if (!Array.isArray(packages)) {
     return null;
   }
 
-  for (const packageResult of packages) {
-    const message = findFirstString(
-      packageResult,
-      [
-        "error",
-        "Error",
-        "message",
-        "Message",
-        "remark",
-        "remarks",
-        "rmk",
-        "status",
-      ],
+  for (
+    let index = 0;
+    index < packages.length;
+    index += 1
+  ) {
+    const packageResult =
+      packages[index];
+
+    /*
+     * Log each package response as a single serialized
+     * string so Vercel does not collapse it to [Object].
+     */
+    console.error(
+      `Delhivery package result ${index + 1}: ${safelySerializeForLogs(
+        packageResult,
+      )}`,
     );
+
+    const message =
+      findFirstString(
+        packageResult,
+        [
+          "error",
+          "Error",
+          "message",
+          "Message",
+          "remark",
+          "remarks",
+          "rmk",
+          "detail",
+          "reason",
+          "Reason",
+        ],
+      );
 
     if (message) {
       return message;
+    }
+
+    if (
+      isRecord(packageResult)
+    ) {
+      const status =
+        packageResult.status;
+
+      if (
+        typeof status ===
+          "string" &&
+        status.trim() &&
+        ![
+          "success",
+          "created",
+          "ok",
+        ].includes(
+          status
+            .trim()
+            .toLowerCase(),
+        )
+      ) {
+        return status.trim();
+      }
     }
   }
 
@@ -454,20 +508,49 @@ function getSafeShipmentErrorMessage(
 
   const rawMessage =
     packageMessage ||
-    getErrorMessage(data, fallback);
+    getErrorMessage(
+      data,
+      fallback,
+    );
 
   const normalized =
-    rawMessage.toLowerCase();
+    rawMessage
+      .trim()
+      .toLowerCase();
 
+  /*
+   * A package status of only "Fail" is not useful
+   * to the administrator.
+   */
+  if (
+    normalized === "fail" ||
+    normalized === "failed"
+  ) {
+    return (
+      "Shipment creation failed. Verify the delivery address, " +
+      "pickup location and shipment details, then try again."
+    );
+  }
+
+  /*
+   * Do not expose carrier support information or generic
+   * internal server messages directly in the admin interface.
+   */
   if (
     normalized.includes(
       "client.support@delhivery.com",
     ) ||
     normalized.includes(
-      "an internal error has occurred",
+      "internal error has occurred",
+    ) ||
+    normalized.includes(
+      "internal error has occured",
     )
   ) {
-    return "Shipment creation failed. Verify the delivery address, pickup location and shipment details, then try again.";
+    return (
+      "Shipment creation failed. Verify the delivery address, " +
+      "pickup location and shipment details, then try again."
+    );
   }
 
   return rawMessage;
@@ -483,7 +566,9 @@ function safelySerializeForLogs(
       2,
     );
   } catch {
-    return "[Unable to serialize response]";
+    return (
+      "[Unable to serialize Delhivery response]"
+    );
   }
 }
 
@@ -546,7 +631,9 @@ export async function createDelhiveryShipment(
     );
 
   const phone =
-    normalizePhone(input.phone);
+    normalizePhone(
+      input.phone,
+    );
 
   const productDescription =
     normalizeRequiredString(
@@ -604,13 +691,20 @@ export async function createDelhiveryShipment(
 
   const shipment = {
     name: customerName,
+
     add: address,
+
     pin: pincode,
+
     city,
+
     state,
+
     country:
-      input.country?.trim() ||
+      input.country
+        ?.trim() ||
       "India",
+
     phone,
 
     order: orderId,
@@ -629,12 +723,13 @@ export async function createDelhiveryShipment(
       productDescription,
 
     hsn_code:
-      input.hsnCode?.trim() ||
+      input.hsnCode
+        ?.trim() ||
       "",
 
     cod_amount:
       input.paymentMode ===
-      "COD"
+        "COD"
         ? String(codAmount)
         : "0",
 
@@ -649,21 +744,26 @@ export async function createDelhiveryShipment(
 
     seller_add:
       input.sellerAddress
-        ?.trim() || "",
+        ?.trim() ||
+      "",
 
     seller_name:
       input.sellerName
-        ?.trim() || "",
+        ?.trim() ||
+      "",
 
     seller_inv:
       input.sellerInvoice
-        ?.trim() || "",
+        ?.trim() ||
+      "",
 
     quantity:
       String(quantity),
 
-    // Blank lets Delhivery
-    // dynamically allocate a waybill.
+    /*
+     * A blank waybill asks Delhivery to allocate
+     * a waybill automatically.
+     */
     waybill: "",
 
     shipment_width:
@@ -677,7 +777,8 @@ export async function createDelhiveryShipment(
 
     seller_gst_tin:
       input.sellerGstTin
-        ?.trim() || "",
+        ?.trim() ||
+      "",
 
     shipping_mode:
       input.shippingMode,
@@ -688,7 +789,9 @@ export async function createDelhiveryShipment(
   };
 
   const payload = {
-    shipments: [shipment],
+    shipments: [
+      shipment,
+    ],
 
     pickup_location: {
       name:
@@ -700,9 +803,10 @@ export async function createDelhiveryShipment(
       city:
         config.pickupCity,
 
-      pin_code: Number(
-        config.pickupPincode,
-      ),
+      pin_code:
+        Number(
+          config.pickupPincode,
+        ),
 
       country:
         config.pickupCountry,
@@ -715,36 +819,46 @@ export async function createDelhiveryShipment(
   const formBody =
     new URLSearchParams();
 
-  formBody.set("format", "json");
+  formBody.set(
+    "format",
+    "json",
+  );
+
   formBody.set(
     "data",
     JSON.stringify(payload),
   );
 
-  const response = await fetch(
+  const endpoint =
     `${normalizeBaseUrl(
       config.baseUrl,
-    )}/api/cmu/create.json`,
-    {
-      method: "POST",
+    )}/api/cmu/create.json`;
 
-      headers: {
-        Authorization:
-          `Token ${config.apiToken}`,
+  const response =
+    await fetch(
+      endpoint,
+      {
+        method: "POST",
 
-        Accept:
-          "application/json",
+        headers: {
+          Authorization:
+            `Token ${config.apiToken}`,
 
-        "Content-Type":
-          "application/x-www-form-urlencoded",
+          Accept:
+            "application/json",
+
+          "Content-Type":
+            "application/x-www-form-urlencoded",
+        },
+
+        body:
+          formBody.toString(),
+
+        cache: "no-store",
+
+        signal,
       },
-
-      body: formBody.toString(),
-
-      cache: "no-store",
-      signal,
-    },
-  );
+    );
 
   const contentType =
     response.headers.get(
@@ -757,39 +871,93 @@ export async function createDelhiveryShipment(
     )
       ? await response
           .json()
-          .catch(() => null)
+          .catch(
+            () => null,
+          )
       : await response
           .text()
-          .catch(() => null);
+          .catch(
+            () => null,
+          );
 
+  const successFlag =
+    findBooleanSuccess(data);
+
+  /*
+   * Log rejected responses safely. This deliberately excludes:
+   * - the API token
+   * - customer phone
+   * - customer name
+   * - customer address
+   * - pickup address and phone
+   */
   if (
     !response.ok ||
-    findBooleanSuccess(data) === false
+    successFlag === false
   ) {
     console.error(
       "Delhivery shipment API response:",
-      safelySerializeForLogs(data),
+      safelySerializeForLogs(
+        data,
+      ),
     );
 
     console.error(
       "Delhivery shipment request summary:",
       safelySerializeForLogs({
+        endpoint,
+        httpStatus:
+          response.status,
+
         orderId,
+
         paymentMode:
           input.paymentMode,
+
         shippingMode:
           input.shippingMode,
+
         destinationPincode:
           pincode,
+
         pickupLocation:
           config.pickupLocation,
+
         pickupPincode:
           config.pickupPincode,
+
         quantity,
+
         weightGrams,
+
         widthCm,
+
         heightCm,
       }),
+    );
+  }
+
+  /*
+   * Log every package result separately. This is done even
+   * when Delhivery returns HTTP 200 with success: false.
+   */
+  if (
+    isRecord(data) &&
+    Array.isArray(
+      data.packages,
+    )
+  ) {
+    data.packages.forEach(
+      (
+        packageResult,
+        index,
+      ) => {
+        console.error(
+          `Delhivery package result ${index + 1}: ${safelySerializeForLogs(
+            packageResult,
+          )}`,
+        );
+      },
     );
   }
 
@@ -804,54 +972,70 @@ export async function createDelhiveryShipment(
     );
   }
 
-  const successFlag =
-    findBooleanSuccess(data);
-
   const waybill =
-    findFirstString(data, [
-      "waybill",
-      "waybill_number",
-      "awb",
-      "awb_number",
-    ]);
+    findFirstString(
+      data,
+      [
+        "waybill",
+        "waybill_number",
+        "awb",
+        "awb_number",
+      ],
+    );
 
   const shipmentId =
-    findFirstString(data, [
-      "shipment_id",
-      "shipmentId",
-      "refnum",
-      "reference_number",
-    ]);
+    findFirstString(
+      data,
+      [
+        "shipment_id",
+        "shipmentId",
+        "refnum",
+        "reference_number",
+      ],
+    );
 
   const returnedOrderId =
-    findFirstString(data, [
-      "order",
-      "order_id",
-      "orderId",
-      "client_order_id",
-    ]) || orderId;
+    findFirstString(
+      data,
+      [
+        "order",
+        "order_id",
+        "orderId",
+        "client_order_id",
+      ],
+    ) ||
+    orderId;
 
   const status =
-    findFirstString(data, [
-      "status",
-      "Status",
-      "shipment_status",
-    ]);
+    findFirstString(
+      data,
+      [
+        "status",
+        "Status",
+        "shipment_status",
+      ],
+    );
 
   const message =
-    findFirstString(data, [
-      "message",
-      "Message",
-      "remark",
-      "remarks",
-      "rmk",
-    ]);
+    findFirstString(
+      data,
+      [
+        "message",
+        "Message",
+        "remark",
+        "remarks",
+        "rmk",
+      ],
+    );
 
   const success =
     successFlag ??
     Boolean(waybill);
 
-  if (!success || !waybill) {
+  if (
+    !success ||
+    !waybill
+  ) {
     throw new DelhiveryShipmentError(
       getSafeShipmentErrorMessage(
         data,
@@ -864,13 +1048,20 @@ export async function createDelhiveryShipment(
 
   return {
     success: true,
+
     waybill,
+
     shipmentId,
+
     orderId:
       returnedOrderId,
+
     status:
-      status || "Created",
+      status ||
+      "Created",
+
     message,
+
     raw: data,
   };
 }
