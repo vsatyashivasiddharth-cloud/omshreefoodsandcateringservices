@@ -50,6 +50,12 @@ interface CheckoutFormState {
 
 interface WebsiteOrderResponse {
   id: string;
+  orderAccessToken: string;
+}
+
+interface WebsiteOrderAccess {
+  id: string;
+  token: string;
 }
 
 interface CreateRazorpayOrderResponse {
@@ -300,7 +306,11 @@ function isWebsiteOrderResponse(
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
-    value.id.length > 0
+    value.id.trim().length > 0 &&
+    typeof value.orderAccessToken ===
+      "string" &&
+    value.orderAccessToken.trim().length >
+      0
   );
 }
 
@@ -466,8 +476,10 @@ export default function CheckoutForm({
     setPaymentVerifying,
   ] = useState(false);
 
-  const websiteOrderIdRef =
-    useRef<string | null>(null);
+  const websiteOrderRef =
+    useRef<WebsiteOrderAccess | null>(
+      null,
+    );
 
   function handleChange(
     event: ChangeEvent<
@@ -598,9 +610,9 @@ export default function CheckoutForm({
     return null;
   }
 
-  async function createWebsiteOrder() {
-    if (websiteOrderIdRef.current) {
-      return websiteOrderIdRef.current;
+  async function createWebsiteOrder(): Promise<WebsiteOrderAccess> {
+    if (websiteOrderRef.current) {
+      return websiteOrderRef.current;
     }
 
     const completeAddress = [
@@ -649,6 +661,8 @@ export default function CheckoutForm({
             }),
           ),
         }),
+
+        cache: "no-store",
       },
     );
 
@@ -666,18 +680,22 @@ export default function CheckoutForm({
       );
     }
 
-    if (
-      !isWebsiteOrderResponse(data)
-    ) {
+    if (!isWebsiteOrderResponse(data)) {
       throw new Error(
         "The order response was invalid.",
       );
     }
 
-    websiteOrderIdRef.current =
-      data.id;
+    const orderAccess: WebsiteOrderAccess = {
+      id: data.id.trim(),
+      token:
+        data.orderAccessToken.trim(),
+    };
 
-    return data.id;
+    websiteOrderRef.current =
+      orderAccess;
+
+    return orderAccess;
   }
 
   async function createPaymentOrder(
@@ -786,6 +804,7 @@ export default function CheckoutForm({
 
   async function openPaymentCheckout(
     paymentOrder: CreateRazorpayOrderResponse,
+    orderAccess: WebsiteOrderAccess,
   ) {
     await loadRazorpayScript();
 
@@ -884,11 +903,15 @@ export default function CheckoutForm({
               "Payment completed successfully.",
             );
 
-            router.push(
+            const successUrl =
               `/order-success?id=${encodeURIComponent(
-                paymentOrder.websiteOrderId,
-              )}`,
-            );
+                orderAccess.id,
+              )}` +
+              `&token=${encodeURIComponent(
+                orderAccess.token,
+              )}`;
+
+            router.replace(successUrl);
           } catch (error) {
             console.error(
               "Payment verification failed:",
@@ -951,16 +974,17 @@ export default function CheckoutForm({
     setLoading(true);
 
     try {
-      const websiteOrderId =
+      const orderAccess =
         await createWebsiteOrder();
 
       const paymentOrder =
         await createPaymentOrder(
-          websiteOrderId,
+          orderAccess.id,
         );
 
       await openPaymentCheckout(
         paymentOrder,
+        orderAccess,
       );
     } catch (error) {
       console.error(

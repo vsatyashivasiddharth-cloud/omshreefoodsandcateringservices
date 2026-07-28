@@ -40,8 +40,23 @@ function serializeDecimal(
     : null;
 }
 
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers: noStoreHeaders(),
+    },
+  );
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: RouteContext,
 ) {
   try {
@@ -50,23 +65,39 @@ export async function GET(
 
     const orderId = id.trim();
 
+    const publicAccessToken =
+      request.nextUrl.searchParams
+        .get("token")
+        ?.trim() ?? "";
+
     if (!orderId) {
-      return NextResponse.json(
-        {
-          error:
-            "Order ID is required.",
-        },
-        {
-          status: 400,
-          headers: noStoreHeaders(),
-        },
+      return errorResponse(
+        "Order reference is required.",
+        400,
       );
     }
 
+    if (
+      !publicAccessToken ||
+      publicAccessToken.length > 200
+    ) {
+      return errorResponse(
+        "A valid order access token is required.",
+        401,
+      );
+    }
+
+    /*
+     * Both the order ID and its private access token must match.
+     *
+     * The token is intentionally not selected or returned in the
+     * response, so it cannot accidentally appear inside page data.
+     */
     const order =
-      await prisma.order.findUnique({
+      await prisma.order.findFirst({
         where: {
           id: orderId,
+          publicAccessToken,
         },
 
         select: {
@@ -151,15 +182,14 @@ export async function GET(
         },
       });
 
+    /*
+     * Return the same response for an unknown order and an invalid
+     * token. This avoids revealing whether a particular order exists.
+     */
     if (!order) {
-      return NextResponse.json(
-        {
-          error: "Order not found.",
-        },
-        {
-          status: 404,
-          headers: noStoreHeaders(),
-        },
+      return errorResponse(
+        "Order details are unavailable.",
+        404,
       );
     }
 
@@ -322,27 +352,15 @@ export async function GET(
         Prisma.PrismaClientKnownRequestError &&
       error.code === "P2023"
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid order ID.",
-        },
-        {
-          status: 400,
-          headers: noStoreHeaders(),
-        },
+      return errorResponse(
+        "Invalid order reference.",
+        400,
       );
     }
 
-    return NextResponse.json(
-      {
-        error:
-          "Unable to load the order.",
-      },
-      {
-        status: 500,
-        headers: noStoreHeaders(),
-      },
+    return errorResponse(
+      "Unable to load the order.",
+      500,
     );
   }
 }

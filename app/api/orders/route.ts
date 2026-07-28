@@ -790,71 +790,142 @@ export async function POST(
       });
 
     return NextResponse.json(
-      {
-        ...order,
+  {
+    id: order.id,
 
-        subtotalAmount: Number(
-          order.subtotalAmount,
-        ),
+    /*
+     * Return the customer-facing token only during order creation.
+     * The checkout page must preserve this token and include it in
+     * the order-success URL after payment succeeds.
+     */
+    orderAccessToken:
+      order.publicAccessToken,
 
-        shippingEstimatedAmount:
-          Number(
-            order
-              .shippingEstimatedAmount,
-          ),
+    customerName:
+      order.customerName,
 
-        shippingChargedAmount:
-          Number(
-            order
-              .shippingChargedAmount,
-          ),
+    phone: order.phone,
+    email: order.email,
 
-        shippingDiscountAmount:
-          Number(
-            order
-              .shippingDiscountAmount,
-          ),
+    deliveryAddress: {
+      address: order.address,
+      city: order.city,
+      state: order.state,
+      pincode: order.pincode,
+    },
 
-        totalAmount: Number(
-          order.totalAmount,
-        ),
+    subtotalAmount: Number(
+      order.subtotalAmount,
+    ),
 
-        packageLengthCm:
-          order.packageLengthCm
-            ? Number(
-                order.packageLengthCm,
-              )
-            : null,
+    shippingEstimatedAmount:
+      Number(
+        order.shippingEstimatedAmount,
+      ),
 
-        packageBreadthCm:
-          order.packageBreadthCm
-            ? Number(
-                order.packageBreadthCm,
-              )
-            : null,
+    shippingChargedAmount:
+      Number(
+        order.shippingChargedAmount,
+      ),
 
-        packageHeightCm:
-          order.packageHeightCm
-            ? Number(
-                order.packageHeightCm,
-              )
-            : null,
+    shippingDiscountAmount:
+      Number(
+        order.shippingDiscountAmount,
+      ),
 
-        items: order.items.map(
-          (item) => ({
-            ...item,
+    totalAmount: Number(
+      order.totalAmount,
+    ),
 
-            price: Number(
-              item.price,
-            ),
-          }),
-        ),
+    status: order.status,
+
+    paymentStatus:
+      order.paymentStatus,
+
+    paymentMethod:
+      order.paymentMethod,
+
+    shipping: {
+      mode: order.shippingMode,
+
+      status:
+        order.shipmentStatus,
+
+      quotedAt:
+        order.shippingQuotedAt,
+
+      package: order.package
+        ? {
+            id: order.package.id,
+            name: order.package.name,
+            code: order.package.code,
+
+            packedWeightGrams:
+              order.packageWeightGrams,
+
+            dimensions: {
+              lengthCm:
+                order.packageLengthCm
+                  ? Number(
+                      order.packageLengthCm,
+                    )
+                  : null,
+
+              breadthCm:
+                order.packageBreadthCm
+                  ? Number(
+                      order.packageBreadthCm,
+                    )
+                  : null,
+
+              heightCm:
+                order.packageHeightCm
+                  ? Number(
+                      order.packageHeightCm,
+                    )
+                  : null,
+            },
+          }
+        : null,
+    },
+
+    items: order.items.map(
+      (item) => {
+        const unitPrice =
+          Number(item.price);
+
+        return {
+          id: item.id,
+
+          quantity:
+            item.quantity,
+
+          unitPrice,
+
+          lineTotal:
+            Math.round(
+              unitPrice *
+                item.quantity *
+                100,
+            ) / 100,
+
+          product:
+            item.product,
+        };
       },
-      {
-        status: 201,
-        headers: noStoreHeaders(),
-      },
-    );
+    ),
+
+    createdAt:
+      order.createdAt,
+
+    updatedAt:
+      order.updatedAt,
+  },
+  {
+    status: 201,
+    headers: noStoreHeaders(),
+  },
+);
   } catch (error) {
     console.error(
       "Order creation failed:",

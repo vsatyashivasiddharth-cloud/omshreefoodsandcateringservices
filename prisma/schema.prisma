@@ -114,8 +114,9 @@ model Product {
 
   featured Boolean @default(false)
 
-  /// Approximate packed contribution of one unit.
-  /// Includes product container and immediate packaging.
+  /// Approximate packed contribution of one sellable product unit.
+  /// Includes the product container and immediate packaging, but not
+  /// the outer shipping package selected for the whole order.
   shippingWeightGrams Int @default(0)
 
   categoryId String
@@ -145,10 +146,11 @@ model ShippingPackage {
   breadthCm Decimal @db.Decimal(8, 2)
   heightCm  Decimal @db.Decimal(8, 2)
 
-  /// Empty package weight, including box and protective material.
+  /// Empty package weight, including the outer box
+  /// and protective packing material.
   emptyWeightGrams Int @default(0)
 
-  /// Maximum recommended packed weight for this box.
+  /// Maximum recommended total packed weight.
   maxWeightGrams Int
 
   active Boolean @default(true)
@@ -166,6 +168,10 @@ model ShippingPackage {
 model Order {
   id String @id @default(cuid())
 
+  /// Secret token required to access the customer-facing
+  /// order confirmation API.
+  publicAccessToken String @unique @default(uuid())
+
   customerName String
   phone        String
   email        String?
@@ -178,17 +184,16 @@ model Order {
   /// Cost of products before shipping.
   subtotalAmount Decimal @default(0) @db.Decimal(10, 2)
 
-  /// Rate returned by Delhivery before applying your discount.
+  /// Shipping estimate before applying any store-funded discount.
   shippingEstimatedAmount Decimal @default(0) @db.Decimal(10, 2)
 
   /// Shipping amount actually charged to the customer.
   shippingChargedAmount Decimal @default(0) @db.Decimal(10, 2)
 
-  /// Difference between estimated shipping and customer charge.
+  /// Difference between the estimated and charged shipping amounts.
   shippingDiscountAmount Decimal @default(0) @db.Decimal(10, 2)
 
-  /// Final customer total:
-  /// subtotalAmount + shippingChargedAmount
+  /// Final amount paid by the customer.
   totalAmount Decimal @db.Decimal(10, 2)
 
   status OrderStatus @default(PENDING)
@@ -205,18 +210,17 @@ model Order {
   shippingMode     ShippingMode?
   shipmentStatus   ShipmentStatus   @default(NOT_CREATED)
 
-  /// Selected standard package.
+  /// Selected shipping-package preset.
   packageId String?
   package   ShippingPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
 
-  /// Package values are copied here so previous orders remain accurate
-  /// even if a ShippingPackage preset is edited later.
+  /// Snapshot of the packed shipment values used for this order.
   packageWeightGrams Int?
   packageLengthCm    Decimal? @db.Decimal(8, 2)
   packageBreadthCm   Decimal? @db.Decimal(8, 2)
   packageHeightCm    Decimal? @db.Decimal(8, 2)
 
-  /// Delhivery shipment information.
+  /// Internal carrier shipment data.
   delhiveryWaybill    String? @unique
   delhiveryShipmentId String?
   delhiveryOrderId    String?

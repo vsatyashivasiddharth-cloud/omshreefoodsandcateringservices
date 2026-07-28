@@ -457,6 +457,11 @@ export default function OrderSuccessContent() {
       .get("id")
       ?.trim() ?? "";
 
+  const orderAccessToken =
+    searchParams
+      .get("token")
+      ?.trim() ?? "";
+
   const [order, setOrder] =
     useState<OrderDetails | null>(
       null,
@@ -473,10 +478,10 @@ export default function OrderSuccessContent() {
       new AbortController();
 
     async function loadOrder() {
-      if (!orderId) {
+      if (!orderId || !orderAccessToken) {
         setOrder(null);
         setError(
-          "No order reference was provided.",
+          "The secure order link is incomplete or invalid.",
         );
         setLoading(false);
         return;
@@ -489,6 +494,8 @@ export default function OrderSuccessContent() {
         const response = await fetch(
           `/api/orders/${encodeURIComponent(
             orderId,
+          )}?token=${encodeURIComponent(
+            orderAccessToken,
           )}`,
           {
             method: "GET",
@@ -559,7 +566,7 @@ export default function OrderSuccessContent() {
     return () => {
       controller.abort();
     };
-  }, [orderId]);
+  }, [orderAccessToken, orderId]);
 
   if (loading) {
     return (
@@ -609,7 +616,7 @@ export default function OrderSuccessContent() {
 
             <p className="mx-auto mt-4 max-w-xl leading-7 text-gray-600">
               {error ||
-                "We could not find the requested order."}
+                "We could not securely load the requested order."}
             </p>
 
             <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
