@@ -7,12 +7,14 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   CalendarDays,
   Mail,
   MapPin,
   Package,
+  PackagePlus,
   Phone,
   ReceiptText,
   User,
@@ -115,6 +117,20 @@ interface OrderDetailsProps {
 interface ApiError {
   error?: string;
   message?: string;
+}
+
+interface CreateShipmentResponse {
+  success: true;
+  alreadyCreated: boolean;
+  message: string;
+  order: {
+    id: string;
+    shipmentStatus: string;
+    delhiveryWaybill: string;
+    delhiveryShipmentId?: string | null;
+    delhiveryOrderId?: string | null;
+    delhiveryStatus?: string | null;
+  };
 }
 
 interface DetailItemProps {
@@ -233,6 +249,33 @@ function isOrderItem(
     price >= 0 &&
     isNullableString(value.createdAt) &&
     isOrderProduct(value.product)
+  );
+}
+
+function isCreateShipmentResponse(
+  value: unknown,
+): value is CreateShipmentResponse {
+  if (!isRecord(value) || !isRecord(value.order)) {
+    return false;
+  }
+
+  return (
+    value.success === true &&
+    typeof value.alreadyCreated === "boolean" &&
+    typeof value.message === "string" &&
+    typeof value.order.id === "string" &&
+    typeof value.order.shipmentStatus === "string" &&
+    typeof value.order.delhiveryWaybill === "string" &&
+    value.order.delhiveryWaybill.trim().length > 0 &&
+    isNullableString(
+      value.order.delhiveryShipmentId,
+    ) &&
+    isNullableString(
+      value.order.delhiveryOrderId,
+    ) &&
+    isNullableString(
+      value.order.delhiveryStatus,
+    )
   );
 }
 
@@ -587,6 +630,11 @@ export default function OrderDetails({
   const [error, setError] =
     useState<string | null>(null);
 
+  const [
+    shipmentCreating,
+    setShipmentCreating,
+  ] = useState(false);
+
   const loadOrder = useCallback(
     async (signal?: AbortSignal) => {
       const orderId = id.trim();
@@ -676,6 +724,83 @@ export default function OrderDetails({
       controller.abort();
     };
   }, [loadOrder]);
+
+  const createShipment =
+    useCallback(async () => {
+      if (shipmentCreating) {
+        return;
+      }
+
+      const orderId = id.trim();
+
+      if (!orderId) {
+        toast.error(
+          "Order ID is required.",
+        );
+        return;
+      }
+
+      setShipmentCreating(true);
+
+      try {
+        const response = await fetch(
+          `/api/orders/${encodeURIComponent(
+            orderId,
+          )}/shipment`,
+          {
+            method: "POST",
+            cache: "no-store",
+          },
+        );
+
+        const data: unknown =
+          await response
+            .json()
+            .catch(() => null);
+
+        if (!response.ok) {
+          const apiError =
+            isRecord(data)
+              ? (data as ApiError)
+              : null;
+
+          throw new Error(
+            apiError?.error ||
+              apiError?.message ||
+              "Unable to create the shipment.",
+          );
+        }
+
+        if (
+          !isCreateShipmentResponse(data)
+        ) {
+          throw new Error(
+            "The shipment response was invalid.",
+          );
+        }
+
+        toast.success(data.message);
+
+        await loadOrder();
+      } catch (shipmentError) {
+        console.error(
+          "Shipment creation error:",
+          shipmentError,
+        );
+
+        toast.error(
+          shipmentError instanceof Error
+            ? shipmentError.message
+            : "Unable to create the shipment.",
+        );
+      } finally {
+        setShipmentCreating(false);
+      }
+    }, [
+      id,
+      loadOrder,
+      shipmentCreating,
+    ]);
 
   if (loading) {
     return (
@@ -792,6 +917,13 @@ export default function OrderDetails({
     Boolean(order.delhiveryShipmentId) ||
     Boolean(order.shipmentStatus) ||
     hasPackageDetails;
+
+  const canCreateShipment =
+    order.shippingProvider ===
+      "DELHIVERY" &&
+    order.paymentStatus === "SUCCESS" &&
+    order.status !== "CANCELLED" &&
+    !order.delhiveryWaybill;
 
   return (
     <section className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE] py-8 sm:py-10">
@@ -1080,18 +1212,47 @@ export default function OrderDetails({
                 </p>
               </div>
 
-              {order.shipmentStatus && (
-                <Badge
-                  variant={getShipmentStatusVariant(
-                    order.shipmentStatus,
-                  )}
-                  rounded
-                >
-                  {formatStatus(
-                    order.shipmentStatus,
-                  )}
-                </Badge>
-              )}
+              <div className="flex flex-wrap items-center gap-3">
+                {order.shipmentStatus && (
+                  <Badge
+                    variant={getShipmentStatusVariant(
+                      order.shipmentStatus,
+                    )}
+                    rounded
+                  >
+                    {formatStatus(
+                      order.shipmentStatus,
+                    )}
+                  </Badge>
+                )}
+
+                {canCreateShipment && (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    loading={
+                      shipmentCreating
+                    }
+                    disabled={
+                      shipmentCreating
+                    }
+                    leftIcon={
+                      <PackagePlus
+                        size={17}
+                        aria-hidden="true"
+                      />
+                    }
+                    onClick={() =>
+                      void createShipment()
+                    }
+                  >
+                    {shipmentCreating
+                      ? "Creating Shipment..."
+                      : "Create Shipment"}
+                  </Button>
+                )}
+              </div>
             </div>
 
             <dl className="mt-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
