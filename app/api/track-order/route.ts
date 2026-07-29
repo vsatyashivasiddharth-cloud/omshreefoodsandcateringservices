@@ -3,11 +3,12 @@ import {
   NextResponse,
 } from "next/server";
 
-import prisma from "@/lib/prisma";
 import {
   maskIndianPhone,
   normalizeIndianPhone,
 } from "@/lib/phone";
+import prisma from "@/lib/prisma";
+import { checkTrackOrderRateLimit } from "@/lib/track-order-rate-limit";
 
 const MAX_RECENT_ORDERS = 5;
 
@@ -23,6 +24,10 @@ function noStoreHeaders() {
 function errorResponse(
   error: string,
   status: number,
+  additionalHeaders?: Record<
+    string,
+    string
+  >,
 ) {
   return NextResponse.json(
     {
@@ -30,7 +35,10 @@ function errorResponse(
     },
     {
       status,
-      headers: noStoreHeaders(),
+      headers: {
+        ...noStoreHeaders(),
+        ...additionalHeaders,
+      },
     },
   );
 }
@@ -53,8 +61,53 @@ function getTrimmedString(
     : "";
 }
 
+function getClientIpAddress(
+  request: NextRequest,
+) {
+  const forwardedFor =
+    request.headers.get(
+      "x-forwarded-for",
+    );
+
+  if (forwardedFor) {
+    const firstAddress =
+      forwardedFor
+        .split(",")[0]
+        ?.trim();
+
+    if (firstAddress) {
+      return firstAddress;
+    }
+  }
+
+  const realIp =
+    request.headers
+      .get("x-real-ip")
+      ?.trim();
+
+  if (realIp) {
+    return realIp;
+  }
+
+  const vercelForwardedFor =
+    request.headers
+      .get(
+        "x-vercel-forwarded-for",
+      )
+      ?.trim();
+
+  if (vercelForwardedFor) {
+    return vercelForwardedFor;
+  }
+
+  return "unknown";
+}
+
 function serializeDate(
-  value: Date | null | undefined,
+  value:
+    | Date
+    | null
+    | undefined,
 ) {
   return value
     ? value.toISOString()
@@ -92,9 +145,10 @@ export async function POST(
       );
     }
 
-    const phone = getTrimmedString(
-      rawBody.phone,
-    );
+    const phone =
+      getTrimmedString(
+        rawBody.phone,
+      );
 
     const phoneNormalized =
       normalizeIndianPhone(phone);
@@ -103,6 +157,27 @@ export async function POST(
       return errorResponse(
         "Please enter a valid 10-digit Indian mobile number.",
         400,
+      );
+    }
+
+    const ipAddress =
+      getClientIpAddress(request);
+
+    const rateLimit =
+      checkTrackOrderRateLimit({
+        phone: phoneNormalized,
+        ipAddress,
+      });
+
+    if (!rateLimit.allowed) {
+      return errorResponse(
+        "Too many tracking attempts. Please wait a few minutes and try again.",
+        429,
+        {
+          "Retry-After": String(
+            rateLimit.retryAfterSeconds,
+          ),
+        },
       );
     }
 
@@ -127,8 +202,10 @@ export async function POST(
           pincode: true,
 
           subtotalAmount: true,
-          shippingChargedAmount: true,
-          shippingDiscountAmount: true,
+          shippingChargedAmount:
+            true,
+          shippingDiscountAmount:
+            true,
           totalAmount: true,
 
           status: true,
@@ -145,7 +222,8 @@ export async function POST(
           shippingQuotedAt: true,
           pickupScheduledAt: true,
           shippedAt: true,
-          estimatedDeliveryAt: true,
+          estimatedDeliveryAt:
+            true,
           deliveredAt: true,
 
           packageWeightGrams: true,
@@ -197,9 +275,10 @@ export async function POST(
 
     return NextResponse.json(
       {
-        phone: maskIndianPhone(
-          phoneNormalized,
-        ),
+        phone:
+          maskIndianPhone(
+            phoneNormalized,
+          ),
 
         count: orders.length,
 
@@ -248,7 +327,8 @@ export async function POST(
               provider:
                 order.shippingProvider,
 
-              mode: order.shippingMode,
+              mode:
+                order.shippingMode,
 
               status:
                 order.shipmentStatus,
@@ -286,67 +366,71 @@ export async function POST(
                   order.deliveredAt,
                 ),
 
-              package: order.package
-                ? {
-                    id:
-                      order.package.id,
+              package:
+                order.package
+                  ? {
+                      id:
+                        order.package.id,
 
-                    name:
-                      order.package
-                        .name,
+                      name:
+                        order.package
+                          .name,
 
-                    code:
-                      order.package
-                        .code,
+                      code:
+                        order.package
+                          .code,
 
-                    packedWeightGrams:
-                      order.packageWeightGrams,
+                      packedWeightGrams:
+                        order.packageWeightGrams,
 
-                    dimensions: {
-                      lengthCm:
-                        serializeDecimal(
-                          order.packageLengthCm,
-                        ),
+                      dimensions: {
+                        lengthCm:
+                          serializeDecimal(
+                            order.packageLengthCm,
+                          ),
 
-                      breadthCm:
-                        serializeDecimal(
-                          order.packageBreadthCm,
-                        ),
+                        breadthCm:
+                          serializeDecimal(
+                            order.packageBreadthCm,
+                          ),
 
-                      heightCm:
-                        serializeDecimal(
-                          order.packageHeightCm,
-                        ),
-                    },
-                  }
-                : null,
+                        heightCm:
+                          serializeDecimal(
+                            order.packageHeightCm,
+                          ),
+                      },
+                    }
+                  : null,
             },
 
-            items: order.items.map(
-              (item) => {
-                const unitPrice =
-                  Number(item.price);
+            items:
+              order.items.map(
+                (item) => {
+                  const unitPrice =
+                    Number(
+                      item.price,
+                    );
 
-                return {
-                  id: item.id,
+                  return {
+                    id: item.id,
 
-                  quantity:
-                    item.quantity,
+                    quantity:
+                      item.quantity,
 
-                  unitPrice,
+                    unitPrice,
 
-                  lineTotal:
-                    Math.round(
-                      unitPrice *
-                        item.quantity *
-                        100,
-                    ) / 100,
+                    lineTotal:
+                      Math.round(
+                        unitPrice *
+                          item.quantity *
+                          100,
+                      ) / 100,
 
-                  product:
-                    item.product,
-                };
-              },
-            ),
+                    product:
+                      item.product,
+                  };
+                },
+              ),
 
             createdAt:
               serializeDate(
@@ -362,7 +446,8 @@ export async function POST(
       },
       {
         status: 200,
-        headers: noStoreHeaders(),
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
