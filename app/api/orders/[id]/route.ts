@@ -94,10 +94,6 @@ export async function GET(
       );
     }
 
-    /*
-     * Both the order ID and private token must match.
-     * The token is never selected or returned.
-     */
     const order =
       await prisma.order.findFirst({
         where: {
@@ -187,10 +183,6 @@ export async function GET(
         },
       });
 
-    /*
-     * Use the same response for an unknown order and an invalid
-     * token so the endpoint does not reveal whether an order exists.
-     */
     if (!order) {
       return errorResponse(
         "Order details are unavailable.",
@@ -251,10 +243,6 @@ export async function GET(
         shipping: {
           mode: order.shippingMode,
 
-          /*
-           * This is your normalized internal status:
-           * CREATED, IN_TRANSIT, CANCELLED, DELIVERED, etc.
-           */
           status:
             order.shipmentStatus,
 
@@ -287,10 +275,6 @@ export async function GET(
             number:
               order.delhiveryWaybill,
 
-            /*
-             * Raw courier status for customer-friendly display.
-             * The provider name is not exposed.
-             */
             status:
               order.delhiveryStatus,
           },
