@@ -1,0 +1,1604 @@
+"use client";
+
+import {
+  useCallback,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  BadgeIndianRupee,
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
+  MapPin,
+  Package,
+  PackageCheck,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  TriangleAlert,
+  Truck,
+} from "lucide-react";
+
+import Badge from "@/components/ui/Badge";
+import Card from "@/components/ui/Card";
+import Container from "@/components/ui/Container";
+import Spinner from "@/components/ui/Spinner";
+import { formatCurrency } from "@/lib/shop";
+
+interface OrderCategory {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+interface OrderProduct {
+  id: string;
+  name: string;
+  slug: string;
+  image: string | null;
+  category: OrderCategory;
+}
+
+interface OrderItem {
+  id: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  createdAt: string;
+  product: OrderProduct;
+}
+
+interface DeliveryAddress {
+  address: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+interface ShippingPackageDetails {
+  id: string;
+  name: string;
+  code: string;
+  packedWeightGrams: number | null;
+
+  dimensions: {
+    lengthCm: number | null;
+    breadthCm: number | null;
+    heightCm: number | null;
+  };
+}
+
+interface TrackingDetails {
+  number: string | null;
+  status: string | null;
+}
+
+interface OrderShippingDetails {
+  mode: string | null;
+  status: string;
+
+  quotedAt: string | null;
+  pickupScheduledAt: string | null;
+  shippedAt: string | null;
+  estimatedDeliveryAt: string | null;
+  deliveredAt: string | null;
+
+  tracking: TrackingDetails;
+  package: ShippingPackageDetails | null;
+}
+
+interface OrderDetails {
+  id: string;
+
+  customerName: string;
+  phone: string;
+  email: string | null;
+
+  deliveryAddress: DeliveryAddress;
+
+  subtotalAmount: number;
+  shippingEstimatedAmount: number;
+  shippingChargedAmount: number;
+  shippingDiscountAmount: number;
+  totalAmount: number;
+
+  status: string;
+  paymentStatus: string;
+  paymentMethod: string | null;
+
+  shipping: OrderShippingDetails;
+
+  items: OrderItem[];
+
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ErrorResponse {
+  error?: string;
+  message?: string;
+}
+
+interface InfoRowProps {
+  label: string;
+  value: ReactNode;
+}
+
+interface StatusNoticeProps {
+  type:
+    | "success"
+    | "error"
+    | "warning"
+    | "info";
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+}
+
+const ACTIVE_SHIPMENT_STATUSES =
+  new Set([
+    "CREATED",
+    "PICKUP_SCHEDULED",
+    "IN_TRANSIT",
+    "OUT_FOR_DELIVERY",
+  ]);
+
+function isRecord(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  );
+}
+
+function isNullableString(
+  value: unknown,
+): value is string | null {
+  return (
+    typeof value === "string" ||
+    value === null
+  );
+}
+
+function isNullableNumber(
+  value: unknown,
+): value is number | null {
+  return (
+    value === null ||
+    (typeof value === "number" &&
+      Number.isFinite(value))
+  );
+}
+
+function isOrderCategory(
+  value: unknown,
+): value is OrderCategory {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.slug === "string"
+  );
+}
+
+function isOrderProduct(
+  value: unknown,
+): value is OrderProduct {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.slug === "string" &&
+    isNullableString(value.image) &&
+    isOrderCategory(value.category)
+  );
+}
+
+function isOrderItem(
+  value: unknown,
+): value is OrderItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.quantity === "number" &&
+    Number.isInteger(value.quantity) &&
+    value.quantity > 0 &&
+    typeof value.unitPrice === "number" &&
+    Number.isFinite(value.unitPrice) &&
+    value.unitPrice >= 0 &&
+    typeof value.lineTotal === "number" &&
+    Number.isFinite(value.lineTotal) &&
+    value.lineTotal >= 0 &&
+    typeof value.createdAt ===
+      "string" &&
+    isOrderProduct(value.product)
+  );
+}
+
+function isDeliveryAddress(
+  value: unknown,
+): value is DeliveryAddress {
+  return (
+    isRecord(value) &&
+    typeof value.address === "string" &&
+    typeof value.city === "string" &&
+    typeof value.state === "string" &&
+    typeof value.pincode === "string"
+  );
+}
+
+function isShippingPackage(
+  value: unknown,
+): value is ShippingPackageDetails {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const dimensions =
+    value.dimensions;
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.code === "string" &&
+    isNullableNumber(
+      value.packedWeightGrams,
+    ) &&
+    isRecord(dimensions) &&
+    isNullableNumber(
+      dimensions.lengthCm,
+    ) &&
+    isNullableNumber(
+      dimensions.breadthCm,
+    ) &&
+    isNullableNumber(
+      dimensions.heightCm,
+    )
+  );
+}
+
+function isTrackingDetails(
+  value: unknown,
+): value is TrackingDetails {
+  return (
+    isRecord(value) &&
+    isNullableString(value.number) &&
+    isNullableString(value.status)
+  );
+}
+
+function isShippingDetails(
+  value: unknown,
+): value is OrderShippingDetails {
+  return (
+    isRecord(value) &&
+    isNullableString(value.mode) &&
+    typeof value.status ===
+      "string" &&
+    isNullableString(value.quotedAt) &&
+    isNullableString(
+      value.pickupScheduledAt,
+    ) &&
+    isNullableString(value.shippedAt) &&
+    isNullableString(
+      value.estimatedDeliveryAt,
+    ) &&
+    isNullableString(
+      value.deliveredAt,
+    ) &&
+    isTrackingDetails(
+      value.tracking,
+    ) &&
+    (value.package === null ||
+      isShippingPackage(
+        value.package,
+      ))
+  );
+}
+
+function isOrderDetails(
+  value: unknown,
+): value is OrderDetails {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.customerName ===
+      "string" &&
+    typeof value.phone === "string" &&
+    isNullableString(value.email) &&
+    isDeliveryAddress(
+      value.deliveryAddress,
+    ) &&
+    typeof value.subtotalAmount ===
+      "number" &&
+    Number.isFinite(
+      value.subtotalAmount,
+    ) &&
+    typeof value
+      .shippingEstimatedAmount ===
+      "number" &&
+    Number.isFinite(
+      value.shippingEstimatedAmount,
+    ) &&
+    typeof value
+      .shippingChargedAmount ===
+      "number" &&
+    Number.isFinite(
+      value.shippingChargedAmount,
+    ) &&
+    typeof value
+      .shippingDiscountAmount ===
+      "number" &&
+    Number.isFinite(
+      value.shippingDiscountAmount,
+    ) &&
+    typeof value.totalAmount ===
+      "number" &&
+    Number.isFinite(
+      value.totalAmount,
+    ) &&
+    typeof value.status === "string" &&
+    typeof value.paymentStatus ===
+      "string" &&
+    isNullableString(
+      value.paymentMethod,
+    ) &&
+    isShippingDetails(
+      value.shipping,
+    ) &&
+    Array.isArray(value.items) &&
+    value.items.every(isOrderItem) &&
+    typeof value.createdAt ===
+      "string" &&
+    typeof value.updatedAt ===
+      "string"
+  );
+}
+
+function formatDate(
+  value: string | null,
+) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-IN",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  ).format(date);
+}
+
+function formatStatus(
+  value: string,
+) {
+  return value
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) =>
+      character.toUpperCase(),
+    );
+}
+
+function formatWeight(
+  value: number | null,
+) {
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return "Not available";
+  }
+
+  if (value >= 1000) {
+    return `${(
+      value / 1000
+    ).toLocaleString("en-IN", {
+      maximumFractionDigits: 2,
+    })} kg`;
+  }
+
+  return `${value.toLocaleString(
+    "en-IN",
+  )} g`;
+}
+
+function formatDimension(
+  value: number | null,
+) {
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return "—";
+  }
+
+  return value.toLocaleString(
+    "en-IN",
+    {
+      maximumFractionDigits: 2,
+    },
+  );
+}
+
+function getDeliveryMethod(
+  mode: string | null,
+) {
+  switch (mode) {
+    case "EXPRESS":
+      return "Express Delivery";
+
+    case "SURFACE":
+      return "Surface Delivery";
+
+    default:
+      return "Standard Delivery";
+  }
+}
+
+function getShipmentMessage(
+  status: string,
+) {
+  switch (
+    status.trim().toUpperCase()
+  ) {
+    case "NOT_CREATED":
+      return "Your courier shipment has not been created yet.";
+
+    case "QUOTED":
+      return "The delivery charge has been calculated. The shipment will be created after payment confirmation.";
+
+    case "CREATED":
+      return "Your shipment has been created and is waiting to be prepared for pickup.";
+
+    case "PICKUP_SCHEDULED":
+      return "Pickup has been scheduled for your parcel.";
+
+    case "IN_TRANSIT":
+      return "Your parcel is currently travelling toward the delivery address.";
+
+    case "OUT_FOR_DELIVERY":
+      return "Your parcel is out for delivery and should reach you soon.";
+
+    case "DELIVERED":
+      return "Your order has been delivered successfully.";
+
+    case "CANCELLED":
+      return "The courier shipment associated with this order has been cancelled.";
+
+    case "RTO":
+      return "The parcel is being returned to the sender.";
+
+    case "FAILED":
+      return "The shipment could not proceed. Please contact customer support.";
+
+    default:
+      return "Delivery information will appear when it becomes available.";
+  }
+}
+
+export default function TrackOrderContent() {
+  const [orderId, setOrderId] =
+    useState("");
+
+  const [accessToken, setAccessToken] =
+    useState("");
+
+  const [order, setOrder] =
+    useState<OrderDetails | null>(
+      null,
+    );
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [
+    refreshMessage,
+    setRefreshMessage,
+  ] = useState<string | null>(null);
+
+  const loadOrder = useCallback(
+    async (refresh = false) => {
+      const normalizedOrderId =
+        orderId.trim();
+
+      const normalizedAccessToken =
+        accessToken.trim();
+
+      if (
+        !normalizedOrderId ||
+        !normalizedAccessToken
+      ) {
+        setError(
+          "Enter both your order ID and private access token.",
+        );
+        return;
+      }
+
+      if (
+        normalizedAccessToken.length >
+        200
+      ) {
+        setError(
+          "The order access token is invalid.",
+        );
+        return;
+      }
+
+      if (refresh) {
+        setRefreshing(true);
+        setRefreshMessage(null);
+      } else {
+        setLoading(true);
+        setOrder(null);
+      }
+
+      setError(null);
+
+      try {
+        const response = await fetch(
+          `/api/orders/${encodeURIComponent(
+            normalizedOrderId,
+          )}?token=${encodeURIComponent(
+            normalizedAccessToken,
+          )}`,
+          {
+            method: "GET",
+            cache: "no-store",
+          },
+        );
+
+        const data: unknown =
+          await response
+            .json()
+            .catch(() => null);
+
+        if (!response.ok) {
+          const errorData =
+            isRecord(data)
+              ? (data as ErrorResponse)
+              : null;
+
+          throw new Error(
+            errorData?.error ||
+              errorData?.message ||
+              "Unable to load the order.",
+          );
+        }
+
+        if (!isOrderDetails(data)) {
+          throw new Error(
+            "The order response was invalid.",
+          );
+        }
+
+        setOrder(data);
+
+        if (refresh) {
+          setRefreshMessage(
+            "Delivery information refreshed successfully.",
+          );
+        }
+      } catch (loadError) {
+        console.error(
+          "Track order request failed:",
+          loadError,
+        );
+
+        const message =
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load the order.";
+
+        if (refresh) {
+          setRefreshMessage(message);
+        } else {
+          setOrder(null);
+          setError(message);
+        }
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [accessToken, orderId],
+  );
+
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+    void loadOrder(false);
+  }
+
+  const shipping = order?.shipping;
+
+  const normalizedShipmentStatus =
+    shipping?.status
+      .trim()
+      .toUpperCase() ?? "";
+
+  const isShipmentActive =
+    ACTIVE_SHIPMENT_STATUSES.has(
+      normalizedShipmentStatus,
+    );
+
+  const isShipmentCancelled =
+    normalizedShipmentStatus ===
+    "CANCELLED";
+
+  const isShipmentDelivered =
+    normalizedShipmentStatus ===
+    "DELIVERED";
+
+  const isShipmentRto =
+    normalizedShipmentStatus ===
+    "RTO";
+
+  const isShipmentFailed =
+    normalizedShipmentStatus ===
+    "FAILED";
+
+  const trackingNumber =
+    shipping?.tracking.number ?? null;
+
+  const rawTrackingStatus =
+    shipping?.tracking.status ?? null;
+
+  const estimatedDeliveryDate =
+    formatDate(
+      shipping
+        ?.estimatedDeliveryAt ?? null,
+    );
+
+  const deliveredDate =
+    formatDate(
+      shipping?.deliveredAt ?? null,
+    );
+
+  const updatedDate =
+    formatDate(
+      order?.updatedAt ?? null,
+    );
+
+  return (
+    <main className="min-h-screen bg-[#FFF8EE] pb-20 pt-28 lg:pt-32">
+      <section className="relative overflow-hidden py-12 sm:py-16">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -left-28 top-0 h-80 w-80 rounded-full bg-green-100/50 blur-3xl"
+        />
+
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-[#FFF4DE] blur-3xl"
+        />
+
+        <Container>
+          <div className="mx-auto max-w-4xl text-center">
+            <Badge
+              variant="secondary"
+              size="md"
+              className="gap-2"
+            >
+              <Truck
+                size={17}
+                aria-hidden="true"
+              />
+
+              Secure Order Tracking
+            </Badge>
+
+            <h1 className="mt-6 text-4xl font-bold tracking-tight text-[#6D2E00] sm:text-5xl">
+              Track Your Order
+            </h1>
+
+            <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-gray-600">
+              Enter the order ID and
+              private access token from
+              your confirmation link to
+              view the latest delivery
+              information.
+            </p>
+          </div>
+
+          <Card
+            padding="lg"
+            className="mx-auto mt-10 max-w-4xl shadow-xl"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DE] text-[#C89B3C]">
+                <ShieldCheck
+                  size={24}
+                  aria-hidden="true"
+                />
+              </div>
+
+              <div>
+                <h2 className="text-xl font-bold text-[#6D2E00]">
+                  Secure order lookup
+                </h2>
+
+                <p className="mt-2 leading-7 text-gray-600">
+                  Your private token is
+                  only used to securely
+                  retrieve the matching
+                  order. It is not added
+                  to this page&apos;s URL.
+                </p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={handleSubmit}
+              className="mt-8 space-y-6"
+            >
+              <div>
+                <label
+                  htmlFor="track-order-id"
+                  className="mb-2 block text-sm font-semibold text-[#6D2E00]"
+                >
+                  Order ID
+                </label>
+
+                <input
+                  id="track-order-id"
+                  type="text"
+                  value={orderId}
+                  onChange={(event) => {
+                    setOrderId(
+                      event.target.value,
+                    );
+                  }}
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="Enter your order reference"
+                  disabled={
+                    loading || refreshing
+                  }
+                  className="h-14 w-full rounded-2xl border border-[#F3DFC2] bg-white px-5 text-[#6D2E00] outline-none transition placeholder:text-gray-400 focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="track-order-token"
+                  className="mb-2 block text-sm font-semibold text-[#6D2E00]"
+                >
+                  Private Access Token
+                </label>
+
+                <input
+                  id="track-order-token"
+                  type="password"
+                  value={accessToken}
+                  onChange={(event) => {
+                    setAccessToken(
+                      event.target.value,
+                    );
+                  }}
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="Enter the token from your secure order link"
+                  disabled={
+                    loading || refreshing
+                  }
+                  className="h-14 w-full rounded-2xl border border-[#F3DFC2] bg-white px-5 text-[#6D2E00] outline-none transition placeholder:text-gray-400 focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+              </div>
+
+              {error && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-700"
+                >
+                  <TriangleAlert
+                    size={20}
+                    className="mt-0.5 shrink-0"
+                    aria-hidden="true"
+                  />
+
+                  <p className="text-sm leading-6">
+                    {error}
+                  </p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={
+                  loading || refreshing
+                }
+                className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#6D2E00] px-8 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? (
+                  <>
+                    <Spinner size="sm" />
+                    Loading Order...
+                  </>
+                ) : (
+                  <>
+                    <Search
+                      size={20}
+                      aria-hidden="true"
+                    />
+
+                    Track Order
+                  </>
+                )}
+              </button>
+            </form>
+          </Card>
+
+          {order && shipping && (
+            <div className="mx-auto mt-10 max-w-5xl space-y-8">
+              <Card
+                padding="lg"
+                className="shadow-xl"
+              >
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <Badge
+                      variant="success"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <CheckCircle2
+                        size={16}
+                        aria-hidden="true"
+                      />
+
+                      Order Found
+                    </Badge>
+
+                    <h2 className="mt-4 text-3xl font-bold text-[#6D2E00]">
+                      Hello,{" "}
+                      {order.customerName}
+                    </h2>
+
+                    <p className="mt-2 break-all text-sm text-gray-500">
+                      Order reference:{" "}
+                      {order.id}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void loadOrder(true);
+                    }}
+                    disabled={refreshing}
+                    className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-5 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw
+                      size={17}
+                      aria-hidden="true"
+                      className={
+                        refreshing
+                          ? "animate-spin"
+                          : ""
+                      }
+                    />
+
+                    {refreshing
+                      ? "Refreshing..."
+                      : "Refresh Status"}
+                  </button>
+                </div>
+
+                {refreshMessage && (
+                  <div
+                    role={
+                      refreshMessage.includes(
+                        "successfully",
+                      )
+                        ? "status"
+                        : "alert"
+                    }
+                    className={`mt-5 rounded-2xl border px-5 py-4 text-sm font-medium ${
+                      refreshMessage.includes(
+                        "successfully",
+                      )
+                        ? "border-green-200 bg-green-50 text-green-800"
+                        : "border-red-200 bg-red-50 text-red-700"
+                    }`}
+                  >
+                    {refreshMessage}
+                  </div>
+                )}
+
+                {isShipmentCancelled && (
+                  <StatusNotice
+                    type="error"
+                    icon={
+                      <TriangleAlert
+                        size={22}
+                        aria-hidden="true"
+                      />
+                    }
+                    title="Delivery shipment cancelled"
+                  >
+                    The courier shipment
+                    associated with this
+                    order has been
+                    cancelled. Your payment
+                    and website order remain
+                    recorded. Please contact
+                    customer support for
+                    assistance.
+                  </StatusNotice>
+                )}
+
+                {isShipmentDelivered && (
+                  <StatusNotice
+                    type="success"
+                    icon={
+                      <PackageCheck
+                        size={22}
+                        aria-hidden="true"
+                      />
+                    }
+                    title="Order delivered"
+                  >
+                    Your order has been
+                    delivered successfully
+                    {deliveredDate
+                      ? ` on ${deliveredDate}.`
+                      : "."}
+                  </StatusNotice>
+                )}
+
+                {isShipmentActive && (
+                  <StatusNotice
+                    type="info"
+                    icon={
+                      <Truck
+                        size={22}
+                        aria-hidden="true"
+                      />
+                    }
+                    title={formatStatus(
+                      shipping.status,
+                    )}
+                  >
+                    {estimatedDeliveryDate
+                      ? `Estimated delivery: ${estimatedDeliveryDate}.`
+                      : getShipmentMessage(
+                          shipping.status,
+                        )}
+                  </StatusNotice>
+                )}
+
+                {isShipmentRto && (
+                  <StatusNotice
+                    type="warning"
+                    icon={
+                      <Truck
+                        size={22}
+                        aria-hidden="true"
+                      />
+                    }
+                    title="Returning to sender"
+                  >
+                    The parcel is being
+                    returned to the sender.
+                    Please contact customer
+                    support for assistance.
+                  </StatusNotice>
+                )}
+
+                {isShipmentFailed && (
+                  <StatusNotice
+                    type="error"
+                    icon={
+                      <TriangleAlert
+                        size={22}
+                        aria-hidden="true"
+                      />
+                    }
+                    title="Shipment requires attention"
+                  >
+                    The shipment could not
+                    proceed. Please contact
+                    customer support so the
+                    delivery can be reviewed.
+                  </StatusNotice>
+                )}
+
+                {!isShipmentActive &&
+                  !isShipmentCancelled &&
+                  !isShipmentDelivered &&
+                  !isShipmentRto &&
+                  !isShipmentFailed && (
+                    <StatusNotice
+                      type="info"
+                      icon={
+                        <Package
+                          size={22}
+                          aria-hidden="true"
+                        />
+                      }
+                      title={formatStatus(
+                        shipping.status,
+                      )}
+                    >
+                      {getShipmentMessage(
+                        shipping.status,
+                      )}
+                    </StatusNotice>
+                  )}
+
+                <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                  <SummaryCard
+                    icon={
+                      <Package
+                        size={21}
+                        aria-hidden="true"
+                      />
+                    }
+                    label="Order Status"
+                    value={formatStatus(
+                      order.status,
+                    )}
+                  />
+
+                  <SummaryCard
+                    icon={
+                      <Truck
+                        size={21}
+                        aria-hidden="true"
+                      />
+                    }
+                    label="Delivery Status"
+                    value={formatStatus(
+                      shipping.status,
+                    )}
+                  />
+
+                  <SummaryCard
+                    icon={
+                      <CreditCard
+                        size={21}
+                        aria-hidden="true"
+                      />
+                    }
+                    label="Payment Method"
+                    value={
+                      order.paymentMethod ||
+                      "Prepaid"
+                    }
+                  />
+
+                  <SummaryCard
+                    icon={
+                      <BadgeIndianRupee
+                        size={21}
+                        aria-hidden="true"
+                      />
+                    }
+                    label="Payment Status"
+                    value={formatStatus(
+                      order.paymentStatus,
+                    )}
+                  />
+                </div>
+              </Card>
+
+              <div className="grid gap-8 lg:grid-cols-2">
+                <Card
+                  padding="lg"
+                  className="shadow-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <Truck
+                      size={24}
+                      className="text-[#C89B3C]"
+                      aria-hidden="true"
+                    />
+
+                    <h2 className="text-2xl font-bold text-[#6D2E00]">
+                      Shipment Details
+                    </h2>
+                  </div>
+
+                  <div className="mt-7 space-y-5">
+                    <InfoRow
+                      label="Delivery Method"
+                      value={getDeliveryMethod(
+                        shipping.mode,
+                      )}
+                    />
+
+                    <InfoRow
+                      label="Current Status"
+                      value={formatStatus(
+                        shipping.status,
+                      )}
+                    />
+
+                    {rawTrackingStatus && (
+                      <InfoRow
+                        label="Latest Update"
+                        value={formatStatus(
+                          rawTrackingStatus,
+                        )}
+                      />
+                    )}
+
+                    {trackingNumber && (
+                      <InfoRow
+                        label="Tracking Number"
+                        value={
+                          <span className="break-all">
+                            {trackingNumber}
+                          </span>
+                        }
+                      />
+                    )}
+
+                    {formatDate(
+                      shipping.pickupScheduledAt,
+                    ) && (
+                      <InfoRow
+                        label="Pickup Scheduled"
+                        value={formatDate(
+                          shipping.pickupScheduledAt,
+                        )}
+                      />
+                    )}
+
+                    {formatDate(
+                      shipping.shippedAt,
+                    ) && (
+                      <InfoRow
+                        label="Shipped On"
+                        value={formatDate(
+                          shipping.shippedAt,
+                        )}
+                      />
+                    )}
+
+                    {estimatedDeliveryDate && (
+                      <InfoRow
+                        label="Estimated Delivery"
+                        value={
+                          estimatedDeliveryDate
+                        }
+                      />
+                    )}
+
+                    {deliveredDate && (
+                      <InfoRow
+                        label="Delivered On"
+                        value={deliveredDate}
+                      />
+                    )}
+
+                    {updatedDate && (
+                      <InfoRow
+                        label="Last Updated"
+                        value={updatedDate}
+                      />
+                    )}
+                  </div>
+                </Card>
+
+                <Card
+                  padding="lg"
+                  className="shadow-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <MapPin
+                      size={24}
+                      className="text-[#C89B3C]"
+                      aria-hidden="true"
+                    />
+
+                    <h2 className="text-2xl font-bold text-[#6D2E00]">
+                      Delivery Address
+                    </h2>
+                  </div>
+
+                  <div className="mt-7 space-y-5">
+                    <InfoRow
+                      label="Customer"
+                      value={
+                        order.customerName
+                      }
+                    />
+
+                    <InfoRow
+                      label="Phone"
+                      value={order.phone}
+                    />
+
+                    {order.email && (
+                      <InfoRow
+                        label="Email"
+                        value={order.email}
+                      />
+                    )}
+
+                    <InfoRow
+                      label="Address"
+                      value={
+                        <span className="text-right">
+                          {
+                            order
+                              .deliveryAddress
+                              .address
+                          }
+                          <br />
+                          {
+                            order
+                              .deliveryAddress
+                              .city
+                          }
+                          ,{" "}
+                          {
+                            order
+                              .deliveryAddress
+                              .state
+                          }{" "}
+                          {
+                            order
+                              .deliveryAddress
+                              .pincode
+                          }
+                        </span>
+                      }
+                    />
+                  </div>
+                </Card>
+              </div>
+
+              <div className="grid gap-8 lg:grid-cols-2">
+                <Card
+                  padding="lg"
+                  className="shadow-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <ShoppingBag
+                      size={24}
+                      className="text-[#C89B3C]"
+                      aria-hidden="true"
+                    />
+
+                    <h2 className="text-2xl font-bold text-[#6D2E00]">
+                      Order Summary
+                    </h2>
+                  </div>
+
+                  <div className="mt-7 space-y-4">
+                    <InfoRow
+                      label="Products"
+                      value={order.items.reduce(
+                        (total, item) =>
+                          total +
+                          item.quantity,
+                        0,
+                      )}
+                    />
+
+                    <InfoRow
+                      label="Subtotal"
+                      value={formatCurrency(
+                        order.subtotalAmount,
+                      )}
+                    />
+
+                    <InfoRow
+                      label="Delivery Charge"
+                      value={
+                        order.shippingChargedAmount ===
+                        0
+                          ? "FREE"
+                          : formatCurrency(
+                              order.shippingChargedAmount,
+                            )
+                      }
+                    />
+
+                    {order.shippingDiscountAmount >
+                      0 && (
+                      <InfoRow
+                        label="Delivery Discount"
+                        value={`-${formatCurrency(
+                          order.shippingDiscountAmount,
+                        )}`}
+                      />
+                    )}
+
+                    <div className="border-t border-[#F3DFC2]" />
+
+                    <InfoRow
+                      label="Grand Total"
+                      value={
+                        <span className="text-xl text-[#C89B3C]">
+                          {formatCurrency(
+                            order.totalAmount,
+                          )}
+                        </span>
+                      }
+                    />
+                  </div>
+                </Card>
+
+                <Card
+                  padding="lg"
+                  className="shadow-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    <Package
+                      size={24}
+                      className="text-[#C89B3C]"
+                      aria-hidden="true"
+                    />
+
+                    <h2 className="text-2xl font-bold text-[#6D2E00]">
+                      Package Information
+                    </h2>
+                  </div>
+
+                  {shipping.package ? (
+                    <div className="mt-7 space-y-5">
+                      <InfoRow
+                        label="Package"
+                        value={
+                          shipping.package.name
+                        }
+                      />
+
+                      <InfoRow
+                        label="Packed Weight"
+                        value={formatWeight(
+                          shipping.package
+                            .packedWeightGrams,
+                        )}
+                      />
+
+                      <InfoRow
+                        label="Dimensions"
+                        value={`${formatDimension(
+                          shipping.package
+                            .dimensions
+                            .lengthCm,
+                        )} × ${formatDimension(
+                          shipping.package
+                            .dimensions
+                            .breadthCm,
+                        )} × ${formatDimension(
+                          shipping.package
+                            .dimensions
+                            .heightCm,
+                        )} cm`}
+                      />
+                    </div>
+                  ) : (
+                    <p className="mt-7 leading-7 text-gray-600">
+                      Package information
+                      is not available yet.
+                    </p>
+                  )}
+                </Card>
+              </div>
+
+              <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+                <Link
+                  href="/"
+                  className="inline-flex h-13 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-7 font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white"
+                >
+                  <ArrowLeft
+                    size={19}
+                    aria-hidden="true"
+                  />
+
+                  Back to Home
+                </Link>
+
+                <Link
+                  href="/shop"
+                  className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-[#6D2E00] px-7 font-semibold text-white shadow-lg transition hover:bg-[#8B4513]"
+                >
+                  <ShoppingBag
+                    size={19}
+                    aria-hidden="true"
+                  />
+
+                  Continue Shopping
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {!order && !loading && (
+            <Card
+              padding="lg"
+              className="mx-auto mt-10 max-w-4xl border border-[#F3DFC2] bg-[#FFFDF8] text-center shadow-lg"
+            >
+              <CalendarClock
+                size={42}
+                className="mx-auto text-[#C89B3C]"
+                aria-hidden="true"
+              />
+
+              <h2 className="mt-5 text-2xl font-bold text-[#6D2E00]">
+                Your delivery details
+                will appear here
+              </h2>
+
+              <p className="mx-auto mt-3 max-w-xl leading-7 text-gray-600">
+                Use the secure details
+                from your order
+                confirmation to retrieve
+                the latest stored shipment
+                information.
+              </p>
+
+              <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500">
+                <Clock3
+                  size={17}
+                  aria-hidden="true"
+                />
+
+                Shipment information is
+                updated automatically.
+              </div>
+            </Card>
+          )}
+        </Container>
+      </section>
+    </main>
+  );
+}
+
+function SummaryCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <Card
+      variant="filled"
+      padding="md"
+      className="shadow-none"
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#C89B3C] shadow-sm">
+          {icon}
+        </div>
+
+        <div>
+          <p className="text-sm text-gray-500">
+            {label}
+          </p>
+
+          <p className="mt-1 font-semibold text-[#6D2E00]">
+            {value}
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+}: InfoRowProps) {
+  return (
+    <div className="flex items-start justify-between gap-5">
+      <span className="shrink-0 text-gray-500">
+        {label}
+      </span>
+
+      <span className="min-w-0 break-words text-right font-semibold text-[#6D2E00]">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function StatusNotice({
+  type,
+  icon,
+  title,
+  children,
+}: StatusNoticeProps) {
+  const styles = {
+    success: {
+      card:
+        "border-green-200 bg-green-50",
+      icon: "text-green-600",
+      title: "text-green-800",
+      text: "text-green-700",
+    },
+
+    error: {
+      card:
+        "border-red-200 bg-red-50",
+      icon: "text-red-600",
+      title: "text-red-800",
+      text: "text-red-700",
+    },
+
+    warning: {
+      card:
+        "border-amber-200 bg-amber-50",
+      icon: "text-amber-600",
+      title: "text-amber-800",
+      text: "text-amber-700",
+    },
+
+    info: {
+      card:
+        "border-[#F3DFC2] bg-[#FFFDF8]",
+      icon: "text-[#C89B3C]",
+      title: "text-[#6D2E00]",
+      text: "text-gray-600",
+    },
+  } as const;
+
+  const style = styles[type];
+
+  return (
+    <Card
+      variant="filled"
+      padding="md"
+      className={`mt-7 border shadow-none ${style.card}`}
+    >
+      <div className="flex items-start gap-4">
+        <div
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ${style.icon}`}
+        >
+          {icon}
+        </div>
+
+        <div>
+          <h3
+            className={`font-semibold ${style.title}`}
+          >
+            {title}
+          </h3>
+
+          <p
+            className={`mt-2 text-sm leading-6 ${style.text}`}
+          >
+            {children}
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
+}

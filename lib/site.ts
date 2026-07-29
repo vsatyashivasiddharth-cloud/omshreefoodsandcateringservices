@@ -10,15 +10,14 @@ export const siteConfig = {
 
   whatsapp: "917013820854",
 
-  email: "omshreefoodsandcaterers@gmail.com",
+  email:
+    "omshreefoodsandcaterers@gmail.com",
 
   address: "Andhra Pradesh, India",
 
   social: {
     instagram: "",
-
     facebook: "",
-
     youtube: "",
   },
 
@@ -40,6 +39,10 @@ export const siteConfig = {
       href: "/catering",
     },
     {
+      title: "Track Order",
+      href: "/track-order",
+    },
+    {
       title: "About",
       href: "/about",
     },
@@ -48,4 +51,4 @@ export const siteConfig = {
       href: "/contact",
     },
   ],
-};
+} as const;
