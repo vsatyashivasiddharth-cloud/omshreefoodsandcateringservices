@@ -57,19 +57,33 @@ function normalizeStatusText(
 function mapDelhiveryStatus(
   status: string,
   statusCode: string | null,
+  scanText: string,
 ): ShipmentStatus {
-  const normalized = normalizeStatusText(
-    [
-      status,
-      statusCode ?? "",
-    ].join(" "),
-  );
+  const normalized =
+    normalizeStatusText(
+      [
+        status,
+        statusCode ?? "",
+        scanText,
+      ].join(" "),
+    );
 
+  /*
+   * Delhivery can return "Not picked" as the current
+   * tracking status after an order has been cancelled
+   * before physical pickup.
+   *
+   * The scan instructions may also contain:
+   * "Shipment not received from client".
+   */
   if (
+    normalized.includes("cancelled") ||
+    normalized.includes("canceled") ||
     normalized.includes("cancel") ||
     normalized.includes(
       "shipment not received from client",
-    )
+    ) ||
+    normalized.includes("not picked")
   ) {
     return ShipmentStatus.CANCELLED;
   }
@@ -105,7 +119,9 @@ function mapDelhiveryStatus(
 
   if (
     normalized.includes("in transit") ||
-    normalized.includes("in-transit") ||
+    normalized.includes(
+      "in-transit",
+    ) ||
     normalized.includes("picked up") ||
     normalized.includes(
       "shipment received",
@@ -138,8 +154,8 @@ function mapDelhiveryStatus(
   }
 
   /*
-   * A manifested shipment with a valid AWB remains CREATED
-   * until Delhivery reports a later operational status.
+   * A valid AWB that has not yet progressed remains
+   * in the CREATED state.
    */
   return ShipmentStatus.CREATED;
 }
@@ -156,9 +172,8 @@ function getOrderStatusUpdate(
       return OrderStatus.DELIVERED;
 
     /*
-     * Cancelling the carrier shipment does not necessarily
-     * mean the customer's paid website order should be
-     * cancelled or refunded automatically.
+     * Cancelling a courier shipment must not automatically
+     * cancel or refund the paid customer order.
      */
     case ShipmentStatus.CANCELLED:
     case ShipmentStatus.RTO:
@@ -170,6 +185,30 @@ function getOrderStatusUpdate(
     default:
       return undefined;
   }
+}
+
+function createTrackingScanText(
+  scans: Awaited<
+    ReturnType<
+      typeof getDelhiveryTracking
+    >
+  >["scans"],
+) {
+  return scans
+    .flatMap((scan) => [
+      scan.status,
+      scan.statusCode,
+      scan.instructions,
+      scan.location,
+    ])
+    .filter(
+      (
+        value,
+      ): value is string =>
+        typeof value === "string" &&
+        value.trim().length > 0,
+    )
+    .join(" ");
 }
 
 export async function POST(
@@ -206,7 +245,6 @@ export async function POST(
 
         select: {
           id: true,
-
           status: true,
 
           shippingProvider: true,
@@ -257,7 +295,11 @@ export async function POST(
       15_000,
     );
 
-    let tracking;
+    let tracking: Awaited<
+      ReturnType<
+        typeof getDelhiveryTracking
+      >
+    >;
 
     try {
       tracking =
@@ -269,16 +311,26 @@ export async function POST(
       clearTimeout(timeout);
     }
 
+    const scanText =
+      createTrackingScanText(
+        tracking.scans,
+      );
+
     const shipmentStatus =
       mapDelhiveryStatus(
         tracking.status,
         tracking.statusCode,
+        scanText,
       );
 
     const orderStatus =
       getOrderStatusUpdate(
         shipmentStatus,
       );
+
+    const isCancelled =
+      shipmentStatus ===
+      ShipmentStatus.CANCELLED;
 
     const updatedOrder =
       await prisma.$transaction(
@@ -297,28 +349,43 @@ export async function POST(
             data: {
               shipmentStatus,
 
+              /*
+               * Keep Delhivery's raw current status for
+               * troubleshooting and display.
+               *
+               * This may remain "Not picked" even when our
+               * normalized shipment status is CANCELLED.
+               */
               delhiveryStatus:
                 tracking.status,
 
               /*
-               * Preserve previously recorded timestamps when
-               * Delhivery does not return a value.
+               * Clear operational timestamps for a shipment
+               * cancelled before physical pickup.
                */
               pickupScheduledAt:
-                tracking.pickupScheduledAt ??
-                existingOrder.pickupScheduledAt,
+                isCancelled
+                  ? null
+                  : tracking.pickupScheduledAt ??
+                    existingOrder.pickupScheduledAt,
 
               shippedAt:
-                tracking.shippedAt ??
-                existingOrder.shippedAt,
+                isCancelled
+                  ? null
+                  : tracking.shippedAt ??
+                    existingOrder.shippedAt,
 
               estimatedDeliveryAt:
-                tracking.estimatedDeliveryAt ??
-                existingOrder.estimatedDeliveryAt,
+                isCancelled
+                  ? null
+                  : tracking.estimatedDeliveryAt ??
+                    existingOrder.estimatedDeliveryAt,
 
               deliveredAt:
-                tracking.deliveredAt ??
-                existingOrder.deliveredAt,
+                isCancelled
+                  ? null
+                  : tracking.deliveredAt ??
+                    existingOrder.deliveredAt,
 
               ...(orderStatus
                 ? {
@@ -371,7 +438,31 @@ export async function POST(
           "Shipment status synchronized successfully.",
 
         order: {
-          ...updatedOrder,
+          id: updatedOrder.id,
+
+          status:
+            updatedOrder.status,
+
+          shippingProvider:
+            updatedOrder.shippingProvider,
+
+          shippingMode:
+            updatedOrder.shippingMode,
+
+          shipmentStatus:
+            updatedOrder.shipmentStatus,
+
+          delhiveryWaybill:
+            updatedOrder.delhiveryWaybill,
+
+          delhiveryShipmentId:
+            updatedOrder.delhiveryShipmentId,
+
+          delhiveryOrderId:
+            updatedOrder.delhiveryOrderId,
+
+          delhiveryStatus:
+            updatedOrder.delhiveryStatus,
 
           shippingQuotedAt:
             updatedOrder.shippingQuotedAt
@@ -414,6 +505,9 @@ export async function POST(
 
           scanCount:
             tracking.scans.length,
+
+          normalizedShipmentStatus:
+            shipmentStatus,
         },
       },
       {
