@@ -39,16 +39,16 @@ export const siteConfig = {
       href: "/catering",
     },
     {
-      title: "Track Order",
-      href: "/track-order",
-    },
-    {
       title: "About",
       href: "/about",
     },
     {
       title: "Contact",
       href: "/contact",
+    },
+    {
+      title: "Track Order",
+      href: "/track-order",
     },
   ],
 } as const;

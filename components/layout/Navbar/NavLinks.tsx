@@ -18,14 +18,20 @@ export default function NavLinks() {
           item.href === "/"
             ? pathname === "/"
             : pathname === item.href ||
-              pathname.startsWith(`${item.href}/`);
+              pathname.startsWith(
+                `${item.href}/`,
+              );
 
         return (
           <Link
             key={item.href}
             href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={`group relative rounded-full px-4 py-3 text-sm font-semibold tracking-wide transition-all duration-300 xl:px-5 xl:text-[15px] ${
+            aria-current={
+              active
+                ? "page"
+                : undefined
+            }
+            className={`group relative whitespace-nowrap rounded-full px-3 py-3 text-sm font-semibold tracking-wide transition-all duration-300 xl:px-4 xl:text-[15px] ${
               active
                 ? "bg-[#FFF4DE] text-[#C89B3C]"
                 : "text-[#6D2E00] hover:bg-[#FFF4DE]/70 hover:text-[#C89B3C]"
@@ -36,7 +42,9 @@ export default function NavLinks() {
             <span
               aria-hidden="true"
               className={`absolute bottom-2 left-1/2 h-0.5 -translate-x-1/2 rounded-full bg-[#C89B3C] transition-all duration-300 ${
-                active ? "w-8" : "w-0 group-hover:w-8"
+                active
+                  ? "w-8"
+                  : "w-0 group-hover:w-8"
               }`}
             />
           </Link>
