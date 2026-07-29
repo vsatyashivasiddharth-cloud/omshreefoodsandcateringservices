@@ -307,3 +307,16 @@ model ContactInquiry {
   @@index([createdAt])
   @@index([isRead, createdAt])
 }
+
+model TrackingLookupAttempt {
+  id String @id @default(cuid())
+
+  phoneHash String
+  ipHash    String
+
+  createdAt DateTime @default(now())
+
+  @@index([phoneHash, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([createdAt])
+}

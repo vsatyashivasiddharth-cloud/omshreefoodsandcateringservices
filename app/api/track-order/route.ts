@@ -8,7 +8,9 @@ import {
   normalizeIndianPhone,
 } from "@/lib/phone";
 import prisma from "@/lib/prisma";
-import { checkTrackOrderRateLimit } from "@/lib/track-order-rate-limit";
+import {
+  checkTrackOrderRateLimit,
+} from "@/lib/track-order-rate-limit";
 
 const MAX_RECENT_ORDERS = 5;
 
@@ -35,6 +37,7 @@ function errorResponse(
     },
     {
       status,
+
       headers: {
         ...noStoreHeaders(),
         ...additionalHeaders,
@@ -80,6 +83,18 @@ function getClientIpAddress(
     }
   }
 
+  const vercelForwardedFor =
+    request.headers
+      .get(
+        "x-vercel-forwarded-for",
+      )
+      ?.split(",")[0]
+      ?.trim();
+
+  if (vercelForwardedFor) {
+    return vercelForwardedFor;
+  }
+
   const realIp =
     request.headers
       .get("x-real-ip")
@@ -89,18 +104,11 @@ function getClientIpAddress(
     return realIp;
   }
 
-  const vercelForwardedFor =
-    request.headers
-      .get(
-        "x-vercel-forwarded-for",
-      )
-      ?.trim();
-
-  if (vercelForwardedFor) {
-    return vercelForwardedFor;
-  }
-
-  return "unknown";
+  /*
+   * Local development requests might
+   * not include a forwarded IP header.
+   */
+  return "unknown-client";
 }
 
 function serializeDate(
@@ -164,7 +172,7 @@ export async function POST(
       getClientIpAddress(request);
 
     const rateLimit =
-      checkTrackOrderRateLimit({
+      await checkTrackOrderRateLimit({
         phone: phoneNormalized,
         ipAddress,
       });
@@ -202,10 +210,13 @@ export async function POST(
           pincode: true,
 
           subtotalAmount: true,
+
           shippingChargedAmount:
             true,
+
           shippingDiscountAmount:
             true,
+
           totalAmount: true,
 
           status: true,
@@ -222,8 +233,10 @@ export async function POST(
           shippingQuotedAt: true,
           pickupScheduledAt: true,
           shippedAt: true,
+
           estimatedDeliveryAt:
             true,
+
           deliveredAt: true,
 
           packageWeightGrams: true,
@@ -302,12 +315,14 @@ export async function POST(
 
             shippingChargedAmount:
               serializeDecimal(
-                order.shippingChargedAmount,
+                order
+                  .shippingChargedAmount,
               ),
 
             shippingDiscountAmount:
               serializeDecimal(
-                order.shippingDiscountAmount,
+                order
+                  .shippingDiscountAmount,
               ),
 
             totalAmount:
@@ -348,7 +363,8 @@ export async function POST(
 
               pickupScheduledAt:
                 serializeDate(
-                  order.pickupScheduledAt,
+                  order
+                    .pickupScheduledAt,
                 ),
 
               shippedAt:
@@ -358,7 +374,8 @@ export async function POST(
 
               estimatedDeliveryAt:
                 serializeDate(
-                  order.estimatedDeliveryAt,
+                  order
+                    .estimatedDeliveryAt,
                 ),
 
               deliveredAt:
@@ -381,22 +398,26 @@ export async function POST(
                           .code,
 
                       packedWeightGrams:
-                        order.packageWeightGrams,
+                        order
+                          .packageWeightGrams,
 
                       dimensions: {
                         lengthCm:
                           serializeDecimal(
-                            order.packageLengthCm,
+                            order
+                              .packageLengthCm,
                           ),
 
                         breadthCm:
                           serializeDecimal(
-                            order.packageBreadthCm,
+                            order
+                              .packageBreadthCm,
                           ),
 
                         heightCm:
                           serializeDecimal(
-                            order.packageHeightCm,
+                            order
+                              .packageHeightCm,
                           ),
                       },
                     }
