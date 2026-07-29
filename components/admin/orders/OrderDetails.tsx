@@ -17,6 +17,7 @@ import {
   PackagePlus,
   Phone,
   ReceiptText,
+  RefreshCw,
   User,
 } from "lucide-react";
 
@@ -130,6 +131,29 @@ interface CreateShipmentResponse {
     delhiveryShipmentId?: string | null;
     delhiveryOrderId?: string | null;
     delhiveryStatus?: string | null;
+  };
+}
+
+interface SyncShipmentResponse {
+  success: true;
+  message: string;
+  order: {
+    id: string;
+    status: OrderStatus;
+    shipmentStatus: string;
+    delhiveryWaybill: string;
+    delhiveryStatus?: string | null;
+    pickupScheduledAt?: string | null;
+    shippedAt?: string | null;
+    estimatedDeliveryAt?: string | null;
+    deliveredAt?: string | null;
+    updatedAt: string;
+  };
+  tracking: {
+    waybill: string;
+    status: string;
+    statusCode: string | null;
+    scanCount: number;
   };
 }
 
@@ -276,6 +300,42 @@ function isCreateShipmentResponse(
     isNullableString(
       value.order.delhiveryStatus,
     )
+  );
+}
+
+function isSyncShipmentResponse(
+  value: unknown,
+): value is SyncShipmentResponse {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.order) ||
+    !isRecord(value.tracking)
+  ) {
+    return false;
+  }
+
+  return (
+    value.success === true &&
+    typeof value.message === "string" &&
+    typeof value.order.id === "string" &&
+    isOrderStatus(value.order.status) &&
+    typeof value.order.shipmentStatus === "string" &&
+    typeof value.order.delhiveryWaybill === "string" &&
+    value.order.delhiveryWaybill.trim().length > 0 &&
+    isNullableString(value.order.delhiveryStatus) &&
+    isNullableString(value.order.pickupScheduledAt) &&
+    isNullableString(value.order.shippedAt) &&
+    isNullableString(
+      value.order.estimatedDeliveryAt,
+    ) &&
+    isNullableString(value.order.deliveredAt) &&
+    typeof value.order.updatedAt === "string" &&
+    typeof value.tracking.waybill === "string" &&
+    typeof value.tracking.status === "string" &&
+    isNullableString(value.tracking.statusCode) &&
+    typeof value.tracking.scanCount === "number" &&
+Number.isInteger(value.tracking.scanCount) &&
+value.tracking.scanCount >= 0
   );
 }
 
@@ -635,6 +695,11 @@ export default function OrderDetails({
     setShipmentCreating,
   ] = useState(false);
 
+  const [
+    shipmentSyncing,
+    setShipmentSyncing,
+  ] = useState(false);
+
   const loadOrder = useCallback(
     async (signal?: AbortSignal) => {
       const orderId = id.trim();
@@ -802,6 +867,83 @@ export default function OrderDetails({
       shipmentCreating,
     ]);
 
+
+  const syncShipment =
+    useCallback(async () => {
+      if (shipmentSyncing) {
+        return;
+      }
+
+      const orderId = id.trim();
+
+      if (!orderId) {
+        toast.error(
+          "Order ID is required.",
+        );
+        return;
+      }
+
+      setShipmentSyncing(true);
+
+      try {
+        const response = await fetch(
+          `/api/admin/orders/${encodeURIComponent(
+            orderId,
+          )}/sync-shipment`,
+          {
+            method: "POST",
+            cache: "no-store",
+          },
+        );
+
+        const data: unknown =
+          await response
+            .json()
+            .catch(() => null);
+
+        if (!response.ok) {
+          const apiError =
+            isRecord(data)
+              ? (data as ApiError)
+              : null;
+
+          throw new Error(
+            apiError?.error ||
+              apiError?.message ||
+              "Unable to synchronize the shipment.",
+          );
+        }
+
+        if (!isSyncShipmentResponse(data)) {
+          throw new Error(
+            "The shipment synchronization response was invalid.",
+          );
+        }
+
+        toast.success(data.message);
+
+        await loadOrder();
+      } catch (syncError) {
+        console.error(
+          "Shipment synchronization error:",
+          syncError,
+        );
+
+        toast.error(
+          syncError instanceof Error
+            ? syncError.message
+            : "Unable to synchronize the shipment.",
+        );
+      } finally {
+        setShipmentSyncing(false);
+      }
+    }, [
+      id,
+      loadOrder,
+      shipmentSyncing,
+    ]);
+
+
   if (loading) {
     return (
       <section className="min-h-[70vh] bg-gradient-to-br from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE]">
@@ -924,6 +1066,13 @@ export default function OrderDetails({
     order.paymentStatus === "SUCCESS" &&
     order.status !== "CANCELLED" &&
     !order.delhiveryWaybill;
+
+  const canSyncShipment =
+    order.shippingProvider ===
+      "DELHIVERY" &&
+    Boolean(
+      order.delhiveryWaybill?.trim(),
+    );
 
   return (
     <section className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE] py-8 sm:py-10">
@@ -1226,6 +1375,39 @@ export default function OrderDetails({
                   </Badge>
                 )}
 
+                {canSyncShipment && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    loading={
+                      shipmentSyncing
+                    }
+                    disabled={
+                      shipmentSyncing ||
+                      shipmentCreating
+                    }
+                    leftIcon={
+                      <RefreshCw
+                        size={17}
+                        className={
+                          shipmentSyncing
+                            ? "animate-spin"
+                            : undefined
+                        }
+                        aria-hidden="true"
+                      />
+                    }
+                    onClick={() =>
+                      void syncShipment()
+                    }
+                  >
+                    {shipmentSyncing
+                      ? "Syncing Status..."
+                      : "Sync Shipment Status"}
+                  </Button>
+                )}
+
                 {canCreateShipment && (
                   <Button
                     type="button"
@@ -1235,7 +1417,8 @@ export default function OrderDetails({
                       shipmentCreating
                     }
                     disabled={
-                      shipmentCreating
+                      shipmentCreating ||
+                      shipmentSyncing
                     }
                     leftIcon={
                       <PackagePlus
