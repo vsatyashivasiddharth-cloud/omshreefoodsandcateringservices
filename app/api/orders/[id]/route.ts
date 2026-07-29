@@ -40,6 +40,14 @@ function serializeDecimal(
     : null;
 }
 
+function serializeDate(
+  value: Date | null | undefined,
+) {
+  return value
+    ? value.toISOString()
+    : null;
+}
+
 function errorResponse(
   error: string,
   status: number,
@@ -57,11 +65,10 @@ function errorResponse(
 
 export async function GET(
   request: NextRequest,
-  context: RouteContext,
+  { params }: RouteContext,
 ) {
   try {
-    const { id } =
-      await context.params;
+    const { id } = await params;
 
     const orderId = id.trim();
 
@@ -88,10 +95,8 @@ export async function GET(
     }
 
     /*
-     * Both the order ID and its private access token must match.
-     *
-     * The token is intentionally not selected or returned in the
-     * response, so it cannot accidentally appear inside page data.
+     * Both the order ID and private token must match.
+     * The token is never selected or returned.
      */
     const order =
       await prisma.order.findFirst({
@@ -183,8 +188,8 @@ export async function GET(
       });
 
     /*
-     * Return the same response for an unknown order and an invalid
-     * token. This avoids revealing whether a particular order exists.
+     * Use the same response for an unknown order and an invalid
+     * token so the endpoint does not reveal whether an order exists.
      */
     if (!order) {
       return errorResponse(
@@ -246,35 +251,55 @@ export async function GET(
         shipping: {
           mode: order.shippingMode,
 
+          /*
+           * This is your normalized internal status:
+           * CREATED, IN_TRANSIT, CANCELLED, DELIVERED, etc.
+           */
           status:
             order.shipmentStatus,
 
           quotedAt:
-            order.shippingQuotedAt,
+            serializeDate(
+              order.shippingQuotedAt,
+            ),
 
           pickupScheduledAt:
-            order.pickupScheduledAt,
+            serializeDate(
+              order.pickupScheduledAt,
+            ),
 
           shippedAt:
-            order.shippedAt,
+            serializeDate(
+              order.shippedAt,
+            ),
 
           estimatedDeliveryAt:
-            order.estimatedDeliveryAt,
+            serializeDate(
+              order.estimatedDeliveryAt,
+            ),
 
           deliveredAt:
-            order.deliveredAt,
+            serializeDate(
+              order.deliveredAt,
+            ),
 
           tracking: {
             number:
               order.delhiveryWaybill,
 
+            /*
+             * Raw courier status for customer-friendly display.
+             * The provider name is not exposed.
+             */
             status:
               order.delhiveryStatus,
           },
 
           package: order.package
             ? {
-                ...order.package,
+                id: order.package.id,
+                name: order.package.name,
+                code: order.package.code,
 
                 packedWeightGrams:
                   order.packageWeightGrams,
@@ -308,10 +333,7 @@ export async function GET(
 
             return {
               id: item.id,
-
-              quantity:
-                item.quantity,
-
+              quantity: item.quantity,
               unitPrice,
 
               lineTotal:
@@ -322,7 +344,7 @@ export async function GET(
                 ) / 100,
 
               createdAt:
-                item.createdAt,
+                item.createdAt.toISOString(),
 
               product:
                 item.product,
@@ -331,10 +353,10 @@ export async function GET(
         ),
 
         createdAt:
-          order.createdAt,
+          order.createdAt.toISOString(),
 
         updatedAt:
-          order.updatedAt,
+          order.updatedAt.toISOString(),
       },
       {
         status: 200,

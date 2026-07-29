@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useState,
   type ReactNode,
@@ -19,7 +20,9 @@ import {
   Package,
   PackageCheck,
   Phone,
+  RefreshCw,
   ShoppingBag,
+  TriangleAlert,
   Truck,
 } from "lucide-react";
 
@@ -140,89 +143,13 @@ interface DetailCardProps {
   value: string;
 }
 
-const nextSteps = [
-  {
-    title: "Order Confirmed",
-    description:
-      "We have successfully received your order and shared it with our team.",
-    icon: CheckCircle2,
-  },
-  {
-    title: "Fresh Preparation",
-    description:
-      "Your food will be freshly prepared using carefully selected ingredients.",
-    icon: PackageCheck,
-  },
-  {
-    title: "Ready for Dispatch",
-    description:
-      "Your parcel will be carefully packed and prepared for delivery.",
-    icon: Truck,
-  },
-] as const;
-
-function formatDate(
-  value: string | null,
-) {
-  if (!value) {
-    return "";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  return new Intl.DateTimeFormat(
-    "en-IN",
-    {
-      dateStyle: "medium",
-      timeStyle: "short",
-    },
-  ).format(date);
-}
-
-function formatStatus(value: string) {
-  return value
-    .replaceAll("_", " ")
-    .toLowerCase()
-    .replace(/\b\w/g, (character) =>
-      character.toUpperCase(),
-    );
-}
-
-function formatWeight(
-  value: number | null,
-) {
-  if (
-    value === null ||
-    !Number.isFinite(value) ||
-    value <= 0
-  ) {
-    return "Not available";
-  }
-
-  if (value >= 1000) {
-    return `${(
-      value / 1000
-    ).toLocaleString("en-IN", {
-      maximumFractionDigits: 2,
-    })} kg`;
-  }
-
-  return `${value.toLocaleString(
-    "en-IN",
-  )} g`;
-}
-
-function getDeliveryMethod(
-  mode: string | null,
-) {
-  return mode === "EXPRESS"
-    ? "Express Delivery"
-    : "Standard Delivery";
-}
+const ACTIVE_SHIPMENT_STATUSES =
+  new Set([
+    "CREATED",
+    "PICKUP_SCHEDULED",
+    "IN_TRANSIT",
+    "OUT_FOR_DELIVERY",
+  ]);
 
 function isRecord(
   value: unknown,
@@ -236,7 +163,7 @@ function isRecord(
 
 function isNullableString(
   value: unknown,
-) {
+): value is string | null {
   return (
     typeof value === "string" ||
     value === null
@@ -245,7 +172,7 @@ function isNullableString(
 
 function isNullableNumber(
   value: unknown,
-) {
+): value is number | null {
   return (
     value === null ||
     (typeof value === "number" &&
@@ -280,11 +207,8 @@ function isOrderProduct(
 function isOrderItem(
   value: unknown,
 ): value is OrderItem {
-  if (!isRecord(value)) {
-    return false;
-  }
-
   return (
+    isRecord(value) &&
     typeof value.id === "string" &&
     Number.isInteger(value.quantity) &&
     Number(value.quantity) > 0 &&
@@ -357,11 +281,8 @@ function isTrackingDetails(
 function isShippingDetails(
   value: unknown,
 ): value is OrderShippingDetails {
-  if (!isRecord(value)) {
-    return false;
-  }
-
   return (
+    isRecord(value) &&
     isNullableString(value.mode) &&
     typeof value.status ===
       "string" &&
@@ -389,11 +310,8 @@ function isShippingDetails(
 function isOrderDetails(
   value: unknown,
 ): value is OrderDetails {
-  if (!isRecord(value)) {
-    return false;
-  }
-
   return (
+    isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.customerName ===
       "string" &&
@@ -448,6 +366,129 @@ function isOrderDetails(
   );
 }
 
+function formatDate(
+  value: string | null,
+) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-IN",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  ).format(date);
+}
+
+function formatStatus(
+  value: string,
+) {
+  return value
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (character) =>
+      character.toUpperCase(),
+    );
+}
+
+function formatWeight(
+  value: number | null,
+) {
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return "Not available";
+  }
+
+  if (value >= 1000) {
+    return `${(
+      value / 1000
+    ).toLocaleString("en-IN", {
+      maximumFractionDigits: 2,
+    })} kg`;
+  }
+
+  return `${value.toLocaleString(
+    "en-IN",
+  )} g`;
+}
+
+function formatDimension(
+  value: number | null,
+) {
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return "—";
+  }
+
+  return value.toLocaleString(
+    "en-IN",
+    {
+      maximumFractionDigits: 2,
+    },
+  );
+}
+
+function getDeliveryMethod(
+  mode: string | null,
+) {
+  return mode === "EXPRESS"
+    ? "Express Delivery"
+    : "Standard Delivery";
+}
+
+function getShipmentMessage(
+  status: string,
+) {
+  switch (
+    status.trim().toUpperCase()
+  ) {
+    case "QUOTED":
+      return "Your delivery charge has been calculated. The shipment will be created after payment confirmation.";
+
+    case "CREATED":
+      return "Your shipment has been created and is waiting to be prepared for pickup.";
+
+    case "PICKUP_SCHEDULED":
+      return "Pickup has been scheduled for your parcel.";
+
+    case "IN_TRANSIT":
+      return "Your parcel is currently travelling toward the delivery location.";
+
+    case "OUT_FOR_DELIVERY":
+      return "Your parcel is out for delivery and should reach you soon.";
+
+    case "DELIVERED":
+      return "Your order has been delivered successfully.";
+
+    case "CANCELLED":
+      return "The courier shipment associated with this order has been cancelled.";
+
+    case "RTO":
+      return "The parcel is being returned to the sender.";
+
+    case "FAILED":
+      return "The shipment could not proceed. Please contact customer support.";
+
+    default:
+      return "Delivery information will appear here when it becomes available.";
+  }
+}
+
 export default function OrderSuccessContent() {
   const searchParams =
     useSearchParams();
@@ -470,14 +511,25 @@ export default function OrderSuccessContent() {
   const [loading, setLoading] =
     useState(true);
 
+  const [refreshing, setRefreshing] =
+    useState(false);
+
   const [error, setError] =
     useState<string | null>(null);
 
-  useEffect(() => {
-    const controller =
-      new AbortController();
+  const [
+    refreshNotification,
+    setRefreshNotification,
+  ] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
-    async function loadOrder() {
+  const loadOrder = useCallback(
+    async (
+      signal?: AbortSignal,
+      isRefresh = false,
+    ) => {
       if (!orderId || !orderAccessToken) {
         setOrder(null);
         setError(
@@ -487,8 +539,12 @@ export default function OrderSuccessContent() {
         return;
       }
 
-      setLoading(true);
-      setError(null);
+      if (isRefresh) {
+        setRefreshing(true);
+        setRefreshNotification(null);
+      } else {
+        setLoading(true);
+      }
 
       try {
         const response = await fetch(
@@ -500,8 +556,7 @@ export default function OrderSuccessContent() {
           {
             method: "GET",
             cache: "no-store",
-            signal:
-              controller.signal,
+            signal,
           },
         );
 
@@ -530,6 +585,15 @@ export default function OrderSuccessContent() {
         }
 
         setOrder(data);
+        setError(null);
+
+        if (isRefresh) {
+          setRefreshNotification({
+            type: "success",
+            message:
+              "Delivery information refreshed successfully.",
+          });
+        }
       } catch (loadError) {
         if (
           loadError instanceof
@@ -545,28 +609,50 @@ export default function OrderSuccessContent() {
           loadError,
         );
 
-        setOrder(null);
-
-        setError(
+        const message =
           loadError instanceof Error
             ? loadError.message
-            : "Unable to load your order.",
-        );
+            : "Unable to load your order.";
+
+        if (isRefresh) {
+          /*
+           * Keep the previously loaded order visible when
+           * only a refresh request fails.
+           */
+          setRefreshNotification({
+            type: "error",
+            message,
+          });
+        } else {
+          setOrder(null);
+          setError(message);
+        }
       } finally {
-        if (
-          !controller.signal.aborted
-        ) {
+        if (!signal?.aborted) {
           setLoading(false);
+          setRefreshing(false);
         }
       }
-    }
+    },
+    [
+      orderAccessToken,
+      orderId,
+    ],
+  );
 
-    void loadOrder();
+  useEffect(() => {
+    const controller =
+      new AbortController();
+
+    void loadOrder(
+      controller.signal,
+      false,
+    );
 
     return () => {
       controller.abort();
     };
-  }, [orderAccessToken, orderId]);
+  }, [loadOrder]);
 
   if (loading) {
     return (
@@ -584,8 +670,7 @@ export default function OrderSuccessContent() {
 
             <p className="mt-3 text-gray-500">
               Please wait while we
-              prepare your
-              confirmation.
+              prepare your confirmation.
             </p>
           </Card>
         </Container>
@@ -602,7 +687,7 @@ export default function OrderSuccessContent() {
             className="mx-auto max-w-3xl text-center shadow-xl"
           >
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-red-50">
-              <PackageCheck
+              <TriangleAlert
                 size={42}
                 className="text-red-500"
                 aria-hidden="true"
@@ -610,8 +695,7 @@ export default function OrderSuccessContent() {
             </div>
 
             <h1 className="mt-6 text-3xl font-bold text-[#6D2E00]">
-              Order Details
-              Unavailable
+              Order Details Unavailable
             </h1>
 
             <p className="mx-auto mt-4 max-w-xl leading-7 text-gray-600">
@@ -660,14 +744,56 @@ export default function OrderSuccessContent() {
   const supportPhone =
     shopConfig.supportPhone;
 
-  const paymentLabel = "Prepaid";
+  const shipping =
+    order.shipping;
 
   const shippingPackage =
-    order.shipping.package;
+    shipping.package;
 
   const trackingNumber =
-    order.shipping.tracking
-      .number;
+    shipping.tracking.number;
+
+  const rawTrackingStatus =
+    shipping.tracking.status;
+
+  const normalizedShipmentStatus =
+    shipping.status
+      .trim()
+      .toUpperCase();
+
+  const isShipmentActive =
+    ACTIVE_SHIPMENT_STATUSES.has(
+      normalizedShipmentStatus,
+    );
+
+  const isShipmentCancelled =
+    normalizedShipmentStatus ===
+    "CANCELLED";
+
+  const isShipmentDelivered =
+    normalizedShipmentStatus ===
+    "DELIVERED";
+
+  const isShipmentRto =
+    normalizedShipmentStatus ===
+    "RTO";
+
+  const isShipmentFailed =
+    normalizedShipmentStatus ===
+    "FAILED";
+
+  const estimatedDeliveryDate =
+    formatDate(
+      shipping.estimatedDeliveryAt,
+    );
+
+  const deliveredDate =
+    formatDate(
+      shipping.deliveredAt,
+    );
+
+  const updatedDate =
+    formatDate(order.updatedAt);
 
   return (
     <section className="relative overflow-hidden py-12 sm:py-16">
@@ -714,11 +840,11 @@ export default function OrderSuccessContent() {
             </h1>
 
             <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-gray-600">
-              We have received your
-              order successfully. Our
-              team will begin preparing
-              it shortly and arrange
-              delivery to your address.
+              We have received your order
+              successfully. You can review
+              your payment, products and
+              latest delivery information
+              below.
             </p>
 
             <div
@@ -760,12 +886,9 @@ export default function OrderSuccessContent() {
                   </h2>
 
                   <p className="mt-2 text-gray-500">
-                    {
-                      order.items
-                        .length
-                    }{" "}
-                    {order.items
-                      .length === 1
+                    {order.items.length}{" "}
+                    {order.items.length ===
+                    1
                       ? "product"
                       : "products"}{" "}
                     · {totalItems}{" "}
@@ -802,14 +925,12 @@ export default function OrderSuccessContent() {
                         >
                           <Image
                             src={
-                              item
-                                .product
+                              item.product
                                 .image ||
                               "/images/no-image.jpg"
                             }
                             alt={
-                              item
-                                .product
+                              item.product
                                 .name
                             }
                             fill
@@ -826,16 +947,14 @@ export default function OrderSuccessContent() {
                                 className="rounded font-semibold text-[#6D2E00] transition-colors hover:text-[#C89B3C] focus:outline-none focus:ring-2 focus:ring-[#C89B3C]/30"
                               >
                                 {
-                                  item
-                                    .product
+                                  item.product
                                     .name
                                 }
                               </Link>
 
                               <p className="mt-1 text-xs uppercase tracking-wide text-[#C89B3C]">
                                 {
-                                  item
-                                    .product
+                                  item.product
                                     .category
                                     .name
                                 }
@@ -846,9 +965,7 @@ export default function OrderSuccessContent() {
                                   item.unitPrice,
                                 )}{" "}
                                 ×{" "}
-                                {
-                                  item.quantity
-                                }
+                                {item.quantity}
                               </p>
                             </div>
 
@@ -929,15 +1046,164 @@ export default function OrderSuccessContent() {
               padding="lg"
               className="shadow-lg"
             >
-              <h2 className="text-2xl font-bold text-[#6D2E00] sm:text-3xl">
-                Delivery Information
-              </h2>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-[#6D2E00] sm:text-3xl">
+                    Delivery Information
+                  </h2>
 
-              <p className="mt-3 leading-7 text-gray-500">
-                Review your delivery,
-                payment and package
-                information.
-              </p>
+                  <p className="mt-3 leading-7 text-gray-500">
+                    Review the latest
+                    delivery, payment and
+                    package information.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    void loadOrder(
+                      undefined,
+                      true,
+                    );
+                  }}
+                  disabled={refreshing}
+                  className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-5 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <RefreshCw
+                    size={17}
+                    aria-hidden="true"
+                    className={
+                      refreshing
+                        ? "animate-spin"
+                        : ""
+                    }
+                  />
+
+                  {refreshing
+                    ? "Refreshing..."
+                    : "Refresh Delivery Status"}
+                </button>
+              </div>
+
+              {refreshNotification && (
+                <div
+                  role={
+                    refreshNotification.type ===
+                    "error"
+                      ? "alert"
+                      : "status"
+                  }
+                  className={`mt-5 rounded-2xl border px-4 py-3 text-sm font-medium ${
+                    refreshNotification.type ===
+                    "success"
+                      ? "border-green-200 bg-green-50 text-green-800"
+                      : "border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  {
+                    refreshNotification.message
+                  }
+                </div>
+              )}
+
+              {isShipmentCancelled && (
+                <StatusNotice
+                  type="error"
+                  icon={
+                    <TriangleAlert
+                      size={22}
+                      aria-hidden="true"
+                    />
+                  }
+                  title="Delivery shipment cancelled"
+                >
+                  The courier shipment
+                  associated with this order
+                  has been cancelled. Your
+                  payment and website order
+                  remain recorded. Please
+                  contact customer support
+                  for assistance or
+                  rescheduling.
+                </StatusNotice>
+              )}
+
+              {isShipmentDelivered && (
+                <StatusNotice
+                  type="success"
+                  icon={
+                    <PackageCheck
+                      size={22}
+                      aria-hidden="true"
+                    />
+                  }
+                  title="Order delivered"
+                >
+                  Your order has been
+                  delivered successfully
+                  {deliveredDate
+                    ? ` on ${deliveredDate}.`
+                    : "."}
+                </StatusNotice>
+              )}
+
+              {isShipmentActive && (
+                <StatusNotice
+                  type="info"
+                  icon={
+                    <Truck
+                      size={22}
+                      aria-hidden="true"
+                    />
+                  }
+                  title={formatStatus(
+                    shipping.status,
+                  )}
+                >
+                  {estimatedDeliveryDate
+                    ? `Estimated delivery: ${estimatedDeliveryDate}.`
+                    : getShipmentMessage(
+                        shipping.status,
+                      )}
+                </StatusNotice>
+              )}
+
+              {isShipmentRto && (
+                <StatusNotice
+                  type="warning"
+                  icon={
+                    <Truck
+                      size={22}
+                      aria-hidden="true"
+                    />
+                  }
+                  title="Returning to sender"
+                >
+                  The parcel is being
+                  returned to the sender.
+                  Please contact customer
+                  support for assistance.
+                </StatusNotice>
+              )}
+
+              {isShipmentFailed && (
+                <StatusNotice
+                  type="error"
+                  icon={
+                    <TriangleAlert
+                      size={22}
+                      aria-hidden="true"
+                    />
+                  }
+                  title="Shipment requires attention"
+                >
+                  The shipment could not
+                  proceed. Please contact
+                  customer support so the
+                  delivery can be reviewed.
+                </StatusNotice>
+              )}
 
               <div className="mt-7 grid gap-5 sm:grid-cols-2">
                 <DetailCard
@@ -949,7 +1215,7 @@ export default function OrderSuccessContent() {
                   }
                   label="Delivery Method"
                   value={getDeliveryMethod(
-                    order.shipping.mode,
+                    shipping.mode,
                   )}
                 />
 
@@ -962,7 +1228,7 @@ export default function OrderSuccessContent() {
                   }
                   label="Delivery Status"
                   value={formatStatus(
-                    order.shipping.status,
+                    shipping.status,
                   )}
                 />
 
@@ -974,7 +1240,10 @@ export default function OrderSuccessContent() {
                     />
                   }
                   label="Payment Method"
-                  value={paymentLabel}
+                  value={
+                    order.paymentMethod ||
+                    "Prepaid"
+                  }
                 />
 
                 <DetailCard
@@ -991,11 +1260,91 @@ export default function OrderSuccessContent() {
                 />
               </div>
 
+              <Card
+                variant="filled"
+                padding="md"
+                className="mt-7 shadow-none"
+              >
+                <div className="space-y-4">
+                  <InfoRow
+                    label="Current Status"
+                    value={formatStatus(
+                      shipping.status,
+                    )}
+                  />
+
+                  {rawTrackingStatus && (
+                    <InfoRow
+                      label="Latest Update"
+                      value={formatStatus(
+                        rawTrackingStatus,
+                      )}
+                    />
+                  )}
+
+                  {trackingNumber && (
+                    <InfoRow
+                      label="Tracking Number"
+                      value={
+                        <span className="break-all">
+                          {trackingNumber}
+                        </span>
+                      }
+                    />
+                  )}
+
+                  {formatDate(
+                    shipping.pickupScheduledAt,
+                  ) && (
+                    <InfoRow
+                      label="Pickup Scheduled"
+                      value={formatDate(
+                        shipping.pickupScheduledAt,
+                      )}
+                    />
+                  )}
+
+                  {formatDate(
+                    shipping.shippedAt,
+                  ) && (
+                    <InfoRow
+                      label="Shipped On"
+                      value={formatDate(
+                        shipping.shippedAt,
+                      )}
+                    />
+                  )}
+
+                  {estimatedDeliveryDate && (
+                    <InfoRow
+                      label="Estimated Delivery"
+                      value={
+                        estimatedDeliveryDate
+                      }
+                    />
+                  )}
+
+                  {deliveredDate && (
+                    <InfoRow
+                      label="Delivered On"
+                      value={deliveredDate}
+                    />
+                  )}
+
+                  {updatedDate && (
+                    <InfoRow
+                      label="Last Refreshed"
+                      value={updatedDate}
+                    />
+                  )}
+                </div>
+              </Card>
+
               {shippingPackage && (
                 <Card
                   variant="filled"
                   padding="md"
-                  className="mt-7 shadow-none"
+                  className="mt-5 shadow-none"
                 >
                   <div className="flex items-start gap-4">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[#C89B3C] shadow-sm">
@@ -1007,18 +1356,25 @@ export default function OrderSuccessContent() {
 
                     <div className="min-w-0 flex-1">
                       <h3 className="font-semibold text-[#6D2E00]">
-                        Package
-                        Information
+                        Package Information
                       </h3>
 
                       <p className="mt-1 text-sm text-gray-500">
-                        Your items will
-                        be securely
-                        packed for
+                        Your products are
+                        packed securely for
                         delivery.
                       </p>
 
                       <div className="mt-4 grid gap-3 text-sm text-gray-600 sm:grid-cols-2">
+                        <p>
+                          Package:{" "}
+                          <span className="font-semibold text-[#6D2E00]">
+                            {
+                              shippingPackage.name
+                            }
+                          </span>
+                        </p>
+
                         <p>
                           Packed weight:{" "}
                           <span className="font-semibold text-[#6D2E00]">
@@ -1028,44 +1384,32 @@ export default function OrderSuccessContent() {
                           </span>
                         </p>
 
-                        <p>
+                        <p className="sm:col-span-2">
                           Dimensions:{" "}
                           <span className="font-semibold text-[#6D2E00]">
-                            {shippingPackage
-                              .dimensions
-                              .lengthCm ??
-                              "—"}{" "}
+                            {formatDimension(
+                              shippingPackage
+                                .dimensions
+                                .lengthCm,
+                            )}{" "}
                             ×{" "}
-                            {shippingPackage
-                              .dimensions
-                              .breadthCm ??
-                              "—"}{" "}
+                            {formatDimension(
+                              shippingPackage
+                                .dimensions
+                                .breadthCm,
+                            )}{" "}
                             ×{" "}
-                            {shippingPackage
-                              .dimensions
-                              .heightCm ??
-                              "—"}{" "}
+                            {formatDimension(
+                              shippingPackage
+                                .dimensions
+                                .heightCm,
+                            )}{" "}
                             cm
                           </span>
                         </p>
                       </div>
                     </div>
                   </div>
-                </Card>
-              )}
-
-              {trackingNumber && (
-                <Card
-                  variant="filled"
-                  padding="md"
-                  className="mt-5 bg-green-50 shadow-none"
-                >
-                  <InfoRow
-                    label="Tracking Number"
-                    value={
-                      trackingNumber
-                    }
-                  />
                 </Card>
               )}
             </Card>
@@ -1079,58 +1423,44 @@ export default function OrderSuccessContent() {
               </h2>
 
               <p className="mt-3 leading-7 text-gray-500">
-                Here is what you can
-                expect after placing
-                your order.
+                Your order and shipment
+                information will be updated
+                as the delivery progresses.
               </p>
 
-              <div className="mt-8 space-y-7">
-                {nextSteps.map(
-                  (step, index) => {
-                    const Icon =
-                      step.icon;
+              <div className="mt-8 space-y-6">
+                <NextStep
+                  icon={
+                    <CheckCircle2
+                      size={22}
+                      aria-hidden="true"
+                    />
+                  }
+                  title="Order Confirmed"
+                  description="Your payment and order details have been recorded successfully."
+                />
 
-                    return (
-                      <div
-                        key={
-                          step.title
-                        }
-                        className="relative flex gap-4 sm:gap-5"
-                      >
-                        {index <
-                          nextSteps.length -
-                            1 && (
-                          <div
-                            aria-hidden="true"
-                            className="absolute left-6 top-12 h-[calc(100%+4px)] w-px bg-[#F3DFC2]"
-                          />
-                        )}
+                <NextStep
+                  icon={
+                    <PackageCheck
+                      size={22}
+                      aria-hidden="true"
+                    />
+                  }
+                  title="Fresh Preparation"
+                  description="Your food will be freshly prepared and packed carefully."
+                />
 
-                        <div className="relative z-10 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FFF4DE] ring-4 ring-white">
-                          <Icon
-                            size={22}
-                            className="text-[#C89B3C]"
-                            aria-hidden="true"
-                          />
-                        </div>
-
-                        <div className="pb-2">
-                          <h3 className="font-semibold text-[#6D2E00]">
-                            {
-                              step.title
-                            }
-                          </h3>
-
-                          <p className="mt-2 leading-7 text-gray-600">
-                            {
-                              step.description
-                            }
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  },
-                )}
+                <NextStep
+                  icon={
+                    <Truck
+                      size={22}
+                      aria-hidden="true"
+                    />
+                  }
+                  title="Delivery Updates"
+                  description="Use the refresh button above to load the latest information stored for your shipment."
+                />
               </div>
             </Card>
           </div>
@@ -1155,8 +1485,9 @@ export default function OrderSuccessContent() {
                   </h2>
 
                   <p className="mt-2 text-sm text-gray-500">
-                    Your order will
-                    be delivered here.
+                    Your order will be
+                    delivered to this
+                    address.
                   </p>
                 </div>
               </div>
@@ -1177,9 +1508,7 @@ export default function OrderSuccessContent() {
                 {order.email && (
                   <InfoRow
                     label="Email"
-                    value={
-                      order.email
-                    }
+                    value={order.email}
                   />
                 )}
 
@@ -1213,16 +1542,12 @@ export default function OrderSuccessContent() {
                   }
                 />
 
-                {formatDate(
-                  order.shipping
-                    .estimatedDeliveryAt,
-                ) && (
+                {estimatedDeliveryDate && (
                   <InfoRow
                     label="Estimated Delivery"
-                    value={formatDate(
-                      order.shipping
-                        .estimatedDeliveryAt,
-                    )}
+                    value={
+                      estimatedDeliveryDate
+                    }
                   />
                 )}
               </div>
@@ -1237,10 +1562,9 @@ export default function OrderSuccessContent() {
               </h2>
 
               <p className="mt-4 leading-7 text-gray-600">
-                Contact our support
-                team if you have any
-                questions regarding
-                your order.
+                Contact our support team
+                with your order reference
+                for assistance.
               </p>
 
               <Card
@@ -1266,8 +1590,7 @@ export default function OrderSuccessContent() {
                     </p>
 
                     <p className="mt-1 font-semibold text-[#6D2E00]">
-                      +91{" "}
-                      {supportPhone}
+                      +91 {supportPhone}
                     </p>
                   </div>
                 </a>
@@ -1381,5 +1704,127 @@ function InfoRow({
         {value}
       </span>
     </div>
+  );
+}
+
+function NextStep({
+  icon,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex gap-4 sm:gap-5">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FFF4DE] text-[#C89B3C] ring-4 ring-white">
+        {icon}
+      </div>
+
+      <div>
+        <h3 className="font-semibold text-[#6D2E00]">
+          {title}
+        </h3>
+
+        <p className="mt-2 leading-7 text-gray-600">
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function StatusNotice({
+  type,
+  icon,
+  title,
+  children,
+}: {
+  type:
+    | "success"
+    | "error"
+    | "warning"
+    | "info";
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+}) {
+  const styles = {
+    success: {
+      card:
+        "border-green-200 bg-green-50",
+      icon:
+        "text-green-600",
+      title:
+        "text-green-800",
+      text:
+        "text-green-700",
+    },
+
+    error: {
+      card:
+        "border-red-200 bg-red-50",
+      icon:
+        "text-red-600",
+      title:
+        "text-red-800",
+      text:
+        "text-red-700",
+    },
+
+    warning: {
+      card:
+        "border-amber-200 bg-amber-50",
+      icon:
+        "text-amber-600",
+      title:
+        "text-amber-800",
+      text:
+        "text-amber-700",
+    },
+
+    info: {
+      card:
+        "border-[#F3DFC2] bg-[#FFFDF8]",
+      icon:
+        "text-[#C89B3C]",
+      title:
+        "text-[#6D2E00]",
+      text:
+        "text-gray-600",
+    },
+  } as const;
+
+  const style = styles[type];
+
+  return (
+    <Card
+      variant="filled"
+      padding="md"
+      className={`mt-7 border shadow-none ${style.card}`}
+    >
+      <div className="flex items-start gap-4">
+        <div
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm ${style.icon}`}
+        >
+          {icon}
+        </div>
+
+        <div>
+          <h3
+            className={`font-semibold ${style.title}`}
+          >
+            {title}
+          </h3>
+
+          <p
+            className={`mt-2 text-sm leading-6 ${style.text}`}
+          >
+            {children}
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }
