@@ -10,16 +10,16 @@ import Link from "next/link";
 import {
   ArrowLeft,
   BadgeIndianRupee,
-  CalendarClock,
+  CalendarDays,
   CheckCircle2,
   Clock3,
   CreditCard,
   MapPin,
   Package,
   PackageCheck,
+  Phone,
   RefreshCw,
   Search,
-  ShieldCheck,
   ShoppingBag,
   TriangleAlert,
   Truck,
@@ -31,47 +31,46 @@ import Container from "@/components/ui/Container";
 import Spinner from "@/components/ui/Spinner";
 import { formatCurrency } from "@/lib/shop";
 
-interface OrderCategory {
+interface TrackingCategory {
   id: string;
   name: string;
   slug: string;
 }
 
-interface OrderProduct {
+interface TrackingProduct {
   id: string;
   name: string;
   slug: string;
   image: string | null;
-  category: OrderCategory;
+  category: TrackingCategory;
 }
 
-interface OrderItem {
+interface TrackingOrderItem {
   id: string;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
-  createdAt: string;
-  product: OrderProduct;
+  product: TrackingProduct;
 }
 
-interface DeliveryAddress {
-  address: string;
+interface DeliveryDestination {
   city: string;
   state: string;
   pincode: string;
 }
 
-interface ShippingPackageDetails {
+interface PackageDimensions {
+  lengthCm: number | null;
+  breadthCm: number | null;
+  heightCm: number | null;
+}
+
+interface TrackingPackage {
   id: string;
   name: string;
   code: string;
   packedWeightGrams: number | null;
-
-  dimensions: {
-    lengthCm: number | null;
-    breadthCm: number | null;
-    heightCm: number | null;
-  };
+  dimensions: PackageDimensions;
 }
 
 interface TrackingDetails {
@@ -79,31 +78,25 @@ interface TrackingDetails {
   status: string | null;
 }
 
-interface OrderShippingDetails {
+interface ShippingDetails {
+  provider: string;
   mode: string | null;
   status: string;
-
+  tracking: TrackingDetails;
   quotedAt: string | null;
   pickupScheduledAt: string | null;
   shippedAt: string | null;
   estimatedDeliveryAt: string | null;
   deliveredAt: string | null;
-
-  tracking: TrackingDetails;
-  package: ShippingPackageDetails | null;
+  package: TrackingPackage | null;
 }
 
-interface OrderDetails {
+interface TrackingOrder {
   id: string;
-
   customerName: string;
-  phone: string;
-  email: string | null;
-
-  deliveryAddress: DeliveryAddress;
+  deliveryDestination: DeliveryDestination;
 
   subtotalAmount: number;
-  shippingEstimatedAmount: number;
   shippingChargedAmount: number;
   shippingDiscountAmount: number;
   totalAmount: number;
@@ -112,12 +105,17 @@ interface OrderDetails {
   paymentStatus: string;
   paymentMethod: string | null;
 
-  shipping: OrderShippingDetails;
-
-  items: OrderItem[];
+  shipping: ShippingDetails;
+  items: TrackingOrderItem[];
 
   createdAt: string;
   updatedAt: string;
+}
+
+interface TrackingResponse {
+  phone: string;
+  count: number;
+  orders: TrackingOrder[];
 }
 
 interface ErrorResponse {
@@ -125,29 +123,24 @@ interface ErrorResponse {
   message?: string;
 }
 
-interface InfoRowProps {
-  label: string;
-  value: ReactNode;
-}
-
 interface StatusNoticeProps {
-  type:
-    | "success"
-    | "error"
-    | "warning"
-    | "info";
+  type: "success" | "error" | "warning" | "info";
   icon: ReactNode;
   title: string;
   children: ReactNode;
 }
 
-const ACTIVE_SHIPMENT_STATUSES =
-  new Set([
-    "CREATED",
-    "PICKUP_SCHEDULED",
-    "IN_TRANSIT",
-    "OUT_FOR_DELIVERY",
-  ]);
+interface InfoRowProps {
+  label: string;
+  value: ReactNode;
+}
+
+const ACTIVE_SHIPMENT_STATUSES = new Set([
+  "CREATED",
+  "PICKUP_SCHEDULED",
+  "IN_TRANSIT",
+  "OUT_FOR_DELIVERY",
+]);
 
 function isRecord(
   value: unknown,
@@ -162,10 +155,7 @@ function isRecord(
 function isNullableString(
   value: unknown,
 ): value is string | null {
-  return (
-    typeof value === "string" ||
-    value === null
-  );
+  return typeof value === "string" || value === null;
 }
 
 function isNullableNumber(
@@ -173,14 +163,13 @@ function isNullableNumber(
 ): value is number | null {
   return (
     value === null ||
-    (typeof value === "number" &&
-      Number.isFinite(value))
+    (typeof value === "number" && Number.isFinite(value))
   );
 }
 
-function isOrderCategory(
+function isTrackingCategory(
   value: unknown,
-): value is OrderCategory {
+): value is TrackingCategory {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
@@ -189,22 +178,22 @@ function isOrderCategory(
   );
 }
 
-function isOrderProduct(
+function isTrackingProduct(
   value: unknown,
-): value is OrderProduct {
+): value is TrackingProduct {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     typeof value.slug === "string" &&
     isNullableString(value.image) &&
-    isOrderCategory(value.category)
+    isTrackingCategory(value.category)
   );
 }
 
-function isOrderItem(
+function isTrackingOrderItem(
   value: unknown,
-): value is OrderItem {
+): value is TrackingOrderItem {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
@@ -213,55 +202,20 @@ function isOrderItem(
     value.quantity > 0 &&
     typeof value.unitPrice === "number" &&
     Number.isFinite(value.unitPrice) &&
-    value.unitPrice >= 0 &&
     typeof value.lineTotal === "number" &&
     Number.isFinite(value.lineTotal) &&
-    value.lineTotal >= 0 &&
-    typeof value.createdAt ===
-      "string" &&
-    isOrderProduct(value.product)
+    isTrackingProduct(value.product)
   );
 }
 
-function isDeliveryAddress(
+function isDeliveryDestination(
   value: unknown,
-): value is DeliveryAddress {
+): value is DeliveryDestination {
   return (
     isRecord(value) &&
-    typeof value.address === "string" &&
     typeof value.city === "string" &&
     typeof value.state === "string" &&
     typeof value.pincode === "string"
-  );
-}
-
-function isShippingPackage(
-  value: unknown,
-): value is ShippingPackageDetails {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  const dimensions =
-    value.dimensions;
-
-  return (
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.code === "string" &&
-    isNullableNumber(
-      value.packedWeightGrams,
-    ) &&
-    isRecord(dimensions) &&
-    isNullableNumber(
-      dimensions.lengthCm,
-    ) &&
-    isNullableNumber(
-      dimensions.breadthCm,
-    ) &&
-    isNullableNumber(
-      dimensions.heightCm,
-    )
   );
 }
 
@@ -275,91 +229,80 @@ function isTrackingDetails(
   );
 }
 
-function isShippingDetails(
+function isTrackingPackage(
   value: unknown,
-): value is OrderShippingDetails {
+): value is TrackingPackage {
+  if (!isRecord(value) || !isRecord(value.dimensions)) {
+    return false;
+  }
+
   return (
-    isRecord(value) &&
-    isNullableString(value.mode) &&
-    typeof value.status ===
-      "string" &&
-    isNullableString(value.quotedAt) &&
-    isNullableString(
-      value.pickupScheduledAt,
-    ) &&
-    isNullableString(value.shippedAt) &&
-    isNullableString(
-      value.estimatedDeliveryAt,
-    ) &&
-    isNullableString(
-      value.deliveredAt,
-    ) &&
-    isTrackingDetails(
-      value.tracking,
-    ) &&
-    (value.package === null ||
-      isShippingPackage(
-        value.package,
-      ))
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.code === "string" &&
+    isNullableNumber(value.packedWeightGrams) &&
+    isNullableNumber(value.dimensions.lengthCm) &&
+    isNullableNumber(value.dimensions.breadthCm) &&
+    isNullableNumber(value.dimensions.heightCm)
   );
 }
 
-function isOrderDetails(
+function isShippingDetails(
   value: unknown,
-): value is OrderDetails {
+): value is ShippingDetails {
+  return (
+    isRecord(value) &&
+    typeof value.provider === "string" &&
+    isNullableString(value.mode) &&
+    typeof value.status === "string" &&
+    isTrackingDetails(value.tracking) &&
+    isNullableString(value.quotedAt) &&
+    isNullableString(value.pickupScheduledAt) &&
+    isNullableString(value.shippedAt) &&
+    isNullableString(value.estimatedDeliveryAt) &&
+    isNullableString(value.deliveredAt) &&
+    (value.package === null ||
+      isTrackingPackage(value.package))
+  );
+}
+
+function isTrackingOrder(
+  value: unknown,
+): value is TrackingOrder {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
-    typeof value.customerName ===
-      "string" &&
-    typeof value.phone === "string" &&
-    isNullableString(value.email) &&
-    isDeliveryAddress(
-      value.deliveryAddress,
-    ) &&
-    typeof value.subtotalAmount ===
-      "number" &&
-    Number.isFinite(
-      value.subtotalAmount,
-    ) &&
-    typeof value
-      .shippingEstimatedAmount ===
-      "number" &&
-    Number.isFinite(
-      value.shippingEstimatedAmount,
-    ) &&
-    typeof value
-      .shippingChargedAmount ===
-      "number" &&
-    Number.isFinite(
-      value.shippingChargedAmount,
-    ) &&
-    typeof value
-      .shippingDiscountAmount ===
-      "number" &&
-    Number.isFinite(
-      value.shippingDiscountAmount,
-    ) &&
-    typeof value.totalAmount ===
-      "number" &&
-    Number.isFinite(
-      value.totalAmount,
-    ) &&
+    typeof value.customerName === "string" &&
+    isDeliveryDestination(value.deliveryDestination) &&
+    typeof value.subtotalAmount === "number" &&
+    Number.isFinite(value.subtotalAmount) &&
+    typeof value.shippingChargedAmount === "number" &&
+    Number.isFinite(value.shippingChargedAmount) &&
+    typeof value.shippingDiscountAmount === "number" &&
+    Number.isFinite(value.shippingDiscountAmount) &&
+    typeof value.totalAmount === "number" &&
+    Number.isFinite(value.totalAmount) &&
     typeof value.status === "string" &&
-    typeof value.paymentStatus ===
-      "string" &&
-    isNullableString(
-      value.paymentMethod,
-    ) &&
-    isShippingDetails(
-      value.shipping,
-    ) &&
+    typeof value.paymentStatus === "string" &&
+    isNullableString(value.paymentMethod) &&
+    isShippingDetails(value.shipping) &&
     Array.isArray(value.items) &&
-    value.items.every(isOrderItem) &&
-    typeof value.createdAt ===
-      "string" &&
-    typeof value.updatedAt ===
-      "string"
+    value.items.every(isTrackingOrderItem) &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string"
+  );
+}
+
+function isTrackingResponse(
+  value: unknown,
+): value is TrackingResponse {
+  return (
+    isRecord(value) &&
+    typeof value.phone === "string" &&
+    typeof value.count === "number" &&
+    Number.isInteger(value.count) &&
+    Array.isArray(value.orders) &&
+    value.orders.every(isTrackingOrder)
   );
 }
 
@@ -376,13 +319,10 @@ function formatDate(
     return "";
   }
 
-  return new Intl.DateTimeFormat(
-    "en-IN",
-    {
-      dateStyle: "medium",
-      timeStyle: "short",
-    },
-  ).format(date);
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function formatStatus(
@@ -395,49 +335,6 @@ function formatStatus(
     .replace(/\b\w/g, (character) =>
       character.toUpperCase(),
     );
-}
-
-function formatWeight(
-  value: number | null,
-) {
-  if (
-    value === null ||
-    !Number.isFinite(value) ||
-    value <= 0
-  ) {
-    return "Not available";
-  }
-
-  if (value >= 1000) {
-    return `${(
-      value / 1000
-    ).toLocaleString("en-IN", {
-      maximumFractionDigits: 2,
-    })} kg`;
-  }
-
-  return `${value.toLocaleString(
-    "en-IN",
-  )} g`;
-}
-
-function formatDimension(
-  value: number | null,
-) {
-  if (
-    value === null ||
-    !Number.isFinite(value) ||
-    value <= 0
-  ) {
-    return "—";
-  }
-
-  return value.toLocaleString(
-    "en-IN",
-    {
-      maximumFractionDigits: 2,
-    },
-  );
 }
 
 function getDeliveryMethod(
@@ -455,17 +352,61 @@ function getDeliveryMethod(
   }
 }
 
+function formatWeight(
+  value: number | null,
+) {
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return "Not available";
+  }
+
+  if (value >= 1000) {
+    return `${(value / 1000).toLocaleString("en-IN", {
+      maximumFractionDigits: 2,
+    })} kg`;
+  }
+
+  return `${value.toLocaleString("en-IN")} g`;
+}
+
+function formatDimension(
+  value: number | null,
+) {
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return "—";
+  }
+
+  return value.toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  });
+}
+
+function maskOrderId(
+  value: string,
+) {
+  if (value.length <= 12) {
+    return value;
+  }
+
+  return `${value.slice(0, 6)}...${value.slice(-6)}`;
+}
+
 function getShipmentMessage(
   status: string,
 ) {
-  switch (
-    status.trim().toUpperCase()
-  ) {
+  switch (status.trim().toUpperCase()) {
     case "NOT_CREATED":
-      return "Your courier shipment has not been created yet.";
+      return "The courier shipment has not been created yet.";
 
     case "QUOTED":
-      return "The delivery charge has been calculated. The shipment will be created after payment confirmation.";
+      return "Delivery charges have been calculated. Shipment preparation will begin after payment confirmation.";
 
     case "CREATED":
       return "Your shipment has been created and is waiting to be prepared for pickup.";
@@ -474,7 +415,7 @@ function getShipmentMessage(
       return "Pickup has been scheduled for your parcel.";
 
     case "IN_TRANSIT":
-      return "Your parcel is currently travelling toward the delivery address.";
+      return "Your parcel is travelling toward the delivery destination.";
 
     case "OUT_FOR_DELIVERY":
       return "Your parcel is out for delivery and should reach you soon.";
@@ -497,55 +438,37 @@ function getShipmentMessage(
 }
 
 export default function TrackOrderContent() {
-  const [orderId, setOrderId] =
-    useState("");
+  const [phone, setPhone] = useState("");
 
-  const [accessToken, setAccessToken] =
-    useState("");
+  const [result, setResult] =
+    useState<TrackingResponse | null>(null);
 
-  const [order, setOrder] =
-    useState<OrderDetails | null>(
-      null,
-    );
+  const [selectedOrderId, setSelectedOrderId] =
+    useState<string | null>(null);
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [refreshing, setRefreshing] =
-    useState(false);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [error, setError] =
     useState<string | null>(null);
 
-  const [
-    refreshMessage,
-    setRefreshMessage,
-  ] = useState<string | null>(null);
+  const [refreshMessage, setRefreshMessage] =
+    useState<string | null>(null);
 
-  const loadOrder = useCallback(
+  const selectedOrder =
+    result?.orders.find(
+      (order) => order.id === selectedOrderId,
+    ) ??
+    result?.orders[0] ??
+    null;
+
+  const loadOrders = useCallback(
     async (refresh = false) => {
-      const normalizedOrderId =
-        orderId.trim();
+      const normalizedInput = phone.trim();
 
-      const normalizedAccessToken =
-        accessToken.trim();
-
-      if (
-        !normalizedOrderId ||
-        !normalizedAccessToken
-      ) {
+      if (!/^[6-9]\d{9}$/.test(normalizedInput)) {
         setError(
-          "Enter both your order ID and private access token.",
-        );
-        return;
-      }
-
-      if (
-        normalizedAccessToken.length >
-        200
-      ) {
-        setError(
-          "The order access token is invalid.",
+          "Please enter a valid 10-digit Indian mobile number.",
         );
         return;
       }
@@ -555,70 +478,88 @@ export default function TrackOrderContent() {
         setRefreshMessage(null);
       } else {
         setLoading(true);
-        setOrder(null);
+        setResult(null);
+        setSelectedOrderId(null);
       }
 
       setError(null);
 
       try {
         const response = await fetch(
-          `/api/orders/${encodeURIComponent(
-            normalizedOrderId,
-          )}?token=${encodeURIComponent(
-            normalizedAccessToken,
-          )}`,
+          "/api/track-order",
           {
-            method: "GET",
+            method: "POST",
             cache: "no-store",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              phone: normalizedInput,
+            }),
           },
         );
 
-        const data: unknown =
-          await response
-            .json()
-            .catch(() => null);
+        const data: unknown = await response
+          .json()
+          .catch(() => null);
 
         if (!response.ok) {
-          const errorData =
-            isRecord(data)
-              ? (data as ErrorResponse)
-              : null;
+          const errorData = isRecord(data)
+            ? (data as ErrorResponse)
+            : null;
 
           throw new Error(
             errorData?.error ||
               errorData?.message ||
-              "Unable to load the order.",
+              "Unable to retrieve order information.",
           );
         }
 
-        if (!isOrderDetails(data)) {
+        if (!isTrackingResponse(data)) {
           throw new Error(
-            "The order response was invalid.",
+            "The tracking response was invalid.",
           );
         }
 
-        setOrder(data);
+        setResult(data);
+
+        setSelectedOrderId(
+          (currentOrderId) => {
+            if (
+              currentOrderId &&
+              data.orders.some(
+                (order) =>
+                  order.id === currentOrderId,
+              )
+            ) {
+              return currentOrderId;
+            }
+
+            return data.orders[0]?.id ?? null;
+          },
+        );
 
         if (refresh) {
           setRefreshMessage(
-            "Delivery information refreshed successfully.",
+            "Order information refreshed successfully.",
           );
         }
-      } catch (loadError) {
+      } catch (requestError) {
         console.error(
           "Track order request failed:",
-          loadError,
+          requestError,
         );
 
         const message =
-          loadError instanceof Error
-            ? loadError.message
-            : "Unable to load the order.";
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to retrieve order information.";
 
         if (refresh) {
           setRefreshMessage(message);
         } else {
-          setOrder(null);
+          setResult(null);
+          setSelectedOrderId(null);
           setError(message);
         }
       } finally {
@@ -626,22 +567,28 @@ export default function TrackOrderContent() {
         setRefreshing(false);
       }
     },
-    [accessToken, orderId],
+    [phone],
   );
 
   function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
-    void loadOrder(false);
+    void loadOrders(false);
   }
 
-  const shipping = order?.shipping;
+  function resetSearch() {
+    setPhone("");
+    setResult(null);
+    setSelectedOrderId(null);
+    setError(null);
+    setRefreshMessage(null);
+  }
+
+  const shipping = selectedOrder?.shipping;
 
   const normalizedShipmentStatus =
-    shipping?.status
-      .trim()
-      .toUpperCase() ?? "";
+    shipping?.status.trim().toUpperCase() ?? "";
 
   const isShipmentActive =
     ACTIVE_SHIPMENT_STATUSES.has(
@@ -649,42 +596,28 @@ export default function TrackOrderContent() {
     );
 
   const isShipmentCancelled =
-    normalizedShipmentStatus ===
-    "CANCELLED";
+    normalizedShipmentStatus === "CANCELLED";
 
   const isShipmentDelivered =
-    normalizedShipmentStatus ===
-    "DELIVERED";
+    normalizedShipmentStatus === "DELIVERED";
 
   const isShipmentRto =
-    normalizedShipmentStatus ===
-    "RTO";
+    normalizedShipmentStatus === "RTO";
 
   const isShipmentFailed =
-    normalizedShipmentStatus ===
-    "FAILED";
+    normalizedShipmentStatus === "FAILED";
 
-  const trackingNumber =
-    shipping?.tracking.number ?? null;
+  const estimatedDeliveryDate = formatDate(
+    shipping?.estimatedDeliveryAt ?? null,
+  );
 
-  const rawTrackingStatus =
-    shipping?.tracking.status ?? null;
+  const deliveredDate = formatDate(
+    shipping?.deliveredAt ?? null,
+  );
 
-  const estimatedDeliveryDate =
-    formatDate(
-      shipping
-        ?.estimatedDeliveryAt ?? null,
-    );
-
-  const deliveredDate =
-    formatDate(
-      shipping?.deliveredAt ?? null,
-    );
-
-  const updatedDate =
-    formatDate(
-      order?.updatedAt ?? null,
-    );
+  const updatedDate = formatDate(
+    selectedOrder?.updatedAt ?? null,
+  );
 
   return (
     <main className="min-h-screen bg-[#FFF8EE] pb-20 pt-28 lg:pt-32">
@@ -711,7 +644,7 @@ export default function TrackOrderContent() {
                 aria-hidden="true"
               />
 
-              Secure Order Tracking
+              Order Tracking
             </Badge>
 
             <h1 className="mt-6 text-4xl font-bold tracking-tight text-[#6D2E00] sm:text-5xl">
@@ -719,11 +652,9 @@ export default function TrackOrderContent() {
             </h1>
 
             <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-gray-600">
-              Enter the order ID and
-              private access token from
-              your confirmation link to
-              view the latest delivery
-              information.
+              Enter the mobile number used while placing your
+              order to view your recent orders and delivery
+              updates.
             </p>
           </div>
 
@@ -733,7 +664,7 @@ export default function TrackOrderContent() {
           >
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DE] text-[#C89B3C]">
-                <ShieldCheck
+                <Phone
                   size={24}
                   aria-hidden="true"
                 />
@@ -741,15 +672,12 @@ export default function TrackOrderContent() {
 
               <div>
                 <h2 className="text-xl font-bold text-[#6D2E00]">
-                  Secure order lookup
+                  Find your recent orders
                 </h2>
 
                 <p className="mt-2 leading-7 text-gray-600">
-                  Your private token is
-                  only used to securely
-                  retrieve the matching
-                  order. It is not added
-                  to this page&apos;s URL.
+                  Use the same 10-digit mobile number that you
+                  entered during checkout.
                 </p>
               </div>
             </div>
@@ -760,58 +688,39 @@ export default function TrackOrderContent() {
             >
               <div>
                 <label
-                  htmlFor="track-order-id"
+                  htmlFor="tracking-phone"
                   className="mb-2 block text-sm font-semibold text-[#6D2E00]"
                 >
-                  Order ID
+                  Mobile Number
                 </label>
 
-                <input
-                  id="track-order-id"
-                  type="text"
-                  value={orderId}
-                  onChange={(event) => {
-                    setOrderId(
-                      event.target.value,
-                    );
-                  }}
-                  required
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="Enter your order reference"
-                  disabled={
-                    loading || refreshing
-                  }
-                  className="h-14 w-full rounded-2xl border border-[#F3DFC2] bg-white px-5 text-[#6D2E00] outline-none transition placeholder:text-gray-400 focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
-                />
-              </div>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-5 flex items-center font-semibold text-gray-500">
+                    +91
+                  </span>
 
-              <div>
-                <label
-                  htmlFor="track-order-token"
-                  className="mb-2 block text-sm font-semibold text-[#6D2E00]"
-                >
-                  Private Access Token
-                </label>
+                  <input
+                    id="tracking-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    value={phone}
+                    onChange={(event) => {
+                      const digits =
+                        event.target.value.replace(
+                          /\D/g,
+                          "",
+                        );
 
-                <input
-                  id="track-order-token"
-                  type="password"
-                  value={accessToken}
-                  onChange={(event) => {
-                    setAccessToken(
-                      event.target.value,
-                    );
-                  }}
-                  required
-                  autoComplete="off"
-                  spellCheck={false}
-                  placeholder="Enter the token from your secure order link"
-                  disabled={
-                    loading || refreshing
-                  }
-                  className="h-14 w-full rounded-2xl border border-[#F3DFC2] bg-white px-5 text-[#6D2E00] outline-none transition placeholder:text-gray-400 focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
-                />
+                      setPhone(digits.slice(0, 10));
+                    }}
+                    required
+                    autoComplete="tel-national"
+                    placeholder="Enter 10-digit mobile number"
+                    maxLength={10}
+                    disabled={loading || refreshing}
+                    className="h-14 w-full rounded-2xl border border-[#F3DFC2] bg-white pl-16 pr-5 text-[#6D2E00] outline-none transition placeholder:text-gray-400 focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
               </div>
 
               {error && (
@@ -833,15 +742,13 @@ export default function TrackOrderContent() {
 
               <button
                 type="submit"
-                disabled={
-                  loading || refreshing
-                }
+                disabled={loading || refreshing}
                 className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#6D2E00] px-8 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? (
                   <>
                     <Spinner size="sm" />
-                    Loading Order...
+                    Finding Orders...
                   </>
                 ) : (
                   <>
@@ -850,616 +757,727 @@ export default function TrackOrderContent() {
                       aria-hidden="true"
                     />
 
-                    Track Order
+                    Track My Order
                   </>
                 )}
               </button>
             </form>
           </Card>
 
-          {order && shipping && (
-            <div className="mx-auto mt-10 max-w-5xl space-y-8">
-              <Card
-                padding="lg"
-                className="shadow-xl"
+          {result && result.orders.length === 0 && (
+            <Card
+              padding="lg"
+              className="mx-auto mt-10 max-w-4xl text-center shadow-lg"
+            >
+              <Package
+                size={44}
+                className="mx-auto text-[#C89B3C]"
+                aria-hidden="true"
+              />
+
+              <h2 className="mt-5 text-2xl font-bold text-[#6D2E00]">
+                No orders found
+              </h2>
+
+              <p className="mx-auto mt-3 max-w-xl leading-7 text-gray-600">
+                We could not find a recent order linked to{" "}
+                {result.phone}. Check the number and try again.
+              </p>
+
+              <button
+                type="button"
+                onClick={resetSearch}
+                className="mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-7 font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white"
               >
-                <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <Badge
-                      variant="success"
-                      size="sm"
-                      className="gap-2"
+                <ArrowLeft
+                  size={18}
+                  aria-hidden="true"
+                />
+
+                Try Another Number
+              </button>
+            </Card>
+          )}
+
+          {result &&
+            result.orders.length > 0 &&
+            selectedOrder &&
+            shipping && (
+              <div className="mx-auto mt-10 max-w-5xl space-y-8">
+                <Card
+                  padding="lg"
+                  className="shadow-xl"
+                >
+                  <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <Badge
+                        variant="success"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <CheckCircle2
+                          size={16}
+                          aria-hidden="true"
+                        />
+
+                        {result.count === 1
+                          ? "1 Order Found"
+                          : `${result.count} Orders Found`}
+                      </Badge>
+
+                      <h2 className="mt-4 text-3xl font-bold text-[#6D2E00]">
+                        Hello, {selectedOrder.customerName}
+                      </h2>
+
+                      <p className="mt-2 text-sm text-gray-500">
+                        Orders linked to {result.phone}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void loadOrders(true);
+                        }}
+                        disabled={refreshing}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-5 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <RefreshCw
+                          size={17}
+                          className={
+                            refreshing
+                              ? "animate-spin"
+                              : ""
+                          }
+                          aria-hidden="true"
+                        />
+
+                        {refreshing
+                          ? "Refreshing..."
+                          : "Refresh"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={resetSearch}
+                        className="inline-flex h-11 items-center justify-center rounded-full bg-[#6D2E00] px-5 text-sm font-semibold text-white transition hover:bg-[#8B4513]"
+                      >
+                        Change Number
+                      </button>
+                    </div>
+                  </div>
+
+                  {refreshMessage && (
+                    <div
+                      role="status"
+                      className={`mt-5 rounded-2xl border px-5 py-4 text-sm font-medium ${
+                        refreshMessage.includes(
+                          "successfully",
+                        )
+                          ? "border-green-200 bg-green-50 text-green-800"
+                          : "border-red-200 bg-red-50 text-red-700"
+                      }`}
                     >
-                      <CheckCircle2
-                        size={16}
-                        aria-hidden="true"
-                      />
+                      {refreshMessage}
+                    </div>
+                  )}
+                </Card>
 
-                      Order Found
-                    </Badge>
-
-                    <h2 className="mt-4 text-3xl font-bold text-[#6D2E00]">
-                      Hello,{" "}
-                      {order.customerName}
+                {result.orders.length > 1 && (
+                  <Card
+                    padding="lg"
+                    className="shadow-lg"
+                  >
+                    <h2 className="text-2xl font-bold text-[#6D2E00]">
+                      Select an order
                     </h2>
 
-                    <p className="mt-2 break-all text-sm text-gray-500">
-                      Order reference:{" "}
-                      {order.id}
-                    </p>
-                  </div>
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                      {result.orders.map((order) => {
+                        const selected =
+                          order.id === selectedOrder.id;
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void loadOrder(true);
-                    }}
-                    disabled={refreshing}
-                    className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-5 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <RefreshCw
-                      size={17}
-                      aria-hidden="true"
-                      className={
-                        refreshing
-                          ? "animate-spin"
-                          : ""
+                        return (
+                          <button
+                            key={order.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedOrderId(order.id);
+                              setRefreshMessage(null);
+                            }}
+                            className={`rounded-2xl border p-5 text-left transition ${
+                              selected
+                                ? "border-[#C89B3C] bg-[#FFF4DE] shadow-md"
+                                : "border-[#F3DFC2] bg-white hover:border-[#C89B3C]/70"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                                  Order
+                                </p>
+
+                                <p className="mt-1 font-semibold text-[#6D2E00]">
+                                  {maskOrderId(order.id)}
+                                </p>
+                              </div>
+
+                              <Badge
+                                variant={
+                                  order.shipping.status ===
+                                  "DELIVERED"
+                                    ? "success"
+                                    : "secondary"
+                                }
+                                size="sm"
+                              >
+                                {formatStatus(
+                                  order.shipping.status,
+                                )}
+                              </Badge>
+                            </div>
+
+                            <div className="mt-4 flex items-center justify-between gap-4 text-sm">
+                              <span className="text-gray-500">
+                                {formatDate(order.createdAt)}
+                              </span>
+
+                              <span className="font-bold text-[#6D2E00]">
+                                {formatCurrency(
+                                  order.totalAmount,
+                                )}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Card>
+                )}
+
+                <Card
+                  padding="lg"
+                  className="shadow-xl"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+                        Selected Order
+                      </p>
+
+                      <h2 className="mt-2 break-all text-2xl font-bold text-[#6D2E00]">
+                        {selectedOrder.id}
+                      </h2>
+
+                      <p className="mt-2 text-sm text-gray-500">
+                        Placed on{" "}
+                        {formatDate(selectedOrder.createdAt)}
+                      </p>
+                    </div>
+
+                    <Badge
+                      variant={
+                        isShipmentDelivered
+                          ? "success"
+                          : "secondary"
                       }
-                    />
-
-                    {refreshing
-                      ? "Refreshing..."
-                      : "Refresh Status"}
-                  </button>
-                </div>
-
-                {refreshMessage && (
-                  <div
-                    role={
-                      refreshMessage.includes(
-                        "successfully",
-                      )
-                        ? "status"
-                        : "alert"
-                    }
-                    className={`mt-5 rounded-2xl border px-5 py-4 text-sm font-medium ${
-                      refreshMessage.includes(
-                        "successfully",
-                      )
-                        ? "border-green-200 bg-green-50 text-green-800"
-                        : "border-red-200 bg-red-50 text-red-700"
-                    }`}
-                  >
-                    {refreshMessage}
+                      size="md"
+                    >
+                      {formatStatus(shipping.status)}
+                    </Badge>
                   </div>
-                )}
 
-                {isShipmentCancelled && (
-                  <StatusNotice
-                    type="error"
-                    icon={
-                      <TriangleAlert
-                        size={22}
-                        aria-hidden="true"
-                      />
-                    }
-                    title="Delivery shipment cancelled"
-                  >
-                    The courier shipment
-                    associated with this
-                    order has been
-                    cancelled. Your payment
-                    and website order remain
-                    recorded. Please contact
-                    customer support for
-                    assistance.
-                  </StatusNotice>
-                )}
-
-                {isShipmentDelivered && (
-                  <StatusNotice
-                    type="success"
-                    icon={
-                      <PackageCheck
-                        size={22}
-                        aria-hidden="true"
-                      />
-                    }
-                    title="Order delivered"
-                  >
-                    Your order has been
-                    delivered successfully
-                    {deliveredDate
-                      ? ` on ${deliveredDate}.`
-                      : "."}
-                  </StatusNotice>
-                )}
-
-                {isShipmentActive && (
-                  <StatusNotice
-                    type="info"
-                    icon={
-                      <Truck
-                        size={22}
-                        aria-hidden="true"
-                      />
-                    }
-                    title={formatStatus(
-                      shipping.status,
-                    )}
-                  >
-                    {estimatedDeliveryDate
-                      ? `Estimated delivery: ${estimatedDeliveryDate}.`
-                      : getShipmentMessage(
-                          shipping.status,
-                        )}
-                  </StatusNotice>
-                )}
-
-                {isShipmentRto && (
-                  <StatusNotice
-                    type="warning"
-                    icon={
-                      <Truck
-                        size={22}
-                        aria-hidden="true"
-                      />
-                    }
-                    title="Returning to sender"
-                  >
-                    The parcel is being
-                    returned to the sender.
-                    Please contact customer
-                    support for assistance.
-                  </StatusNotice>
-                )}
-
-                {isShipmentFailed && (
-                  <StatusNotice
-                    type="error"
-                    icon={
-                      <TriangleAlert
-                        size={22}
-                        aria-hidden="true"
-                      />
-                    }
-                    title="Shipment requires attention"
-                  >
-                    The shipment could not
-                    proceed. Please contact
-                    customer support so the
-                    delivery can be reviewed.
-                  </StatusNotice>
-                )}
-
-                {!isShipmentActive &&
-                  !isShipmentCancelled &&
-                  !isShipmentDelivered &&
-                  !isShipmentRto &&
-                  !isShipmentFailed && (
+                  {isShipmentCancelled && (
                     <StatusNotice
-                      type="info"
+                      type="error"
                       icon={
-                        <Package
+                        <TriangleAlert
                           size={22}
                           aria-hidden="true"
                         />
                       }
-                      title={formatStatus(
-                        shipping.status,
-                      )}
+                      title="Delivery shipment cancelled"
                     >
-                      {getShipmentMessage(
-                        shipping.status,
-                      )}
+                      The courier shipment associated with this
+                      order has been cancelled. Please contact
+                      customer support for assistance.
                     </StatusNotice>
                   )}
 
-                <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                  <SummaryCard
-                    icon={
-                      <Package
-                        size={21}
-                        aria-hidden="true"
-                      />
-                    }
-                    label="Order Status"
-                    value={formatStatus(
-                      order.status,
-                    )}
-                  />
-
-                  <SummaryCard
-                    icon={
-                      <Truck
-                        size={21}
-                        aria-hidden="true"
-                      />
-                    }
-                    label="Delivery Status"
-                    value={formatStatus(
-                      shipping.status,
-                    )}
-                  />
-
-                  <SummaryCard
-                    icon={
-                      <CreditCard
-                        size={21}
-                        aria-hidden="true"
-                      />
-                    }
-                    label="Payment Method"
-                    value={
-                      order.paymentMethod ||
-                      "Prepaid"
-                    }
-                  />
-
-                  <SummaryCard
-                    icon={
-                      <BadgeIndianRupee
-                        size={21}
-                        aria-hidden="true"
-                      />
-                    }
-                    label="Payment Status"
-                    value={formatStatus(
-                      order.paymentStatus,
-                    )}
-                  />
-                </div>
-              </Card>
-
-              <div className="grid gap-8 lg:grid-cols-2">
-                <Card
-                  padding="lg"
-                  className="shadow-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <Truck
-                      size={24}
-                      className="text-[#C89B3C]"
-                      aria-hidden="true"
-                    />
-
-                    <h2 className="text-2xl font-bold text-[#6D2E00]">
-                      Shipment Details
-                    </h2>
-                  </div>
-
-                  <div className="mt-7 space-y-5">
-                    <InfoRow
-                      label="Delivery Method"
-                      value={getDeliveryMethod(
-                        shipping.mode,
-                      )}
-                    />
-
-                    <InfoRow
-                      label="Current Status"
-                      value={formatStatus(
-                        shipping.status,
-                      )}
-                    />
-
-                    {rawTrackingStatus && (
-                      <InfoRow
-                        label="Latest Update"
-                        value={formatStatus(
-                          rawTrackingStatus,
-                        )}
-                      />
-                    )}
-
-                    {trackingNumber && (
-                      <InfoRow
-                        label="Tracking Number"
-                        value={
-                          <span className="break-all">
-                            {trackingNumber}
-                          </span>
-                        }
-                      />
-                    )}
-
-                    {formatDate(
-                      shipping.pickupScheduledAt,
-                    ) && (
-                      <InfoRow
-                        label="Pickup Scheduled"
-                        value={formatDate(
-                          shipping.pickupScheduledAt,
-                        )}
-                      />
-                    )}
-
-                    {formatDate(
-                      shipping.shippedAt,
-                    ) && (
-                      <InfoRow
-                        label="Shipped On"
-                        value={formatDate(
-                          shipping.shippedAt,
-                        )}
-                      />
-                    )}
-
-                    {estimatedDeliveryDate && (
-                      <InfoRow
-                        label="Estimated Delivery"
-                        value={
-                          estimatedDeliveryDate
-                        }
-                      />
-                    )}
-
-                    {deliveredDate && (
-                      <InfoRow
-                        label="Delivered On"
-                        value={deliveredDate}
-                      />
-                    )}
-
-                    {updatedDate && (
-                      <InfoRow
-                        label="Last Updated"
-                        value={updatedDate}
-                      />
-                    )}
-                  </div>
-                </Card>
-
-                <Card
-                  padding="lg"
-                  className="shadow-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <MapPin
-                      size={24}
-                      className="text-[#C89B3C]"
-                      aria-hidden="true"
-                    />
-
-                    <h2 className="text-2xl font-bold text-[#6D2E00]">
-                      Delivery Address
-                    </h2>
-                  </div>
-
-                  <div className="mt-7 space-y-5">
-                    <InfoRow
-                      label="Customer"
-                      value={
-                        order.customerName
+                  {isShipmentDelivered && (
+                    <StatusNotice
+                      type="success"
+                      icon={
+                        <PackageCheck
+                          size={22}
+                          aria-hidden="true"
+                        />
                       }
-                    />
+                      title="Order delivered"
+                    >
+                      Your order has been delivered successfully
+                      {deliveredDate
+                        ? ` on ${deliveredDate}.`
+                        : "."}
+                    </StatusNotice>
+                  )}
 
-                    <InfoRow
-                      label="Phone"
-                      value={order.phone}
-                    />
-
-                    {order.email && (
-                      <InfoRow
-                        label="Email"
-                        value={order.email}
-                      />
-                    )}
-
-                    <InfoRow
-                      label="Address"
-                      value={
-                        <span className="text-right">
-                          {
-                            order
-                              .deliveryAddress
-                              .address
-                          }
-                          <br />
-                          {
-                            order
-                              .deliveryAddress
-                              .city
-                          }
-                          ,{" "}
-                          {
-                            order
-                              .deliveryAddress
-                              .state
-                          }{" "}
-                          {
-                            order
-                              .deliveryAddress
-                              .pincode
-                          }
-                        </span>
+                  {isShipmentActive && (
+                    <StatusNotice
+                      type="info"
+                      icon={
+                        <Truck
+                          size={22}
+                          aria-hidden="true"
+                        />
                       }
-                    />
-                  </div>
-                </Card>
-              </div>
-
-              <div className="grid gap-8 lg:grid-cols-2">
-                <Card
-                  padding="lg"
-                  className="shadow-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <ShoppingBag
-                      size={24}
-                      className="text-[#C89B3C]"
-                      aria-hidden="true"
-                    />
-
-                    <h2 className="text-2xl font-bold text-[#6D2E00]">
-                      Order Summary
-                    </h2>
-                  </div>
-
-                  <div className="mt-7 space-y-4">
-                    <InfoRow
-                      label="Products"
-                      value={order.items.reduce(
-                        (total, item) =>
-                          total +
-                          item.quantity,
-                        0,
-                      )}
-                    />
-
-                    <InfoRow
-                      label="Subtotal"
-                      value={formatCurrency(
-                        order.subtotalAmount,
-                      )}
-                    />
-
-                    <InfoRow
-                      label="Delivery Charge"
-                      value={
-                        order.shippingChargedAmount ===
-                        0
-                          ? "FREE"
-                          : formatCurrency(
-                              order.shippingChargedAmount,
-                            )
-                      }
-                    />
-
-                    {order.shippingDiscountAmount >
-                      0 && (
-                      <InfoRow
-                        label="Delivery Discount"
-                        value={`-${formatCurrency(
-                          order.shippingDiscountAmount,
-                        )}`}
-                      />
-                    )}
-
-                    <div className="border-t border-[#F3DFC2]" />
-
-                    <InfoRow
-                      label="Grand Total"
-                      value={
-                        <span className="text-xl text-[#C89B3C]">
-                          {formatCurrency(
-                            order.totalAmount,
+                      title={formatStatus(shipping.status)}
+                    >
+                      {estimatedDeliveryDate
+                        ? `Estimated delivery: ${estimatedDeliveryDate}.`
+                        : getShipmentMessage(
+                            shipping.status,
                           )}
-                        </span>
+                    </StatusNotice>
+                  )}
+
+                  {isShipmentRto && (
+                    <StatusNotice
+                      type="warning"
+                      icon={
+                        <Truck
+                          size={22}
+                          aria-hidden="true"
+                        />
                       }
+                      title="Returning to sender"
+                    >
+                      The parcel is being returned to the
+                      sender. Please contact customer support.
+                    </StatusNotice>
+                  )}
+
+                  {isShipmentFailed && (
+                    <StatusNotice
+                      type="error"
+                      icon={
+                        <TriangleAlert
+                          size={22}
+                          aria-hidden="true"
+                        />
+                      }
+                      title="Shipment requires attention"
+                    >
+                      The shipment could not proceed. Please
+                      contact customer support.
+                    </StatusNotice>
+                  )}
+
+                  {!isShipmentActive &&
+                    !isShipmentCancelled &&
+                    !isShipmentDelivered &&
+                    !isShipmentRto &&
+                    !isShipmentFailed && (
+                      <StatusNotice
+                        type="info"
+                        icon={
+                          <Package
+                            size={22}
+                            aria-hidden="true"
+                          />
+                        }
+                        title={formatStatus(shipping.status)}
+                      >
+                        {getShipmentMessage(shipping.status)}
+                      </StatusNotice>
+                    )}
+
+                  <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                    <SummaryCard
+                      icon={
+                        <Package
+                          size={21}
+                          aria-hidden="true"
+                        />
+                      }
+                      label="Order Status"
+                      value={formatStatus(
+                        selectedOrder.status,
+                      )}
+                    />
+
+                    <SummaryCard
+                      icon={
+                        <Truck
+                          size={21}
+                          aria-hidden="true"
+                        />
+                      }
+                      label="Delivery Status"
+                      value={formatStatus(shipping.status)}
+                    />
+
+                    <SummaryCard
+                      icon={
+                        <CreditCard
+                          size={21}
+                          aria-hidden="true"
+                        />
+                      }
+                      label="Payment"
+                      value={
+                        selectedOrder.paymentMethod ||
+                        "Prepaid"
+                      }
+                    />
+
+                    <SummaryCard
+                      icon={
+                        <BadgeIndianRupee
+                          size={21}
+                          aria-hidden="true"
+                        />
+                      }
+                      label="Total"
+                      value={formatCurrency(
+                        selectedOrder.totalAmount,
+                      )}
                     />
                   </div>
                 </Card>
 
-                <Card
-                  padding="lg"
-                  className="shadow-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    <Package
-                      size={24}
-                      className="text-[#C89B3C]"
-                      aria-hidden="true"
-                    />
+                <div className="grid gap-8 lg:grid-cols-2">
+                  <Card
+                    padding="lg"
+                    className="shadow-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Truck
+                        size={24}
+                        className="text-[#C89B3C]"
+                        aria-hidden="true"
+                      />
 
-                    <h2 className="text-2xl font-bold text-[#6D2E00]">
-                      Package Information
-                    </h2>
-                  </div>
+                      <h2 className="text-2xl font-bold text-[#6D2E00]">
+                        Shipment Details
+                      </h2>
+                    </div>
 
-                  {shipping.package ? (
                     <div className="mt-7 space-y-5">
                       <InfoRow
-                        label="Package"
-                        value={
-                          shipping.package.name
-                        }
-                      />
-
-                      <InfoRow
-                        label="Packed Weight"
-                        value={formatWeight(
-                          shipping.package
-                            .packedWeightGrams,
+                        label="Delivery Method"
+                        value={getDeliveryMethod(
+                          shipping.mode,
                         )}
                       />
 
                       <InfoRow
-                        label="Dimensions"
-                        value={`${formatDimension(
-                          shipping.package
-                            .dimensions
-                            .lengthCm,
-                        )} × ${formatDimension(
-                          shipping.package
-                            .dimensions
-                            .breadthCm,
-                        )} × ${formatDimension(
-                          shipping.package
-                            .dimensions
-                            .heightCm,
-                        )} cm`}
+                        label="Current Status"
+                        value={formatStatus(
+                          shipping.status,
+                        )}
+                      />
+
+                      {shipping.tracking.status && (
+                        <InfoRow
+                          label="Latest Update"
+                          value={formatStatus(
+                            shipping.tracking.status,
+                          )}
+                        />
+                      )}
+
+                      {shipping.tracking.number && (
+                        <InfoRow
+                          label="Tracking Number"
+                          value={
+                            <span className="break-all">
+                              {shipping.tracking.number}
+                            </span>
+                          }
+                        />
+                      )}
+
+                      {formatDate(
+                        shipping.pickupScheduledAt,
+                      ) && (
+                        <InfoRow
+                          label="Pickup Scheduled"
+                          value={formatDate(
+                            shipping.pickupScheduledAt,
+                          )}
+                        />
+                      )}
+
+                      {formatDate(shipping.shippedAt) && (
+                        <InfoRow
+                          label="Shipped On"
+                          value={formatDate(
+                            shipping.shippedAt,
+                          )}
+                        />
+                      )}
+
+                      {estimatedDeliveryDate && (
+                        <InfoRow
+                          label="Estimated Delivery"
+                          value={estimatedDeliveryDate}
+                        />
+                      )}
+
+                      {deliveredDate && (
+                        <InfoRow
+                          label="Delivered On"
+                          value={deliveredDate}
+                        />
+                      )}
+
+                      {updatedDate && (
+                        <InfoRow
+                          label="Last Updated"
+                          value={updatedDate}
+                        />
+                      )}
+                    </div>
+                  </Card>
+
+                  <Card
+                    padding="lg"
+                    className="shadow-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <MapPin
+                        size={24}
+                        className="text-[#C89B3C]"
+                        aria-hidden="true"
+                      />
+
+                      <h2 className="text-2xl font-bold text-[#6D2E00]">
+                        Delivery Destination
+                      </h2>
+                    </div>
+
+                    <div className="mt-7 space-y-5">
+                      <InfoRow
+                        label="Customer"
+                        value={selectedOrder.customerName}
+                      />
+
+                      <InfoRow
+                        label="City"
+                        value={
+                          selectedOrder.deliveryDestination.city
+                        }
+                      />
+
+                      <InfoRow
+                        label="State"
+                        value={
+                          selectedOrder.deliveryDestination.state
+                        }
+                      />
+
+                      <InfoRow
+                        label="Pincode"
+                        value={
+                          selectedOrder.deliveryDestination
+                            .pincode
+                        }
                       />
                     </div>
-                  ) : (
-                    <p className="mt-7 leading-7 text-gray-600">
-                      Package information
-                      is not available yet.
-                    </p>
-                  )}
-                </Card>
+                  </Card>
+                </div>
+
+                <div className="grid gap-8 lg:grid-cols-2">
+                  <Card
+                    padding="lg"
+                    className="shadow-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <ShoppingBag
+                        size={24}
+                        className="text-[#C89B3C]"
+                        aria-hidden="true"
+                      />
+
+                      <h2 className="text-2xl font-bold text-[#6D2E00]">
+                        Products
+                      </h2>
+                    </div>
+
+                    <div className="mt-7 space-y-4">
+                      {selectedOrder.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-start justify-between gap-5 border-b border-[#F3DFC2] pb-4 last:border-b-0 last:pb-0"
+                        >
+                          <div>
+                            <p className="font-semibold text-[#6D2E00]">
+                              {item.product.name}
+                            </p>
+
+                            <p className="mt-1 text-sm text-gray-500">
+                              Quantity: {item.quantity}
+                            </p>
+                          </div>
+
+                          <span className="shrink-0 font-semibold text-[#6D2E00]">
+                            {formatCurrency(item.lineTotal)}
+                          </span>
+                        </div>
+                      ))}
+
+                      <div className="border-t border-[#F3DFC2] pt-5">
+                        <InfoRow
+                          label="Subtotal"
+                          value={formatCurrency(
+                            selectedOrder.subtotalAmount,
+                          )}
+                        />
+
+                        <div className="mt-4">
+                          <InfoRow
+                            label="Delivery Charge"
+                            value={
+                              selectedOrder.shippingChargedAmount ===
+                              0
+                                ? "FREE"
+                                : formatCurrency(
+                                    selectedOrder.shippingChargedAmount,
+                                  )
+                            }
+                          />
+                        </div>
+
+                        {selectedOrder.shippingDiscountAmount >
+                          0 && (
+                          <div className="mt-4">
+                            <InfoRow
+                              label="Delivery Discount"
+                              value={`-${formatCurrency(
+                                selectedOrder.shippingDiscountAmount,
+                              )}`}
+                            />
+                          </div>
+                        )}
+
+                        <div className="mt-5 border-t border-[#F3DFC2] pt-5">
+                          <InfoRow
+                            label="Grand Total"
+                            value={
+                              <span className="text-xl text-[#C89B3C]">
+                                {formatCurrency(
+                                  selectedOrder.totalAmount,
+                                )}
+                              </span>
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card
+                    padding="lg"
+                    className="shadow-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Package
+                        size={24}
+                        className="text-[#C89B3C]"
+                        aria-hidden="true"
+                      />
+
+                      <h2 className="text-2xl font-bold text-[#6D2E00]">
+                        Package Information
+                      </h2>
+                    </div>
+
+                    {shipping.package ? (
+                      <div className="mt-7 space-y-5">
+                        <InfoRow
+                          label="Package"
+                          value={shipping.package.name}
+                        />
+
+                        <InfoRow
+                          label="Packed Weight"
+                          value={formatWeight(
+                            shipping.package
+                              .packedWeightGrams,
+                          )}
+                        />
+
+                        <InfoRow
+                          label="Dimensions"
+                          value={`${formatDimension(
+                            shipping.package.dimensions
+                              .lengthCm,
+                          )} × ${formatDimension(
+                            shipping.package.dimensions
+                              .breadthCm,
+                          )} × ${formatDimension(
+                            shipping.package.dimensions
+                              .heightCm,
+                          )} cm`}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-7 leading-7 text-gray-600">
+                        Package information is not available
+                        yet.
+                      </p>
+                    )}
+                  </Card>
+                </div>
+
+                <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+                  <Link
+                    href="/"
+                    className="inline-flex h-13 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-7 font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white"
+                  >
+                    <ArrowLeft
+                      size={19}
+                      aria-hidden="true"
+                    />
+
+                    Back to Home
+                  </Link>
+
+                  <Link
+                    href="/shop"
+                    className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-[#6D2E00] px-7 font-semibold text-white shadow-lg transition hover:bg-[#8B4513]"
+                  >
+                    <ShoppingBag
+                      size={19}
+                      aria-hidden="true"
+                    />
+
+                    Continue Shopping
+                  </Link>
+                </div>
               </div>
+            )}
 
-              <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                <Link
-                  href="/"
-                  className="inline-flex h-13 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-7 font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white"
-                >
-                  <ArrowLeft
-                    size={19}
-                    aria-hidden="true"
-                  />
-
-                  Back to Home
-                </Link>
-
-                <Link
-                  href="/shop"
-                  className="inline-flex h-13 items-center justify-center gap-2 rounded-full bg-[#6D2E00] px-7 font-semibold text-white shadow-lg transition hover:bg-[#8B4513]"
-                >
-                  <ShoppingBag
-                    size={19}
-                    aria-hidden="true"
-                  />
-
-                  Continue Shopping
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {!order && !loading && (
+          {!result && !loading && (
             <Card
               padding="lg"
               className="mx-auto mt-10 max-w-4xl border border-[#F3DFC2] bg-[#FFFDF8] text-center shadow-lg"
             >
-              <CalendarClock
+              <CalendarDays
                 size={42}
                 className="mx-auto text-[#C89B3C]"
                 aria-hidden="true"
               />
 
               <h2 className="mt-5 text-2xl font-bold text-[#6D2E00]">
-                Your delivery details
-                will appear here
+                Your recent orders will appear here
               </h2>
 
               <p className="mx-auto mt-3 max-w-xl leading-7 text-gray-600">
-                Use the secure details
-                from your order
-                confirmation to retrieve
-                the latest stored shipment
-                information.
+                Enter the mobile number used during checkout to
+                see recent order and shipment information.
               </p>
 
               <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500">
@@ -1468,8 +1486,7 @@ export default function TrackOrderContent() {
                   aria-hidden="true"
                 />
 
-                Shipment information is
-                updated automatically.
+                Shipment information is updated automatically.
               </div>
             </Card>
           )}
@@ -1538,32 +1555,28 @@ function StatusNotice({
 }: StatusNoticeProps) {
   const styles = {
     success: {
-      card:
-        "border-green-200 bg-green-50",
+      card: "border-green-200 bg-green-50",
       icon: "text-green-600",
       title: "text-green-800",
       text: "text-green-700",
     },
 
     error: {
-      card:
-        "border-red-200 bg-red-50",
+      card: "border-red-200 bg-red-50",
       icon: "text-red-600",
       title: "text-red-800",
       text: "text-red-700",
     },
 
     warning: {
-      card:
-        "border-amber-200 bg-amber-50",
+      card: "border-amber-200 bg-amber-50",
       icon: "text-amber-600",
       title: "text-amber-800",
       text: "text-amber-700",
     },
 
     info: {
-      card:
-        "border-[#F3DFC2] bg-[#FFFDF8]",
+      card: "border-[#F3DFC2] bg-[#FFFDF8]",
       icon: "text-[#C89B3C]",
       title: "text-[#6D2E00]",
       text: "text-gray-600",

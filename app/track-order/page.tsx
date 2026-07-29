@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 
+import Navbar from "@/components/layout/Navbar/Navbar";
 import TrackOrderContent from "@/components/track-order/TrackOrderContent";
 
 export const metadata: Metadata = {
   title: "Track Order",
   description:
-    "Securely check the latest delivery and shipment status of your Om Shree Foods order.",
+    "Check your recent Om Shree Foods orders and delivery status using your mobile number.",
 };
 
 export default function TrackOrderPage() {
-  return <TrackOrderContent />;
+  return (
+    <>
+      <Navbar />
+      <TrackOrderContent />
+    </>
+  );
 }
