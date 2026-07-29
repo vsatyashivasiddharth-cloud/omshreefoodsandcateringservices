@@ -53,6 +53,10 @@ enum ShipmentStatus {
   FAILED
 }
 
+enum OtpPurpose {
+  ORDER_TRACKING
+}
+
 model User {
   id       String  @id @default(cuid())
   name     String
@@ -173,8 +177,19 @@ model Order {
   publicAccessToken String @unique @default(uuid())
 
   customerName String
-  phone        String
-  email        String?
+
+  /// Original customer-entered phone number.
+  phone String
+
+  /// Digits-only normalized Indian mobile number used for OTP lookup.
+  ///
+  /// Example:
+  /// +91 70138 20854 becomes 7013820854.
+  ///
+  /// This remains optional until existing orders are backfilled.
+  phoneNormalized String?
+
+  email String?
 
   address String
   city    String
@@ -190,7 +205,7 @@ model Order {
   /// Shipping amount actually charged to the customer.
   shippingChargedAmount Decimal @default(0) @db.Decimal(10, 2)
 
-  /// Difference between the estimated and charged shipping amounts.
+  /// Difference between estimated and charged shipping.
   shippingDiscountAmount Decimal @default(0) @db.Decimal(10, 2)
 
   /// Final amount paid by the customer.
@@ -243,6 +258,8 @@ model Order {
   @@index([userId])
   @@index([packageId])
   @@index([phone])
+  @@index([phoneNormalized])
+  @@index([phoneNormalized, createdAt])
   @@index([pincode])
   @@index([status])
   @@index([paymentStatus])
@@ -277,6 +294,81 @@ model OrderItem {
   @@index([productId])
   @@index([createdAt])
   @@index([orderId, productId])
+}
+
+model PhoneOtpChallenge {
+  id String @id @default(cuid())
+
+  /// Digits-only normalized Indian mobile number.
+  phoneNormalized String
+
+  purpose OtpPurpose @default(ORDER_TRACKING)
+
+  /// Cryptographic hash of the OTP.
+  otpHash String
+
+  /// Time after which this OTP is invalid.
+  expiresAt DateTime
+
+  /// Number of failed verification attempts.
+  attempts Int @default(0)
+
+  /// Maximum number of permitted failed attempts.
+  maxAttempts Int @default(5)
+
+  /// Set when the OTP is verified successfully.
+  verifiedAt DateTime?
+
+  /// Set when the OTP is exchanged for a tracking session.
+  consumedAt DateTime?
+
+  /// Optional hashed request metadata used for abuse prevention.
+  requestIpHash String?
+
+  /// Optional hashed browser user-agent data.
+  userAgentHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phoneNormalized])
+  @@index([phoneNormalized, purpose, createdAt])
+  @@index([purpose, createdAt])
+  @@index([expiresAt])
+  @@index([verifiedAt])
+  @@index([consumedAt])
+}
+
+model OrderTrackingSession {
+  id String @id @default(cuid())
+
+  /// Hash of the random session token sent to the browser.
+  tokenHash String @unique
+
+  /// Phone number authorized by OTP verification.
+  phoneNormalized String
+
+  /// Time after which this tracking session expires.
+  expiresAt DateTime
+
+  /// Allows a session to be disabled without deleting it.
+  revokedAt DateTime?
+
+  /// Updated whenever this tracking session is used.
+  lastUsedAt DateTime?
+
+  /// ID of the OTP challenge used to create this session.
+  sourceChallengeId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phoneNormalized])
+  @@index([phoneNormalized, expiresAt])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@index([sourceChallengeId])
+  @@index([createdAt])
 }
 
 model ContactInquiry {

@@ -15,6 +15,7 @@ import {
   DelhiveryApiError,
   getDelhiveryShippingRate,
 } from "@/lib/delhivery";
+import { normalizeIndianPhone } from "@/lib/phone";
 import prisma from "@/lib/prisma";
 import { shopConfig } from "@/lib/shop";
 
@@ -274,9 +275,12 @@ export async function POST(
       );
     }
 
-    if (!/^\d{10}$/.test(phone)) {
+    const phoneNormalized =
+      normalizeIndianPhone(phone);
+
+    if (!phoneNormalized) {
       return errorResponse(
-        "Please enter a valid 10-digit phone number.",
+        "Please enter a valid Indian mobile number.",
         400,
       );
     }
@@ -685,6 +689,7 @@ export async function POST(
         data: {
           customerName,
           phone,
+          phoneNormalized,
 
           email:
             email || null,
