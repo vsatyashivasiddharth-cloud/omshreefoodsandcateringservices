@@ -581,3 +581,372 @@ export function getDelhiveryPickupLocation() {
 export function getDelhiveryOriginPincode() {
   return getConfig().originPincode;
 }
+
+export interface DelhiveryTrackingScan {
+  status: string | null;
+  statusCode: string | null;
+  location: string | null;
+  scannedAt: Date | null;
+  instructions: string | null;
+}
+
+export interface DelhiveryTrackingResult {
+  waybill: string;
+  status: string;
+  statusCode: string | null;
+
+  pickupScheduledAt: Date | null;
+  shippedAt: Date | null;
+  estimatedDeliveryAt: Date | null;
+  deliveredAt: Date | null;
+
+  scans: DelhiveryTrackingScan[];
+  raw: unknown;
+}
+
+function getStringValue(
+  value: unknown,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+
+  return normalized.length > 0
+    ? normalized
+    : null;
+}
+
+function getRecordValue(
+  value: unknown,
+): Record<string, unknown> | null {
+  return isRecord(value)
+    ? value
+    : null;
+}
+
+function parseDelhiveryDate(
+  value: unknown,
+): Date | null {
+  const text = getStringValue(value);
+
+  if (!text) {
+    return null;
+  }
+
+  /*
+   * Delhivery responses may contain ISO dates or strings such as:
+   * 2026-07-29T10:42:00
+   * 2026-07-29 10:42:00
+   */
+  const normalized = text.includes(" ")
+    ? text.replace(" ", "T")
+    : text;
+
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
+}
+
+function findTrackingShipment(
+  data: unknown,
+): Record<string, unknown> | null {
+  if (!isRecord(data)) {
+    return null;
+  }
+
+  const shipmentData = data.ShipmentData;
+
+  if (!Array.isArray(shipmentData)) {
+    return null;
+  }
+
+  for (const entry of shipmentData) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+
+    const shipment =
+      getRecordValue(entry.Shipment);
+
+    if (shipment) {
+      return shipment;
+    }
+
+    /*
+     * Defensive fallback for alternate response shapes.
+     */
+    return entry;
+  }
+
+  return null;
+}
+
+function parseTrackingScans(
+  shipment: Record<string, unknown>,
+): DelhiveryTrackingScan[] {
+  const rawScans = shipment.Scans;
+
+  if (!Array.isArray(rawScans)) {
+    return [];
+  }
+
+  const scans: DelhiveryTrackingScan[] =
+    [];
+
+  for (const entry of rawScans) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+
+    const scan =
+      getRecordValue(entry.ScanDetail) ??
+      getRecordValue(entry.Scan) ??
+      entry;
+
+    const status =
+      getStringValue(scan.Scan) ??
+      getStringValue(scan.Status) ??
+      getStringValue(scan.Instructions);
+
+    const statusCode =
+      getStringValue(scan.ScanType) ??
+      getStringValue(scan.StatusCode);
+
+    const location =
+      getStringValue(scan.ScannedLocation) ??
+      getStringValue(scan.Location);
+
+    const scannedAt =
+      parseDelhiveryDate(
+        scan.ScanDateTime,
+      ) ??
+      parseDelhiveryDate(
+        scan.StatusDateTime,
+      );
+
+    const instructions =
+      getStringValue(scan.Instructions);
+
+    scans.push({
+      status,
+      statusCode,
+      location,
+      scannedAt,
+      instructions,
+    });
+  }
+
+  scans.sort((left, right) => {
+    const leftTime =
+      left.scannedAt?.getTime() ?? 0;
+
+    const rightTime =
+      right.scannedAt?.getTime() ?? 0;
+
+    return leftTime - rightTime;
+  });
+
+  return scans;
+}
+
+function findFirstMatchingScanDate(
+  scans: DelhiveryTrackingScan[],
+  patterns: RegExp[],
+): Date | null {
+  for (
+    let index = scans.length - 1;
+    index >= 0;
+    index -= 1
+  ) {
+    const scan = scans[index];
+
+    const searchableText = [
+      scan.status,
+      scan.statusCode,
+      scan.instructions,
+    ]
+      .filter(
+        (
+          value,
+        ): value is string =>
+          typeof value === "string",
+      )
+      .join(" ");
+
+    if (
+      patterns.some((pattern) =>
+        pattern.test(searchableText),
+      )
+    ) {
+      return scan.scannedAt;
+    }
+  }
+
+  return null;
+}
+
+export async function getDelhiveryTracking(
+  waybill: string,
+  signal?: AbortSignal,
+): Promise<DelhiveryTrackingResult> {
+  const normalizedWaybill =
+    waybill.trim();
+
+  if (!normalizedWaybill) {
+    throw new Error(
+      "Delhivery waybill is required.",
+    );
+  }
+
+  if (
+    !/^[A-Za-z0-9_-]+$/.test(
+      normalizedWaybill,
+    )
+  ) {
+    throw new Error(
+      "Delhivery waybill contains invalid characters.",
+    );
+  }
+
+  const data =
+    await delhiveryRequest<unknown>(
+      "/api/v1/packages/json/",
+      {
+        query: {
+          waybill: normalizedWaybill,
+        },
+        signal,
+      },
+    );
+
+  const shipment =
+    findTrackingShipment(data);
+
+  if (!shipment) {
+    throw new DelhiveryApiError(
+      "Delhivery did not return tracking information for this shipment.",
+      404,
+      data,
+    );
+  }
+
+  const statusRecord =
+    getRecordValue(
+      shipment.Status,
+    );
+
+  const status =
+    getStringValue(
+      statusRecord?.Status,
+    ) ??
+    getStringValue(
+      shipment.Status,
+    ) ??
+    getStringValue(
+      shipment.CurrentStatus,
+    ) ??
+    "Unknown";
+
+  const statusCode =
+    getStringValue(
+      statusRecord?.StatusCode,
+    ) ??
+    getStringValue(
+      statusRecord?.StatusType,
+    ) ??
+    getStringValue(
+      shipment.StatusCode,
+    );
+
+  const scans =
+    parseTrackingScans(shipment);
+
+  const statusDate =
+    parseDelhiveryDate(
+      statusRecord?.StatusDateTime,
+    ) ??
+    parseDelhiveryDate(
+      shipment.StatusDateTime,
+    );
+
+  const pickupScheduledAt =
+    parseDelhiveryDate(
+      shipment.PickupDate,
+    ) ??
+    parseDelhiveryDate(
+      shipment.PickupScheduledDate,
+    ) ??
+    findFirstMatchingScanDate(
+      scans,
+      [
+        /pickup.*scheduled/i,
+        /ready.*pickup/i,
+        /manifested/i,
+      ],
+    );
+
+  const shippedAt =
+    parseDelhiveryDate(
+      shipment.PickedupDate,
+    ) ??
+    parseDelhiveryDate(
+      shipment.DispatchDate,
+    ) ??
+    findFirstMatchingScanDate(
+      scans,
+      [
+        /picked.*up/i,
+        /in.?transit/i,
+        /dispatched/i,
+        /shipment.*received/i,
+      ],
+    );
+
+  const estimatedDeliveryAt =
+    parseDelhiveryDate(
+      shipment.ExpectedDeliveryDate,
+    ) ??
+    parseDelhiveryDate(
+      shipment.EstimatedDeliveryDate,
+    ) ??
+    parseDelhiveryDate(
+      shipment.PromisedDeliveryDate,
+    );
+
+  const deliveredAt =
+    parseDelhiveryDate(
+      shipment.DeliveryDate,
+    ) ??
+    parseDelhiveryDate(
+      shipment.DeliveredDate,
+    ) ??
+    findFirstMatchingScanDate(
+      scans,
+      [
+        /\bdelivered\b/i,
+      ],
+    ) ??
+    (/delivered/i.test(status)
+      ? statusDate
+      : null);
+
+  return {
+    waybill: normalizedWaybill,
+    status,
+    statusCode,
+
+    pickupScheduledAt,
+    shippedAt,
+    estimatedDeliveryAt,
+    deliveredAt,
+
+    scans,
+    raw: data,
+  };
+}
