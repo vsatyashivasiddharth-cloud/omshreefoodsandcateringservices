@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import Footer from "@/components/layout/footer";
 import Navbar from "@/components/layout/Navbar/Navbar";
 import TrackOrderContent from "@/components/track-order/TrackOrderContent";
 
@@ -14,6 +15,7 @@ export default function TrackOrderPage() {
     <>
       <Navbar />
       <TrackOrderContent />
+      <Footer />
     </>
   );
 }
