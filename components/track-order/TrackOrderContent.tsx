@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useState,
   type FormEvent,
   type ReactNode,
@@ -53,36 +54,26 @@ interface TrackingOrderItem {
   product: TrackingProduct;
 }
 
-interface DeliveryDestination {
-  city: string;
-  state: string;
-  pincode: string;
-}
-
-interface PackageDimensions {
-  lengthCm: number | null;
-  breadthCm: number | null;
-  heightCm: number | null;
-}
-
 interface TrackingPackage {
   id: string;
   name: string;
   code: string;
   packedWeightGrams: number | null;
-  dimensions: PackageDimensions;
-}
-
-interface TrackingDetails {
-  number: string | null;
-  status: string | null;
+  dimensions: {
+    lengthCm: number | null;
+    breadthCm: number | null;
+    heightCm: number | null;
+  };
 }
 
 interface ShippingDetails {
   provider: string;
   mode: string | null;
   status: string;
-  tracking: TrackingDetails;
+  tracking: {
+    number: string | null;
+    status: string | null;
+  };
   quotedAt: string | null;
   pickupScheduledAt: string | null;
   shippedAt: string | null;
@@ -94,20 +85,20 @@ interface ShippingDetails {
 interface TrackingOrder {
   id: string;
   customerName: string;
-  deliveryDestination: DeliveryDestination;
-
+  deliveryDestination: {
+    city: string;
+    state: string;
+    pincode: string;
+  };
   subtotalAmount: number;
   shippingChargedAmount: number;
   shippingDiscountAmount: number;
   totalAmount: number;
-
   status: string;
   paymentStatus: string;
   paymentMethod: string | null;
-
   shipping: ShippingDetails;
   items: TrackingOrderItem[];
-
   createdAt: string;
   updatedAt: string;
 }
@@ -135,12 +126,22 @@ interface InfoRowProps {
   value: ReactNode;
 }
 
+interface StoredRateLimit {
+  phone: string;
+  blockedUntil: number;
+}
+
 const ACTIVE_SHIPMENT_STATUSES = new Set([
   "CREATED",
   "PICKUP_SCHEDULED",
   "IN_TRANSIT",
   "OUT_FOR_DELIVERY",
 ]);
+
+const RATE_LIMIT_STORAGE_KEY =
+  "om-shree-track-order-rate-limit";
+
+const DEFAULT_RETRY_AFTER_SECONDS = 10 * 60;
 
 function isRecord(
   value: unknown,
@@ -152,163 +153,35 @@ function isRecord(
   );
 }
 
-function isNullableString(
-  value: unknown,
-): value is string | null {
-  return typeof value === "string" || value === null;
-}
-
-function isNullableNumber(
-  value: unknown,
-): value is number | null {
-  return (
-    value === null ||
-    (typeof value === "number" && Number.isFinite(value))
-  );
-}
-
-function isTrackingCategory(
-  value: unknown,
-): value is TrackingCategory {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.slug === "string"
-  );
-}
-
-function isTrackingProduct(
-  value: unknown,
-): value is TrackingProduct {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.slug === "string" &&
-    isNullableString(value.image) &&
-    isTrackingCategory(value.category)
-  );
-}
-
-function isTrackingOrderItem(
-  value: unknown,
-): value is TrackingOrderItem {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.quantity === "number" &&
-    Number.isInteger(value.quantity) &&
-    value.quantity > 0 &&
-    typeof value.unitPrice === "number" &&
-    Number.isFinite(value.unitPrice) &&
-    typeof value.lineTotal === "number" &&
-    Number.isFinite(value.lineTotal) &&
-    isTrackingProduct(value.product)
-  );
-}
-
-function isDeliveryDestination(
-  value: unknown,
-): value is DeliveryDestination {
-  return (
-    isRecord(value) &&
-    typeof value.city === "string" &&
-    typeof value.state === "string" &&
-    typeof value.pincode === "string"
-  );
-}
-
-function isTrackingDetails(
-  value: unknown,
-): value is TrackingDetails {
-  return (
-    isRecord(value) &&
-    isNullableString(value.number) &&
-    isNullableString(value.status)
-  );
-}
-
-function isTrackingPackage(
-  value: unknown,
-): value is TrackingPackage {
-  if (!isRecord(value) || !isRecord(value.dimensions)) {
-    return false;
-  }
-
-  return (
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.code === "string" &&
-    isNullableNumber(value.packedWeightGrams) &&
-    isNullableNumber(value.dimensions.lengthCm) &&
-    isNullableNumber(value.dimensions.breadthCm) &&
-    isNullableNumber(value.dimensions.heightCm)
-  );
-}
-
-function isShippingDetails(
-  value: unknown,
-): value is ShippingDetails {
-  return (
-    isRecord(value) &&
-    typeof value.provider === "string" &&
-    isNullableString(value.mode) &&
-    typeof value.status === "string" &&
-    isTrackingDetails(value.tracking) &&
-    isNullableString(value.quotedAt) &&
-    isNullableString(value.pickupScheduledAt) &&
-    isNullableString(value.shippedAt) &&
-    isNullableString(value.estimatedDeliveryAt) &&
-    isNullableString(value.deliveredAt) &&
-    (value.package === null ||
-      isTrackingPackage(value.package))
-  );
-}
-
-function isTrackingOrder(
-  value: unknown,
-): value is TrackingOrder {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.customerName === "string" &&
-    isDeliveryDestination(value.deliveryDestination) &&
-    typeof value.subtotalAmount === "number" &&
-    Number.isFinite(value.subtotalAmount) &&
-    typeof value.shippingChargedAmount === "number" &&
-    Number.isFinite(value.shippingChargedAmount) &&
-    typeof value.shippingDiscountAmount === "number" &&
-    Number.isFinite(value.shippingDiscountAmount) &&
-    typeof value.totalAmount === "number" &&
-    Number.isFinite(value.totalAmount) &&
-    typeof value.status === "string" &&
-    typeof value.paymentStatus === "string" &&
-    isNullableString(value.paymentMethod) &&
-    isShippingDetails(value.shipping) &&
-    Array.isArray(value.items) &&
-    value.items.every(isTrackingOrderItem) &&
-    typeof value.createdAt === "string" &&
-    typeof value.updatedAt === "string"
-  );
-}
-
 function isTrackingResponse(
   value: unknown,
 ): value is TrackingResponse {
-  return (
-    isRecord(value) &&
-    typeof value.phone === "string" &&
-    typeof value.count === "number" &&
-    Number.isInteger(value.count) &&
-    Array.isArray(value.orders) &&
-    value.orders.every(isTrackingOrder)
+  if (
+    !isRecord(value) ||
+    typeof value.phone !== "string" ||
+    typeof value.count !== "number" ||
+    !Array.isArray(value.orders)
+  ) {
+    return false;
+  }
+
+  return value.orders.every(
+    (order) =>
+      isRecord(order) &&
+      typeof order.id === "string" &&
+      typeof order.customerName === "string" &&
+      typeof order.status === "string" &&
+      typeof order.paymentStatus === "string" &&
+      typeof order.totalAmount === "number" &&
+      typeof order.createdAt === "string" &&
+      typeof order.updatedAt === "string" &&
+      isRecord(order.deliveryDestination) &&
+      isRecord(order.shipping) &&
+      Array.isArray(order.items),
   );
 }
 
-function formatDate(
-  value: string | null,
-) {
+function formatDate(value: string | null) {
   if (!value) {
     return "";
   }
@@ -325,9 +198,7 @@ function formatDate(
   }).format(date);
 }
 
-function formatStatus(
-  value: string,
-) {
+function formatStatus(value: string) {
   return value
     .replaceAll("_", " ")
     .replaceAll("-", " ")
@@ -337,24 +208,141 @@ function formatStatus(
     );
 }
 
-function getDeliveryMethod(
-  mode: string | null,
+function formatCountdown(seconds: number) {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  if (minutes === 0) {
+    return `${remainingSeconds} second${
+      remainingSeconds === 1 ? "" : "s"
+    }`;
+  }
+
+  if (remainingSeconds === 0) {
+    return `${minutes} minute${
+      minutes === 1 ? "" : "s"
+    }`;
+  }
+
+  return `${minutes} minute${
+    minutes === 1 ? "" : "s"
+  } ${remainingSeconds} second${
+    remainingSeconds === 1 ? "" : "s"
+  }`;
+}
+
+function parseRetryAfterSeconds(
+  response: Response,
 ) {
+  const value = response.headers.get("Retry-After");
+
+  if (!value) {
+    return DEFAULT_RETRY_AFTER_SECONDS;
+  }
+
+  const numericValue = Number(value);
+
+  if (
+    Number.isFinite(numericValue) &&
+    numericValue > 0
+  ) {
+    return Math.ceil(numericValue);
+  }
+
+  const retryDate = new Date(value);
+
+  if (!Number.isNaN(retryDate.getTime())) {
+    return Math.max(
+      1,
+      Math.ceil(
+        (retryDate.getTime() - Date.now()) / 1000,
+      ),
+    );
+  }
+
+  return DEFAULT_RETRY_AFTER_SECONDS;
+}
+
+function readStoredRateLimit(): StoredRateLimit | null {
+  try {
+    const rawValue = sessionStorage.getItem(
+      RATE_LIMIT_STORAGE_KEY,
+    );
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsed: unknown = JSON.parse(rawValue);
+
+    if (
+      !isRecord(parsed) ||
+      typeof parsed.phone !== "string" ||
+      typeof parsed.blockedUntil !== "number" ||
+      !Number.isFinite(parsed.blockedUntil)
+    ) {
+      sessionStorage.removeItem(
+        RATE_LIMIT_STORAGE_KEY,
+      );
+      return null;
+    }
+
+    if (parsed.blockedUntil <= Date.now()) {
+      sessionStorage.removeItem(
+        RATE_LIMIT_STORAGE_KEY,
+      );
+      return null;
+    }
+
+    return {
+      phone: parsed.phone,
+      blockedUntil: parsed.blockedUntil,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storeRateLimit(
+  phone: string,
+  blockedUntil: number,
+) {
+  try {
+    sessionStorage.setItem(
+      RATE_LIMIT_STORAGE_KEY,
+      JSON.stringify({
+        phone,
+        blockedUntil,
+      } satisfies StoredRateLimit),
+    );
+  } catch {
+    // Tracking still works if browser storage is unavailable.
+  }
+}
+
+function clearStoredRateLimit() {
+  try {
+    sessionStorage.removeItem(
+      RATE_LIMIT_STORAGE_KEY,
+    );
+  } catch {
+    // Ignore browser storage failures.
+  }
+}
+
+function getDeliveryMethod(mode: string | null) {
   switch (mode) {
     case "EXPRESS":
       return "Express Delivery";
-
     case "SURFACE":
       return "Surface Delivery";
-
     default:
       return "Standard Delivery";
   }
 }
 
-function formatWeight(
-  value: number | null,
-) {
+function formatWeight(value: number | null) {
   if (
     value === null ||
     !Number.isFinite(value) ||
@@ -364,17 +352,18 @@ function formatWeight(
   }
 
   if (value >= 1000) {
-    return `${(value / 1000).toLocaleString("en-IN", {
-      maximumFractionDigits: 2,
-    })} kg`;
+    return `${(value / 1000).toLocaleString(
+      "en-IN",
+      {
+        maximumFractionDigits: 2,
+      },
+    )} kg`;
   }
 
   return `${value.toLocaleString("en-IN")} g`;
 }
 
-function formatDimension(
-  value: number | null,
-) {
+function formatDimension(value: number | null) {
   if (
     value === null ||
     !Number.isFinite(value) ||
@@ -388,9 +377,7 @@ function formatDimension(
   });
 }
 
-function maskOrderId(
-  value: string,
-) {
+function maskOrderId(value: string) {
   if (value.length <= 12) {
     return value;
   }
@@ -398,40 +385,28 @@ function maskOrderId(
   return `${value.slice(0, 6)}...${value.slice(-6)}`;
 }
 
-function getShipmentMessage(
-  status: string,
-) {
+function getShipmentMessage(status: string) {
   switch (status.trim().toUpperCase()) {
     case "NOT_CREATED":
       return "The courier shipment has not been created yet.";
-
     case "QUOTED":
       return "Delivery charges have been calculated. Shipment preparation will begin after payment confirmation.";
-
     case "CREATED":
       return "Your shipment has been created and is waiting to be prepared for pickup.";
-
     case "PICKUP_SCHEDULED":
       return "Pickup has been scheduled for your parcel.";
-
     case "IN_TRANSIT":
       return "Your parcel is travelling toward the delivery destination.";
-
     case "OUT_FOR_DELIVERY":
       return "Your parcel is out for delivery and should reach you soon.";
-
     case "DELIVERED":
       return "Your order has been delivered successfully.";
-
     case "CANCELLED":
       return "The courier shipment associated with this order has been cancelled.";
-
     case "RTO":
       return "The parcel is being returned to the sender.";
-
     case "FAILED":
       return "The shipment could not proceed. Please contact customer support.";
-
     default:
       return "Delivery information will appear when it becomes available.";
   }
@@ -439,21 +414,77 @@ function getShipmentMessage(
 
 export default function TrackOrderContent() {
   const [phone, setPhone] = useState("");
-
   const [result, setResult] =
     useState<TrackingResponse | null>(null);
-
   const [selectedOrderId, setSelectedOrderId] =
     useState<string | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
   const [error, setError] =
     useState<string | null>(null);
-
   const [refreshMessage, setRefreshMessage] =
     useState<string | null>(null);
+  const [blockedPhone, setBlockedPhone] = useState("");
+  const [blockedUntil, setBlockedUntil] = useState(0);
+  const [currentTime, setCurrentTime] = useState(
+    Date.now(),
+  );
+
+  useEffect(() => {
+    const storedRateLimit = readStoredRateLimit();
+
+    if (!storedRateLimit) {
+      return;
+    }
+
+    setBlockedPhone(storedRateLimit.phone);
+    setBlockedUntil(storedRateLimit.blockedUntil);
+    setCurrentTime(Date.now());
+  }, []);
+
+  useEffect(() => {
+    if (blockedUntil <= Date.now()) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      setCurrentTime(now);
+
+      if (now >= blockedUntil) {
+        setBlockedPhone("");
+        setBlockedUntil(0);
+        setError(null);
+        setRefreshMessage(null);
+        clearStoredRateLimit();
+      }
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [blockedUntil]);
+
+  const normalizedPhone = phone.trim();
+
+  const remainingSeconds =
+    blockedPhone === normalizedPhone &&
+    blockedUntil > currentTime
+      ? Math.max(
+          0,
+          Math.ceil(
+            (blockedUntil - currentTime) / 1000,
+          ),
+        )
+      : 0;
+
+  const isRateLimited = remainingSeconds > 0;
+
+  const rateLimitMessage = isRateLimited
+    ? `Too many tracking attempts. Please try again in ${formatCountdown(
+        remainingSeconds,
+      )}.`
+    : null;
 
   const selectedOrder =
     result?.orders.find(
@@ -461,6 +492,24 @@ export default function TrackOrderContent() {
     ) ??
     result?.orders[0] ??
     null;
+
+  const applyRateLimit = useCallback(
+    (phoneNumber: string, retryAfterSeconds: number) => {
+      const safeRetryAfter = Math.max(
+        1,
+        Math.ceil(retryAfterSeconds),
+      );
+
+      const expiry =
+        Date.now() + safeRetryAfter * 1000;
+
+      setBlockedPhone(phoneNumber);
+      setBlockedUntil(expiry);
+      setCurrentTime(Date.now());
+      storeRateLimit(phoneNumber, expiry);
+    },
+    [],
+  );
 
   const loadOrders = useCallback(
     async (refresh = false) => {
@@ -470,6 +519,14 @@ export default function TrackOrderContent() {
         setError(
           "Please enter a valid 10-digit Indian mobile number.",
         );
+        return;
+      }
+
+      if (
+        blockedPhone === normalizedInput &&
+        blockedUntil > Date.now()
+      ) {
+        setCurrentTime(Date.now());
         return;
       }
 
@@ -503,6 +560,30 @@ export default function TrackOrderContent() {
           .json()
           .catch(() => null);
 
+        if (response.status === 429) {
+          const retryAfterSeconds =
+            parseRetryAfterSeconds(response);
+
+          applyRateLimit(
+            normalizedInput,
+            retryAfterSeconds,
+          );
+
+          const message =
+            isRecord(data) &&
+            typeof data.error === "string"
+              ? data.error
+              : "Too many tracking attempts.";
+
+          if (refresh) {
+            setRefreshMessage(message);
+          } else {
+            setError(message);
+          }
+
+          return;
+        }
+
         if (!response.ok) {
           const errorData = isRecord(data)
             ? (data as ErrorResponse)
@@ -521,23 +602,25 @@ export default function TrackOrderContent() {
           );
         }
 
+        clearStoredRateLimit();
+        setBlockedPhone("");
+        setBlockedUntil(0);
+        setCurrentTime(Date.now());
         setResult(data);
 
-        setSelectedOrderId(
-          (currentOrderId) => {
-            if (
-              currentOrderId &&
-              data.orders.some(
-                (order) =>
-                  order.id === currentOrderId,
-              )
-            ) {
-              return currentOrderId;
-            }
+        setSelectedOrderId((currentOrderId) => {
+          if (
+            currentOrderId &&
+            data.orders.some(
+              (order) =>
+                order.id === currentOrderId,
+            )
+          ) {
+            return currentOrderId;
+          }
 
-            return data.orders[0]?.id ?? null;
-          },
-        );
+          return data.orders[0]?.id ?? null;
+        });
 
         if (refresh) {
           setRefreshMessage(
@@ -567,7 +650,12 @@ export default function TrackOrderContent() {
         setRefreshing(false);
       }
     },
-    [phone],
+    [
+      applyRateLimit,
+      blockedPhone,
+      blockedUntil,
+      phone,
+    ],
   );
 
   function handleSubmit(
@@ -586,7 +674,6 @@ export default function TrackOrderContent() {
   }
 
   const shipping = selectedOrder?.shipping;
-
   const normalizedShipmentStatus =
     shipping?.status.trim().toUpperCase() ?? "";
 
@@ -594,27 +681,21 @@ export default function TrackOrderContent() {
     ACTIVE_SHIPMENT_STATUSES.has(
       normalizedShipmentStatus,
     );
-
   const isShipmentCancelled =
     normalizedShipmentStatus === "CANCELLED";
-
   const isShipmentDelivered =
     normalizedShipmentStatus === "DELIVERED";
-
   const isShipmentRto =
     normalizedShipmentStatus === "RTO";
-
   const isShipmentFailed =
     normalizedShipmentStatus === "FAILED";
 
   const estimatedDeliveryDate = formatDate(
     shipping?.estimatedDeliveryAt ?? null,
   );
-
   const deliveredDate = formatDate(
     shipping?.deliveredAt ?? null,
   );
-
   const updatedDate = formatDate(
     selectedOrder?.updatedAt ?? null,
   );
@@ -626,7 +707,6 @@ export default function TrackOrderContent() {
           aria-hidden="true"
           className="pointer-events-none absolute -left-28 top-0 h-80 w-80 rounded-full bg-green-100/50 blur-3xl"
         />
-
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-[#FFF4DE] blur-3xl"
@@ -639,11 +719,7 @@ export default function TrackOrderContent() {
               size="md"
               className="gap-2"
             >
-              <Truck
-                size={17}
-                aria-hidden="true"
-              />
-
+              <Truck size={17} aria-hidden="true" />
               Order Tracking
             </Badge>
 
@@ -664,17 +740,13 @@ export default function TrackOrderContent() {
           >
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DE] text-[#C89B3C]">
-                <Phone
-                  size={24}
-                  aria-hidden="true"
-                />
+                <Phone size={24} aria-hidden="true" />
               </div>
 
               <div>
                 <h2 className="text-xl font-bold text-[#6D2E00]">
                   Find your recent orders
                 </h2>
-
                 <p className="mt-2 leading-7 text-gray-600">
                   Use the same 10-digit mobile number that you
                   entered during checkout.
@@ -712,6 +784,8 @@ export default function TrackOrderContent() {
                         );
 
                       setPhone(digits.slice(0, 10));
+                      setError(null);
+                      setRefreshMessage(null);
                     }}
                     required
                     autoComplete="tel-national"
@@ -723,9 +797,10 @@ export default function TrackOrderContent() {
                 </div>
               </div>
 
-              {error && (
+              {(rateLimitMessage || error) && (
                 <div
                   role="alert"
+                  aria-live="polite"
                   className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-700"
                 >
                   <TriangleAlert
@@ -733,30 +808,35 @@ export default function TrackOrderContent() {
                     className="mt-0.5 shrink-0"
                     aria-hidden="true"
                   />
-
                   <p className="text-sm leading-6">
-                    {error}
+                    {rateLimitMessage ?? error}
                   </p>
                 </div>
               )}
 
               <button
                 type="submit"
-                disabled={loading || refreshing}
-                className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#6D2E00] px-8 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={
+                  loading ||
+                  refreshing ||
+                  isRateLimited
+                }
+                className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#6D2E00] px-8 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
               >
                 {loading ? (
                   <>
                     <Spinner size="sm" />
                     Finding Orders...
                   </>
+                ) : isRateLimited ? (
+                  <>
+                    <Clock3 size={20} aria-hidden="true" />
+                    Try Again in{" "}
+                    {formatCountdown(remainingSeconds)}
+                  </>
                 ) : (
                   <>
-                    <Search
-                      size={20}
-                      aria-hidden="true"
-                    />
-
+                    <Search size={20} aria-hidden="true" />
                     Track My Order
                   </>
                 )}
@@ -774,26 +854,19 @@ export default function TrackOrderContent() {
                 className="mx-auto text-[#C89B3C]"
                 aria-hidden="true"
               />
-
               <h2 className="mt-5 text-2xl font-bold text-[#6D2E00]">
                 No orders found
               </h2>
-
               <p className="mx-auto mt-3 max-w-xl leading-7 text-gray-600">
                 We could not find a recent order linked to{" "}
                 {result.phone}. Check the number and try again.
               </p>
-
               <button
                 type="button"
                 onClick={resetSearch}
                 className="mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-7 font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white"
               >
-                <ArrowLeft
-                  size={18}
-                  aria-hidden="true"
-                />
-
+                <ArrowLeft size={18} aria-hidden="true" />
                 Try Another Number
               </button>
             </Card>
@@ -804,10 +877,7 @@ export default function TrackOrderContent() {
             selectedOrder &&
             shipping && (
               <div className="mx-auto mt-10 max-w-5xl space-y-8">
-                <Card
-                  padding="lg"
-                  className="shadow-xl"
-                >
+                <Card padding="lg" className="shadow-xl">
                   <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <Badge
@@ -819,7 +889,6 @@ export default function TrackOrderContent() {
                           size={16}
                           aria-hidden="true"
                         />
-
                         {result.count === 1
                           ? "1 Order Found"
                           : `${result.count} Orders Found`}
@@ -828,7 +897,6 @@ export default function TrackOrderContent() {
                       <h2 className="mt-4 text-3xl font-bold text-[#6D2E00]">
                         Hello, {selectedOrder.customerName}
                       </h2>
-
                       <p className="mt-2 text-sm text-gray-500">
                         Orders linked to {result.phone}
                       </p>
@@ -840,22 +908,34 @@ export default function TrackOrderContent() {
                         onClick={() => {
                           void loadOrders(true);
                         }}
-                        disabled={refreshing}
+                        disabled={
+                          refreshing || isRateLimited
+                        }
                         className="inline-flex h-11 items-center justify-center gap-2 rounded-full border-2 border-[#6D2E00] bg-white px-5 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#6D2E00] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <RefreshCw
-                          size={17}
-                          className={
-                            refreshing
-                              ? "animate-spin"
-                              : ""
-                          }
-                          aria-hidden="true"
-                        />
-
+                        {isRateLimited ? (
+                          <Clock3
+                            size={17}
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <RefreshCw
+                            size={17}
+                            className={
+                              refreshing
+                                ? "animate-spin"
+                                : ""
+                            }
+                            aria-hidden="true"
+                          />
+                        )}
                         {refreshing
                           ? "Refreshing..."
-                          : "Refresh"}
+                          : isRateLimited
+                            ? `Wait ${formatCountdown(
+                                remainingSeconds,
+                              )}`
+                            : "Refresh"}
                       </button>
 
                       <button
@@ -868,27 +948,33 @@ export default function TrackOrderContent() {
                     </div>
                   </div>
 
-                  {refreshMessage && (
+                  {(rateLimitMessage ||
+                    refreshMessage) && (
                     <div
-                      role="status"
+                      role={
+                        rateLimitMessage
+                          ? "alert"
+                          : "status"
+                      }
+                      aria-live="polite"
                       className={`mt-5 rounded-2xl border px-5 py-4 text-sm font-medium ${
-                        refreshMessage.includes(
-                          "successfully",
-                        )
-                          ? "border-green-200 bg-green-50 text-green-800"
-                          : "border-red-200 bg-red-50 text-red-700"
+                        rateLimitMessage
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : refreshMessage?.includes(
+                                "successfully",
+                              )
+                            ? "border-green-200 bg-green-50 text-green-800"
+                            : "border-red-200 bg-red-50 text-red-700"
                       }`}
                     >
-                      {refreshMessage}
+                      {rateLimitMessage ??
+                        refreshMessage}
                     </div>
                   )}
                 </Card>
 
                 {result.orders.length > 1 && (
-                  <Card
-                    padding="lg"
-                    className="shadow-lg"
-                  >
+                  <Card padding="lg" className="shadow-lg">
                     <h2 className="text-2xl font-bold text-[#6D2E00]">
                       Select an order
                     </h2>
@@ -917,7 +1003,6 @@ export default function TrackOrderContent() {
                                 <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
                                   Order
                                 </p>
-
                                 <p className="mt-1 font-semibold text-[#6D2E00]">
                                   {maskOrderId(order.id)}
                                 </p>
@@ -942,7 +1027,6 @@ export default function TrackOrderContent() {
                               <span className="text-gray-500">
                                 {formatDate(order.createdAt)}
                               </span>
-
                               <span className="font-bold text-[#6D2E00]">
                                 {formatCurrency(
                                   order.totalAmount,
@@ -956,20 +1040,15 @@ export default function TrackOrderContent() {
                   </Card>
                 )}
 
-                <Card
-                  padding="lg"
-                  className="shadow-xl"
-                >
+                <Card padding="lg" className="shadow-xl">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-sm font-semibold uppercase tracking-wider text-gray-500">
                         Selected Order
                       </p>
-
                       <h2 className="mt-2 break-all text-2xl font-bold text-[#6D2E00]">
                         {selectedOrder.id}
                       </h2>
-
                       <p className="mt-2 text-sm text-gray-500">
                         Placed on{" "}
                         {formatDate(selectedOrder.createdAt)}
@@ -1053,8 +1132,8 @@ export default function TrackOrderContent() {
                       }
                       title="Returning to sender"
                     >
-                      The parcel is being returned to the
-                      sender. Please contact customer support.
+                      The parcel is being returned to the sender.
+                      Please contact customer support.
                     </StatusNotice>
                   )}
 
@@ -1106,7 +1185,6 @@ export default function TrackOrderContent() {
                         selectedOrder.status,
                       )}
                     />
-
                     <SummaryCard
                       icon={
                         <Truck
@@ -1117,7 +1195,6 @@ export default function TrackOrderContent() {
                       label="Delivery Status"
                       value={formatStatus(shipping.status)}
                     />
-
                     <SummaryCard
                       icon={
                         <CreditCard
@@ -1131,7 +1208,6 @@ export default function TrackOrderContent() {
                         "Prepaid"
                       }
                     />
-
                     <SummaryCard
                       icon={
                         <BadgeIndianRupee
@@ -1148,17 +1224,13 @@ export default function TrackOrderContent() {
                 </Card>
 
                 <div className="grid gap-8 lg:grid-cols-2">
-                  <Card
-                    padding="lg"
-                    className="shadow-lg"
-                  >
+                  <Card padding="lg" className="shadow-lg">
                     <div className="flex items-center gap-3">
                       <Truck
                         size={24}
                         className="text-[#C89B3C]"
                         aria-hidden="true"
                       />
-
                       <h2 className="text-2xl font-bold text-[#6D2E00]">
                         Shipment Details
                       </h2>
@@ -1171,7 +1243,6 @@ export default function TrackOrderContent() {
                           shipping.mode,
                         )}
                       />
-
                       <InfoRow
                         label="Current Status"
                         value={formatStatus(
@@ -1242,17 +1313,13 @@ export default function TrackOrderContent() {
                     </div>
                   </Card>
 
-                  <Card
-                    padding="lg"
-                    className="shadow-lg"
-                  >
+                  <Card padding="lg" className="shadow-lg">
                     <div className="flex items-center gap-3">
                       <MapPin
                         size={24}
                         className="text-[#C89B3C]"
                         aria-hidden="true"
                       />
-
                       <h2 className="text-2xl font-bold text-[#6D2E00]">
                         Delivery Destination
                       </h2>
@@ -1263,21 +1330,18 @@ export default function TrackOrderContent() {
                         label="Customer"
                         value={selectedOrder.customerName}
                       />
-
                       <InfoRow
                         label="City"
                         value={
                           selectedOrder.deliveryDestination.city
                         }
                       />
-
                       <InfoRow
                         label="State"
                         value={
                           selectedOrder.deliveryDestination.state
                         }
                       />
-
                       <InfoRow
                         label="Pincode"
                         value={
@@ -1290,17 +1354,13 @@ export default function TrackOrderContent() {
                 </div>
 
                 <div className="grid gap-8 lg:grid-cols-2">
-                  <Card
-                    padding="lg"
-                    className="shadow-lg"
-                  >
+                  <Card padding="lg" className="shadow-lg">
                     <div className="flex items-center gap-3">
                       <ShoppingBag
                         size={24}
                         className="text-[#C89B3C]"
                         aria-hidden="true"
                       />
-
                       <h2 className="text-2xl font-bold text-[#6D2E00]">
                         Products
                       </h2>
@@ -1316,12 +1376,10 @@ export default function TrackOrderContent() {
                             <p className="font-semibold text-[#6D2E00]">
                               {item.product.name}
                             </p>
-
                             <p className="mt-1 text-sm text-gray-500">
                               Quantity: {item.quantity}
                             </p>
                           </div>
-
                           <span className="shrink-0 font-semibold text-[#6D2E00]">
                             {formatCurrency(item.lineTotal)}
                           </span>
@@ -1378,17 +1436,13 @@ export default function TrackOrderContent() {
                     </div>
                   </Card>
 
-                  <Card
-                    padding="lg"
-                    className="shadow-lg"
-                  >
+                  <Card padding="lg" className="shadow-lg">
                     <div className="flex items-center gap-3">
                       <Package
                         size={24}
                         className="text-[#C89B3C]"
                         aria-hidden="true"
                       />
-
                       <h2 className="text-2xl font-bold text-[#6D2E00]">
                         Package Information
                       </h2>
@@ -1400,7 +1454,6 @@ export default function TrackOrderContent() {
                           label="Package"
                           value={shipping.package.name}
                         />
-
                         <InfoRow
                           label="Packed Weight"
                           value={formatWeight(
@@ -1408,7 +1461,6 @@ export default function TrackOrderContent() {
                               .packedWeightGrams,
                           )}
                         />
-
                         <InfoRow
                           label="Dimensions"
                           value={`${formatDimension(
@@ -1425,8 +1477,7 @@ export default function TrackOrderContent() {
                       </div>
                     ) : (
                       <p className="mt-7 leading-7 text-gray-600">
-                        Package information is not available
-                        yet.
+                        Package information is not available yet.
                       </p>
                     )}
                   </Card>
@@ -1441,7 +1492,6 @@ export default function TrackOrderContent() {
                       size={19}
                       aria-hidden="true"
                     />
-
                     Back to Home
                   </Link>
 
@@ -1453,7 +1503,6 @@ export default function TrackOrderContent() {
                       size={19}
                       aria-hidden="true"
                     />
-
                     Continue Shopping
                   </Link>
                 </div>
@@ -1470,22 +1519,15 @@ export default function TrackOrderContent() {
                 className="mx-auto text-[#C89B3C]"
                 aria-hidden="true"
               />
-
               <h2 className="mt-5 text-2xl font-bold text-[#6D2E00]">
                 Your recent orders will appear here
               </h2>
-
               <p className="mx-auto mt-3 max-w-xl leading-7 text-gray-600">
                 Enter the mobile number used during checkout to
                 see recent order and shipment information.
               </p>
-
               <div className="mt-6 flex items-center justify-center gap-2 text-sm text-gray-500">
-                <Clock3
-                  size={17}
-                  aria-hidden="true"
-                />
-
+                <Clock3 size={17} aria-hidden="true" />
                 Shipment information is updated automatically.
               </div>
             </Card>
@@ -1515,12 +1557,8 @@ function SummaryCard({
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#C89B3C] shadow-sm">
           {icon}
         </div>
-
         <div>
-          <p className="text-sm text-gray-500">
-            {label}
-          </p>
-
+          <p className="text-sm text-gray-500">{label}</p>
           <p className="mt-1 font-semibold text-[#6D2E00]">
             {value}
           </p>
@@ -1539,7 +1577,6 @@ function InfoRow({
       <span className="shrink-0 text-gray-500">
         {label}
       </span>
-
       <span className="min-w-0 break-words text-right font-semibold text-[#6D2E00]">
         {value}
       </span>
@@ -1560,21 +1597,18 @@ function StatusNotice({
       title: "text-green-800",
       text: "text-green-700",
     },
-
     error: {
       card: "border-red-200 bg-red-50",
       icon: "text-red-600",
       title: "text-red-800",
       text: "text-red-700",
     },
-
     warning: {
       card: "border-amber-200 bg-amber-50",
       icon: "text-amber-600",
       title: "text-amber-800",
       text: "text-amber-700",
     },
-
     info: {
       card: "border-[#F3DFC2] bg-[#FFFDF8]",
       icon: "text-[#C89B3C]",
@@ -1597,14 +1631,10 @@ function StatusNotice({
         >
           {icon}
         </div>
-
         <div>
-          <h3
-            className={`font-semibold ${style.title}`}
-          >
+          <h3 className={`font-semibold ${style.title}`}>
             {title}
           </h3>
-
           <p
             className={`mt-2 text-sm leading-6 ${style.text}`}
           >
