@@ -7,15 +7,181 @@ import ShopContent from "@/components/shop/ShopContent";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Shop Homemade Products",
+const siteUrl =
+  "https://www.omshreefoodsandcaterers.com";
+
+const shopUrl = `${siteUrl}/shop`;
+
+const brandName =
+  "Om Shree Foods & Caterers";
+
+interface ShopPageProps {
+  searchParams: Promise<
+    Record<string, string | string[] | undefined>
+  >;
+}
+
+function hasActiveFilters(
+  searchParams: Record<
+    string,
+    string | string[] | undefined
+  >,
+) {
+  return Object.values(searchParams).some(
+    (value) => {
+      if (Array.isArray(value)) {
+        return value.some(
+          (item) => item.trim().length > 0,
+        );
+      }
+
+      return Boolean(value?.trim());
+    },
+  );
+}
+
+function serializeStructuredData(
+  value: Record<string, unknown>,
+) {
+  return JSON.stringify(value).replace(
+    /</g,
+    "\\u003c",
+  );
+}
+
+export async function generateMetadata({
+  searchParams,
+}: ShopPageProps): Promise<Metadata> {
+  const resolvedSearchParams =
+    await searchParams;
+
+  const filtered = hasActiveFilters(
+    resolvedSearchParams,
+  );
+
+  const title =
+    "Shop Homemade Snacks, Pickles, Sweets & Spice Powders";
+
+  const description =
+    "Shop freshly prepared murukulu, chekkalu, mixture, homemade pickles, Indian sweets, spice powders and traditional Andhra foods from Om Shree Foods & Caterers.";
+
+  return {
+    title,
+    description,
+
+    alternates: {
+      canonical: "/shop",
+    },
+
+    openGraph: {
+      type: "website",
+      url: "/shop",
+      locale: "en_IN",
+      siteName: brandName,
+      title: `${title} | ${brandName}`,
+      description,
+    },
+
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
+
+    robots: filtered
+      ? {
+          index: false,
+          follow: true,
+          googleBot: {
+            index: false,
+            follow: true,
+          },
+        }
+      : {
+          index: true,
+          follow: true,
+          googleBot: {
+            index: true,
+            follow: true,
+            "max-image-preview": "large",
+            "max-snippet": -1,
+            "max-video-preview": -1,
+          },
+        },
+  };
+}
+
+const collectionStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "@id": `${shopUrl}#collection`,
+  url: shopUrl,
+  name:
+    "Shop Homemade Products | Om Shree Foods & Caterers",
   description:
-    "Explore freshly prepared homemade snacks, sweets, pickles, spice powders and traditional delicacies made with authentic recipes.",
+    "Browse authentic homemade Andhra snacks, pickles, sweets, spice powders and traditional delicacies.",
+  isPartOf: {
+    "@type": "WebSite",
+    "@id": `${siteUrl}/#website`,
+    url: siteUrl,
+    name: brandName,
+  },
+  about: {
+    "@type": "Organization",
+    "@id": `${siteUrl}/#organization`,
+    name: brandName,
+    url: siteUrl,
+  },
+  mainEntity: {
+    "@type": "ItemList",
+    name:
+      "Homemade Food Products",
+    itemListOrder:
+      "https://schema.org/ItemListUnordered",
+  },
+};
+
+const breadcrumbStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "@id": `${shopUrl}#breadcrumb`,
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: siteUrl,
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Shop",
+      item: shopUrl,
+    },
+  ],
 };
 
 export default function ShopPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeStructuredData(
+            collectionStructuredData,
+          ),
+        }}
+      />
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeStructuredData(
+            breadcrumbStructuredData,
+          ),
+        }}
+      />
+
       <Navbar />
 
       <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-white pt-28">
@@ -46,10 +212,11 @@ export default function ShopPage() {
               </h1>
 
               <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-gray-600">
-                Discover freshly prepared homemade snacks,
-                sweets, pickles, spice powders and traditional
-                delicacies made with authentic recipes and
-                premium ingredients.
+                Discover freshly prepared murukulu,
+                chekkalu, mixture, homemade pickles,
+                sweets, spice powders and traditional
+                delicacies made with authentic recipes
+                and premium ingredients.
               </p>
             </div>
 
