@@ -3,21 +3,19 @@ import type { Metadata } from "next";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/footer";
 import CateringContent from "@/components/catering/CateringContent";
+import { siteConfig } from "@/lib/site";
 
 const siteUrl =
   "https://www.omshreefoodsandcaterers.com";
 
 const cateringUrl = `${siteUrl}/catering`;
 
-const brandName =
-  "Om Shree Foods & Caterers";
-
 export const metadata: Metadata = {
   title:
     "Catering Services for Weddings, Parties & Events",
 
   description:
-    "Book authentic vegetarian catering services for weddings, birthdays, functions, corporate events and special occasions from Om Shree Foods & Caterers.",
+    "Book authentic vegetarian catering services for weddings, birthdays, family functions, corporate events and special occasions from Om Shree Foods & Caterers.",
 
   alternates: {
     canonical: "/catering",
@@ -27,11 +25,11 @@ export const metadata: Metadata = {
     type: "website",
     url: "/catering",
     locale: "en_IN",
-    siteName: brandName,
+    siteName: siteConfig.name,
     title:
       "Catering Services for Weddings, Parties & Events | Om Shree Foods",
     description:
-      "Authentic vegetarian catering for weddings, birthdays, functions, corporate events and special occasions.",
+      "Authentic vegetarian catering for weddings, birthdays, family functions, corporate events and special occasions.",
   },
 
   twitter: {
@@ -39,7 +37,7 @@ export const metadata: Metadata = {
     title:
       "Catering Services for Weddings, Parties & Events",
     description:
-      "Authentic vegetarian catering for weddings, birthdays, functions, corporate events and special occasions.",
+      "Authentic vegetarian catering for weddings, birthdays, family functions, corporate events and special occasions.",
   },
 
   robots: {
@@ -68,8 +66,7 @@ const serviceStructuredData = {
   "@context": "https://schema.org",
   "@type": "Service",
   "@id": `${cateringUrl}#service`,
-  name:
-    "Catering Services by Om Shree Foods & Caterers",
+  name: `Catering Services by ${siteConfig.name}`,
   serviceType:
     "Vegetarian Catering Services",
   url: cateringUrl,
@@ -79,8 +76,34 @@ const serviceStructuredData = {
   provider: {
     "@type": "FoodEstablishment",
     "@id": `${siteUrl}/#organization`,
-    name: brandName,
+    name: siteConfig.name,
+    alternateName: siteConfig.shortName,
     url: siteUrl,
+    description: siteConfig.description,
+    telephone: `+91${siteConfig.phone}`,
+    email: siteConfig.email,
+    priceRange: "₹₹",
+    servesCuisine: [
+      "Andhra",
+      "South Indian",
+      "Indian",
+      "Vegetarian",
+    ],
+    address: {
+      "@type": "PostalAddress",
+      addressRegion: "Andhra Pradesh",
+      addressCountry: "IN",
+    },
+    contactPoint: {
+      "@type": "ContactPoint",
+      telephone: `+91${siteConfig.phone}`,
+      contactType: "customer service",
+      areaServed: "IN",
+      availableLanguage: [
+        "English",
+        "Telugu",
+      ],
+    },
   },
 
   areaServed: [
