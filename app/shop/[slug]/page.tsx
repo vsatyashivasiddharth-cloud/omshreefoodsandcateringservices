@@ -19,6 +19,34 @@ import { formatCurrency } from "@/lib/shop";
 import prisma from "@/lib/prisma";
 import type { ProductWithCategory } from "@/types/product";
 
+
+const siteUrl =
+  "https://www.omshreefoodsandcaterers.com";
+
+const brandName =
+  "Om Shree Foods & Caterers";
+
+function getAbsoluteUrl(url: string | null) {
+  if (!url) {
+    return `${siteUrl}/images/no-image.jpg`;
+  }
+
+  try {
+    return new URL(url, siteUrl).toString();
+  } catch {
+    return `${siteUrl}/images/no-image.jpg`;
+  }
+}
+
+function serializeStructuredData(
+  value: Record<string, unknown>,
+) {
+  return JSON.stringify(value).replace(
+    /</g,
+    "\\u003c",
+  );
+}
+
 interface ProductPageProps {
   params: Promise<{
     slug: string;
@@ -70,23 +98,78 @@ export async function generateMetadata({
   if (!product) {
     return {
       title: "Product Not Found",
+      description:
+        "The requested product could not be found.",
+      robots: {
+        index: false,
+        follow: false,
+      },
     };
   }
 
+  const productUrl =
+    `/shop/${encodeURIComponent(product.slug)}`;
+
+  const imageUrl = getAbsoluteUrl(
+    product.image,
+  );
+
+  const description =
+    product.description?.trim() ||
+    `Buy ${product.name} online from ${brandName}. Freshly prepared, hygienically packed and delivered across India.`;
+
   return {
     title: product.name,
-    description: product.description,
+    description,
+
+    alternates: {
+      canonical: productUrl,
+    },
+
     openGraph: {
-      title: product.name,
-      description: product.description,
-      images: product.image
-        ? [
-            {
-              url: product.image,
-              alt: product.name,
-            },
-          ]
-        : undefined,
+      type: "website",
+      url: productUrl,
+      siteName: brandName,
+      locale: "en_IN",
+      title: `${product.name} | ${brandName}`,
+      description,
+      images: [
+        {
+          url: imageUrl,
+          alt: product.name,
+        },
+      ],
+    },
+
+    twitter: {
+      card: "summary_large_image",
+      title: `${product.name} | ${brandName}`,
+      description,
+      images: [imageUrl],
+    },
+
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    },
+
+    other: {
+      "product:price:amount":
+        Number(product.price).toFixed(2),
+      "product:price:currency": "INR",
+      "product:availability":
+        product.stock > 0
+          ? "in stock"
+          : "out of stock",
+      "product:category":
+        product.category.name,
     },
   };
 }
@@ -135,8 +218,106 @@ export default async function ProductPage({
   const inStock =
     normalizedProduct.stock > 0;
 
+  const productUrl =
+  `${siteUrl}/shop/${encodeURIComponent(
+    product.slug,
+  )}`;
+
+const productImage = getAbsoluteUrl(
+  product.image,
+);
+
+const productStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "@id": `${productUrl}#product`,
+  name: product.name,
+  description: product.description,
+  url: productUrl,
+  image: [productImage],
+  sku: product.id,
+  category: product.category.name,
+
+  brand: {
+    "@type": "Brand",
+    name: brandName,
+  },
+
+  offers: {
+    "@type": "Offer",
+    url: productUrl,
+    priceCurrency: "INR",
+    price: normalizedProduct.price.toFixed(2),
+    availability: inStock
+      ? "https://schema.org/InStock"
+      : "https://schema.org/OutOfStock",
+    itemCondition:
+      "https://schema.org/NewCondition",
+    seller: {
+      "@type": "Organization",
+      name: brandName,
+      url: siteUrl,
+    },
+  },
+};
+
+const breadcrumbStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: siteUrl,
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Shop",
+      item: `${siteUrl}/shop`,
+    },
+    {
+      "@type": "ListItem",
+      position: 3,
+      name: product.category.name,
+      item: `${siteUrl}/shop?category=${encodeURIComponent(
+        product.category.slug,
+      )}`,
+    },
+    {
+      "@type": "ListItem",
+      position: 4,
+      name: product.name,
+      item: productUrl,
+    },
+  ],
+};  
+
   return (
     <>
+      
+      <script
+  type="application/ld+json"
+  dangerouslySetInnerHTML={{
+    __html: serializeStructuredData(
+      productStructuredData,
+    ),
+  }}
+/>
+
+<script
+  type="application/ld+json"
+  dangerouslySetInnerHTML={{
+    __html: serializeStructuredData(
+      breadcrumbStructuredData,
+    ),
+  }}
+/>
+
+<Navbar />
+
+
       <Navbar />
 
       <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFFBF4] to-[#FFF8EE] pt-28">
