@@ -22,14 +22,14 @@ export const siteConfig = {
     "/images/about/shop-front.png",
 
   address:
-    "18-8-278/185/2/b, Ambikanagar Uppuguda Road, Moin Bagh, Hyderabad, Telangana 500059, India",
+    "18-8-278/185/2/b, Ambikanagar Uppuguda Road, Moin Bagh, Hyderabad, Telangana 500058, India",
 
   addressDetails: {
     streetAddress:
       "18-8-278/185/2/b, Ambikanagar Uppuguda Road, Moin Bagh",
     addressLocality: "Hyderabad",
     addressRegion: "Telangana",
-    postalCode: "500059",
+    postalCode: "500058",
     addressCountry: "IN",
   },
 
