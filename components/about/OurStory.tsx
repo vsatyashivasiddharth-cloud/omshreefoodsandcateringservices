@@ -10,6 +10,7 @@ import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import Container from "@/components/ui/Container";
 import SectionHeader from "@/components/ui/SectionHeader";
+import { siteConfig } from "@/lib/site";
 
 const highlights = [
   {
@@ -19,7 +20,8 @@ const highlights = [
   },
   {
     title: "Premium",
-    description: "Carefully selected quality",
+    description:
+      "Carefully selected quality ingredients",
     icon: BadgeCheck,
   },
   {
@@ -32,8 +34,6 @@ const highlights = [
 export default function OurStory() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-[#FFFDF8] via-white to-[#FFF8EE] py-20 sm:py-24">
-      {/* Decorative background */}
-
       <div
         aria-hidden="true"
         className="pointer-events-none absolute -left-20 top-24 h-72 w-72 rounded-full bg-[#FFF4DE]/70 blur-3xl"
@@ -46,8 +46,6 @@ export default function OurStory() {
 
       <Container className="relative">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center lg:gap-16">
-          {/* Story image */}
-
           <div className="relative">
             <div
               aria-hidden="true"
@@ -58,19 +56,18 @@ export default function OurStory() {
               padding="sm"
               className="relative overflow-hidden shadow-2xl"
             >
-              <div className="relative h-[380px] overflow-hidden rounded-[24px] sm:h-[460px] lg:h-[520px]">
+              <div className="relative aspect-[4/3] overflow-hidden rounded-[24px] bg-[#FFF4DE]">
                 <Image
-                  src="/images/about/our-story.jpg"
-                  alt="Traditional food preparation at Om Shree Foods and Caterers"
+                  src={siteConfig.image}
+                  alt="Om Shree Foods and Caterers shop entrance in Hyderabad"
                   fill
-                  priority={false}
                   sizes="(max-width: 1024px) 100vw, 50vw"
                   className="object-cover transition-transform duration-700 hover:scale-105"
                 />
 
                 <div
                   aria-hidden="true"
-                  className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"
+                  className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"
                 />
 
                 <Badge
@@ -87,8 +84,6 @@ export default function OurStory() {
               </div>
             </Card>
           </div>
-
-          {/* Story content */}
 
           <div>
             <SectionHeader
@@ -112,22 +107,26 @@ export default function OurStory() {
 
             <div className="mt-7 space-y-5 text-base leading-8 text-gray-600 sm:text-lg">
               <p>
-                Every snack, pickle, sweet and meal is prepared using carefully
-                selected ingredients, time-honoured recipes and strict hygiene
-                standards. We believe great food creates lasting memories,
-                whether it is a family gathering, wedding or festive
+                Every snack, pickle, sweet and meal
+                is prepared using carefully selected
+                ingredients, time-honoured recipes
+                and strict hygiene standards. We
+                believe great food creates lasting
+                memories, whether it is a family
+                gathering, wedding or festive
                 celebration.
               </p>
 
               <p>
-                Our commitment to quality, freshness and customer satisfaction
-                has earned the trust of families and businesses alike. Every
-                order receives the same care and attention that we would give
-                to food prepared for our own family.
+                From our location in Moin Bagh,
+                Hyderabad, we serve customers with
+                freshly prepared foods and
+                dependable catering services. Every
+                order receives the same care and
+                attention that we would give to food
+                prepared for our own family.
               </p>
             </div>
-
-            {/* Highlights */}
 
             <div className="mt-10 grid gap-4 sm:grid-cols-3 sm:gap-5">
               {highlights.map((highlight) => {

@@ -10,11 +10,14 @@ const siteUrl =
 
 const aboutUrl = `${siteUrl}/about`;
 
+const businessImageUrl =
+  `${siteUrl}${siteConfig.image}`;
+
 export const metadata: Metadata = {
   title: "About Us",
 
   description:
-    "Learn about Om Shree Foods & Caterers, our commitment to authentic homemade Andhra foods, quality ingredients, traditional recipes and dependable catering services.",
+    "Learn about Om Shree Foods & Caterers in Hyderabad, our authentic homemade foods, traditional recipes, quality ingredients and dependable catering services.",
 
   alternates: {
     canonical: "/about",
@@ -28,7 +31,13 @@ export const metadata: Metadata = {
     title:
       "About Om Shree Foods & Caterers",
     description:
-      "Discover our story, traditional recipes, homemade products, quality ingredients and catering services.",
+      "Discover our story, homemade products, traditional recipes and catering services in Hyderabad.",
+    images: [
+      {
+        url: businessImageUrl,
+        alt: `${siteConfig.name} shop in Hyderabad`,
+      },
+    ],
   },
 
   twitter: {
@@ -36,7 +45,8 @@ export const metadata: Metadata = {
     title:
       "About Om Shree Foods & Caterers",
     description:
-      "Discover our story, traditional recipes, homemade products, quality ingredients and catering services.",
+      "Discover our story, homemade products, traditional recipes and catering services in Hyderabad.",
+    images: [businessImageUrl],
   },
 
   robots: {
@@ -61,6 +71,78 @@ function serializeStructuredData(
   );
 }
 
+const organizationStructuredData = {
+  "@context": "https://schema.org",
+  "@type": [
+    "Organization",
+    "FoodEstablishment",
+  ],
+  "@id": `${siteUrl}/#organization`,
+  name: siteConfig.name,
+  alternateName: siteConfig.shortName,
+  legalName: siteConfig.tradeName,
+  url: siteUrl,
+  image: businessImageUrl,
+  logo: businessImageUrl,
+  description: siteConfig.description,
+  telephone: `+91${siteConfig.phone}`,
+  email: siteConfig.email,
+  priceRange: "₹₹",
+
+  servesCuisine: [
+    "Andhra",
+    "South Indian",
+    "Indian",
+    "Vegetarian",
+  ],
+
+  address: {
+    "@type": "PostalAddress",
+    streetAddress:
+      siteConfig.addressDetails.streetAddress,
+    addressLocality:
+      siteConfig.addressDetails.addressLocality,
+    addressRegion:
+      siteConfig.addressDetails.addressRegion,
+    postalCode:
+      siteConfig.addressDetails.postalCode,
+    addressCountry:
+      siteConfig.addressDetails.addressCountry,
+  },
+
+  areaServed: [
+    {
+      "@type": "City",
+      name: "Hyderabad",
+    },
+    {
+      "@type": "AdministrativeArea",
+      name: "Telangana",
+    },
+    {
+      "@type": "Country",
+      name: "India",
+    },
+  ],
+
+  contactPoint: {
+    "@type": "ContactPoint",
+    telephone: `+91${siteConfig.phone}`,
+    contactType: "customer service",
+    areaServed: "IN",
+    availableLanguage: [
+      "English",
+      "Telugu",
+    ],
+  },
+
+  sameAs: [
+    siteConfig.social.instagram,
+    siteConfig.social.facebook,
+    siteConfig.social.youtube,
+  ].filter(Boolean),
+};
+
 const aboutPageStructuredData = {
   "@context": "https://schema.org",
   "@type": "AboutPage",
@@ -68,52 +150,19 @@ const aboutPageStructuredData = {
   url: aboutUrl,
   name: `About ${siteConfig.name}`,
   description:
-    "Learn about Om Shree Foods & Caterers, our traditional recipes, homemade food products, premium ingredients and catering services.",
-
+    "Learn about Om Shree Foods & Caterers, our traditional homemade foods and catering services in Hyderabad.",
+  primaryImageOfPage: {
+    "@type": "ImageObject",
+    url: businessImageUrl,
+  },
   isPartOf: {
     "@type": "WebSite",
     "@id": `${siteUrl}/#website`,
     url: siteUrl,
     name: siteConfig.name,
   },
-
   about: {
-    "@type": "Organization",
     "@id": `${siteUrl}/#organization`,
-    name: siteConfig.name,
-    alternateName: siteConfig.shortName,
-    url: siteUrl,
-    description: siteConfig.description,
-    telephone: `+91${siteConfig.phone}`,
-    email: siteConfig.email,
-
-    address: {
-      "@type": "PostalAddress",
-      addressRegion: "Andhra Pradesh",
-      addressCountry: "IN",
-    },
-
-    areaServed: {
-      "@type": "Country",
-      name: "India",
-    },
-
-    contactPoint: {
-      "@type": "ContactPoint",
-      telephone: `+91${siteConfig.phone}`,
-      contactType: "customer service",
-      areaServed: "IN",
-      availableLanguage: [
-        "English",
-        "Telugu",
-      ],
-    },
-
-    sameAs: [
-      siteConfig.social.instagram,
-      siteConfig.social.facebook,
-      siteConfig.social.youtube,
-    ].filter(Boolean),
   },
 };
 
@@ -140,6 +189,15 @@ const breadcrumbStructuredData = {
 export default function AboutPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeStructuredData(
+            organizationStructuredData,
+          ),
+        }}
+      />
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{

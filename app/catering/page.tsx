@@ -10,12 +10,15 @@ const siteUrl =
 
 const cateringUrl = `${siteUrl}/catering`;
 
+const businessImageUrl =
+  `${siteUrl}${siteConfig.image}`;
+
 export const metadata: Metadata = {
   title:
     "Catering Services for Weddings, Parties & Events",
 
   description:
-    "Book authentic vegetarian catering services for weddings, birthdays, family functions, corporate events and special occasions from Om Shree Foods & Caterers.",
+    "Book authentic catering services in Hyderabad for weddings, birthdays, family functions, corporate events and special occasions from Om Shree Foods & Caterers.",
 
   alternates: {
     canonical: "/catering",
@@ -27,17 +30,24 @@ export const metadata: Metadata = {
     locale: "en_IN",
     siteName: siteConfig.name,
     title:
-      "Catering Services for Weddings, Parties & Events | Om Shree Foods",
+      "Catering Services in Hyderabad | Om Shree Foods",
     description:
-      "Authentic vegetarian catering for weddings, birthdays, family functions, corporate events and special occasions.",
+      "Authentic catering for weddings, birthdays, family functions, corporate events and special occasions in Hyderabad.",
+    images: [
+      {
+        url: businessImageUrl,
+        alt: `${siteConfig.name} in Hyderabad`,
+      },
+    ],
   },
 
   twitter: {
     card: "summary_large_image",
     title:
-      "Catering Services for Weddings, Parties & Events",
+      "Catering Services in Hyderabad",
     description:
-      "Authentic vegetarian catering for weddings, birthdays, family functions, corporate events and special occasions.",
+      "Authentic catering for weddings, birthdays, family functions, corporate events and special occasions.",
+    images: [businessImageUrl],
   },
 
   robots: {
@@ -62,58 +72,63 @@ function serializeStructuredData(
   );
 }
 
+const providerStructuredData = {
+  "@type": "FoodEstablishment",
+  "@id": `${siteUrl}/#organization`,
+  name: siteConfig.name,
+  alternateName: siteConfig.shortName,
+  legalName: siteConfig.tradeName,
+  url: siteUrl,
+  image: businessImageUrl,
+  logo: businessImageUrl,
+  description: siteConfig.description,
+  telephone: `+91${siteConfig.phone}`,
+  email: siteConfig.email,
+  priceRange: "₹₹",
+
+  servesCuisine: [
+    "Andhra",
+    "South Indian",
+    "Indian",
+    "Vegetarian",
+  ],
+
+  address: {
+    "@type": "PostalAddress",
+    streetAddress:
+      siteConfig.addressDetails.streetAddress,
+    addressLocality:
+      siteConfig.addressDetails.addressLocality,
+    addressRegion:
+      siteConfig.addressDetails.addressRegion,
+    postalCode:
+      siteConfig.addressDetails.postalCode,
+    addressCountry:
+      siteConfig.addressDetails.addressCountry,
+  },
+};
+
 const serviceStructuredData = {
   "@context": "https://schema.org",
   "@type": "Service",
   "@id": `${cateringUrl}#service`,
   name: `Catering Services by ${siteConfig.name}`,
-  serviceType:
-    "Vegetarian Catering Services",
+  serviceType: "Catering Services",
   url: cateringUrl,
+  image: businessImageUrl,
   description:
-    "Authentic vegetarian catering services for weddings, birthdays, family functions, corporate events and special occasions.",
+    "Authentic catering services for weddings, birthdays, family functions, corporate events and special occasions in Hyderabad.",
 
-  provider: {
-    "@type": "FoodEstablishment",
-    "@id": `${siteUrl}/#organization`,
-    name: siteConfig.name,
-    alternateName: siteConfig.shortName,
-    url: siteUrl,
-    description: siteConfig.description,
-    telephone: `+91${siteConfig.phone}`,
-    email: siteConfig.email,
-    priceRange: "₹₹",
-    servesCuisine: [
-      "Andhra",
-      "South Indian",
-      "Indian",
-      "Vegetarian",
-    ],
-    address: {
-      "@type": "PostalAddress",
-      addressRegion: "Andhra Pradesh",
-      addressCountry: "IN",
-    },
-    contactPoint: {
-      "@type": "ContactPoint",
-      telephone: `+91${siteConfig.phone}`,
-      contactType: "customer service",
-      areaServed: "IN",
-      availableLanguage: [
-        "English",
-        "Telugu",
-      ],
-    },
-  },
+  provider: providerStructuredData,
 
   areaServed: [
     {
-      "@type": "AdministrativeArea",
-      name: "Andhra Pradesh",
+      "@type": "City",
+      name: "Hyderabad",
     },
     {
-      "@type": "Country",
-      name: "India",
+      "@type": "AdministrativeArea",
+      name: "Telangana",
     },
   ],
 

@@ -3,8 +3,13 @@ export const siteConfig = {
 
   shortName: "Om Shree Foods",
 
+  legalName: "Vllore Laxmi",
+
+  tradeName:
+    "Om Shree Foods and Catering Services",
+
   description:
-    "Authentic Homemade Snacks, Pickles, Sweets & Premium Catering Services.",
+    "Authentic homemade snacks, pickles, sweets and premium catering services.",
 
   phone: "7013820854",
 
@@ -13,7 +18,23 @@ export const siteConfig = {
   email:
     "omshreefoodsandcaterers@gmail.com",
 
-  address: "Andhra Pradesh, India",
+  image:
+    "/images/about/shop-front.png",
+
+  address:
+    "18-8-278/185/2/b, Ambikanagar Uppuguda Road, Moin Bagh, Hyderabad, Telangana 500059, India",
+
+  addressDetails: {
+    streetAddress:
+      "18-8-278/185/2/b, Ambikanagar Uppuguda Road, Moin Bagh",
+    addressLocality: "Hyderabad",
+    addressRegion: "Telangana",
+    postalCode: "500059",
+    addressCountry: "IN",
+  },
+
+  landmark:
+    "Near V Square Tea Coffee Vending",
 
   social: {
     instagram: "",
