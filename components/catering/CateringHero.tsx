@@ -38,8 +38,6 @@ const highlights = [
 export default function CateringHero() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-[#6D2E00] via-[#8B4513] to-[#C89B3C] py-20 text-white sm:py-24 lg:py-28">
-      {/* Decorative background */}
-
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 bg-black/15"
@@ -62,8 +60,6 @@ export default function CateringHero() {
 
       <Container className="relative">
         <div className="mx-auto max-w-5xl text-center">
-          {/* Badge */}
-
           <Badge
             variant="neutral"
             className="gap-2 border border-white/20 bg-white/10 text-white shadow-lg backdrop-blur-md"
@@ -72,11 +68,8 @@ export default function CateringHero() {
               size={16}
               aria-hidden="true"
             />
-
             Premium Catering Services
           </Badge>
-
-          {/* Main icon */}
 
           <div className="mx-auto mt-8 flex h-24 w-24 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-xl backdrop-blur-md">
             <UtensilsCrossed
@@ -84,8 +77,6 @@ export default function CateringHero() {
               aria-hidden="true"
             />
           </div>
-
-          {/* Heading */}
 
           <h1 className="mt-8 text-4xl font-bold leading-tight tracking-tight sm:text-5xl md:text-6xl lg:text-7xl">
             Delicious Food
@@ -95,13 +86,13 @@ export default function CateringHero() {
           </h1>
 
           <p className="mx-auto mt-7 max-w-3xl text-base leading-8 text-white/90 sm:text-lg md:text-xl md:leading-9">
-            From intimate family gatherings to grand weddings, corporate
-            events and festive celebrations, Om Shree Foods & Caterers
-            delivers authentic homemade flavours, premium ingredients and
-            professional catering service.
+            From intimate family gatherings to
+            grand weddings, corporate events and
+            festive celebrations, Om Shree Foods
+            &amp; Caterers delivers authentic
+            homemade flavours, premium ingredients
+            and professional catering service.
           </p>
-
-          {/* Actions */}
 
           <div className="mt-10 flex flex-col justify-center gap-4 sm:flex-row sm:items-center">
             <Link
@@ -112,24 +103,20 @@ export default function CateringHero() {
                 size={20}
                 aria-hidden="true"
               />
-
               Book Catering
             </Link>
 
             <Link
-              href="/shop"
+              href="/catering/plates"
               className="inline-flex h-14 items-center justify-center gap-3 rounded-full border border-white/30 bg-white/10 px-8 text-lg font-semibold text-white backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white hover:text-[#6D2E00] focus:outline-none focus:ring-4 focus:ring-white/30 active:scale-95"
             >
-              Explore Products
-
+              Explore Catering Plates
               <ArrowRight
                 size={20}
                 aria-hidden="true"
               />
             </Link>
           </div>
-
-          {/* Highlights */}
 
           <div className="mt-16 grid gap-4 sm:grid-cols-2 md:mt-20 lg:grid-cols-4 lg:gap-6">
             {highlights.map((highlight) => {
