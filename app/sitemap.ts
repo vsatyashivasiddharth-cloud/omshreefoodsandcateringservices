@@ -29,6 +29,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
       url: `${baseUrl}/catering`,
       lastModified: now,
       changeFrequency: "monthly",
+      priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/catering/plates`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/catering/plates/veg`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/catering/plates/non-veg`,
+      lastModified: now,
+      changeFrequency: "monthly",
       priority: 0.8,
     },
     {
