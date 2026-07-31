@@ -223,11 +223,10 @@ export default async function CategoriesPage() {
             </h1>
 
             <p className="mx-auto mt-4 max-w-2xl text-lg leading-8 text-gray-600">
-              Discover traditional Andhra
-              foods, homemade snacks, pickles,
-              sweets and freshly prepared
-              favourites from Om Shree Foods
-              &amp; Caterers.
+              Discover traditional Andhra foods,
+              homemade snacks, pickles, sweets and
+              freshly prepared favourites from Om
+              Shree Foods &amp; Caterers.
             </p>
           </div>
         </section>
@@ -251,8 +250,8 @@ export default async function CategoriesPage() {
               </h2>
 
               <p className="mt-3 text-gray-600">
-                Categories will appear here
-                once they are added.
+                Categories will appear here once
+                they are added.
               </p>
 
               <Link
@@ -291,12 +290,8 @@ export default async function CategoriesPage() {
                       <div className="relative h-56 overflow-hidden bg-[#FFF4DE]">
                         {category.image ? (
                           <Image
-                            src={
-                              category.image
-                            }
-                            alt={
-                              category.name
-                            }
+                            src={category.image}
+                            alt={category.name}
                             fill
                             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                             className="object-cover transition duration-500 group-hover:scale-105"
@@ -333,14 +328,12 @@ export default async function CategoriesPage() {
                         <div className="flex items-center justify-between gap-4">
                           <div className="min-w-0">
                             <h2 className="truncate text-xl font-bold text-[#6D2E00]">
-                              {
-                                category.name
-                              }
+                              {category.name}
                             </h2>
 
                             <p className="mt-2 text-sm leading-6 text-gray-500">
-                              Explore products
-                              in this category.
+                              Explore products in
+                              this category.
                             </p>
                           </div>
 
