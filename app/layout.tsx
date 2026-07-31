@@ -88,10 +88,6 @@ export const metadata: Metadata = {
 
   category: "Food and Catering",
 
-  alternates: {
-    canonical: "/",
-  },
-
   openGraph: {
     type: "website",
     locale: "en_IN",
