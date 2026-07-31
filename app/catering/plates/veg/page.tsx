@@ -10,19 +10,206 @@ import Footer from "@/components/layout/footer";
 import Container from "@/components/ui/Container";
 import CateringPlateGrid from "@/components/catering/CateringPlateGrid";
 import { vegCateringPlates } from "@/lib/catering-plates";
+import { siteConfig } from "@/lib/site";
+
+const siteUrl =
+  "https://www.omshreefoodsandcaterers.com";
+
+const vegPlatesUrl =
+  `${siteUrl}/catering/plates/veg`;
+
+const defaultImageUrl =
+  `${siteUrl}${siteConfig.image}`;
 
 export const metadata: Metadata = {
   title: "Vegetarian Catering Plates",
+
   description:
-    "Explore Basic, Standard, Gold and Diamond vegetarian catering packages from Om Shree Foods & Caterers.",
+    "Explore Basic, Standard, Gold and Diamond vegetarian catering packages in Hyderabad from Om Shree Foods & Caterers.",
+
   alternates: {
     canonical: "/catering/plates/veg",
   },
+
+  openGraph: {
+    type: "website",
+    url: "/catering/plates/veg",
+    locale: "en_IN",
+    siteName: siteConfig.name,
+    title:
+      "Vegetarian Catering Plates | Om Shree Foods & Caterers",
+    description:
+      "Explore vegetarian catering menus for weddings, parties, family functions and special occasions in Hyderabad.",
+    images: [
+      {
+        url: defaultImageUrl,
+        alt: `${siteConfig.name} vegetarian catering services`,
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title:
+      "Vegetarian Catering Plates | Om Shree Foods & Caterers",
+    description:
+      "Explore Basic, Standard, Gold and Diamond vegetarian catering packages.",
+    images: [defaultImageUrl],
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+};
+
+function serializeStructuredData(
+  value: Record<string, unknown>,
+) {
+  return JSON.stringify(value).replace(
+    /</g,
+    "\\u003c",
+  );
+}
+
+const collectionStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "@id": `${vegPlatesUrl}#collection`,
+  url: vegPlatesUrl,
+  name: `Vegetarian Catering Plates | ${siteConfig.name}`,
+  description:
+    "Basic, Standard, Gold and Diamond vegetarian catering packages for weddings, parties, family functions and events in Hyderabad.",
+
+  primaryImageOfPage: {
+    "@type": "ImageObject",
+    url: defaultImageUrl,
+  },
+
+  isPartOf: {
+    "@type": "WebSite",
+    "@id": `${siteUrl}/#website`,
+    url: siteUrl,
+    name: siteConfig.name,
+  },
+
+  about: {
+    "@type": "Service",
+    "@id": `${siteUrl}/catering#service`,
+    name: `Vegetarian Catering Services by ${siteConfig.name}`,
+    url: `${siteUrl}/catering`,
+    provider: {
+      "@id": `${siteUrl}/#organization`,
+    },
+    areaServed: [
+      {
+        "@type": "City",
+        name: "Hyderabad",
+      },
+      {
+        "@type": "AdministrativeArea",
+        name: "Telangana",
+      },
+    ],
+  },
+
+  mainEntity: {
+    "@type": "ItemList",
+    name: "Vegetarian Catering Plate Packages",
+    numberOfItems: vegCateringPlates.length,
+    itemListOrder:
+      "https://schema.org/ItemListOrderAscending",
+
+    itemListElement:
+      vegCateringPlates.map(
+        (plate, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          url: `${vegPlatesUrl}#${plate.slug}`,
+          item: {
+            "@type": "Service",
+            "@id": `${vegPlatesUrl}#${plate.slug}`,
+            name: plate.name,
+            description: plate.description,
+            url: `${vegPlatesUrl}#${plate.slug}`,
+            image: `${siteUrl}${plate.image}`,
+            serviceType:
+              "Vegetarian Catering Plate Package",
+            category:
+              "Vegetarian Catering",
+            provider: {
+              "@id": `${siteUrl}/#organization`,
+            },
+            areaServed: {
+              "@type": "City",
+              name: "Hyderabad",
+            },
+          },
+        }),
+      ),
+  },
+};
+
+const breadcrumbStructuredData = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "@id": `${vegPlatesUrl}#breadcrumb`,
+  itemListElement: [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "Home",
+      item: siteUrl,
+    },
+    {
+      "@type": "ListItem",
+      position: 2,
+      name: "Catering",
+      item: `${siteUrl}/catering`,
+    },
+    {
+      "@type": "ListItem",
+      position: 3,
+      name: "Catering Plates",
+      item: `${siteUrl}/catering/plates`,
+    },
+    {
+      "@type": "ListItem",
+      position: 4,
+      name: "Vegetarian Catering Plates",
+      item: vegPlatesUrl,
+    },
+  ],
 };
 
 export default function VegPlatesPage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeStructuredData(
+            collectionStructuredData,
+          ),
+        }}
+      />
+
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: serializeStructuredData(
+            breadcrumbStructuredData,
+          ),
+        }}
+      />
+
       <Navbar />
 
       <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-white pt-28">
@@ -30,15 +217,22 @@ export default function VegPlatesPage() {
           <Container>
             <Link
               href="/catering/plates"
-              className="inline-flex items-center gap-2 font-semibold text-[#8B4513]"
+              className="inline-flex items-center gap-2 font-semibold text-[#8B4513] transition hover:text-[#6D2E00] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft
+                size={18}
+                aria-hidden="true"
+              />
+
               All Catering Plates
             </Link>
 
             <div className="mx-auto mb-14 mt-8 max-w-3xl text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#E9F6E9] text-green-700">
-                <Leaf size={32} />
+                <Leaf
+                  size={32}
+                  aria-hidden="true"
+                />
               </div>
 
               <h1 className="mt-6 text-4xl font-bold text-[#6D2E00] sm:text-5xl">
@@ -48,8 +242,8 @@ export default function VegPlatesPage() {
               <p className="mt-5 text-lg leading-8 text-gray-600">
                 Explore our Basic, Standard, Gold
                 and Diamond vegetarian catering
-                menus for weddings, parties and
-                special occasions.
+                menus for weddings, parties, family
+                functions and special occasions.
               </p>
             </div>
 

@@ -30,9 +30,10 @@ export default function CateringPlateGrid({
 
         return (
           <article
-            key={plate.slug}
-            className="overflow-hidden rounded-[32px] border border-[#EFD8AE] bg-white shadow-lg"
-          >
+                id={plate.slug}
+                key={plate.slug}
+                className="scroll-mt-32 overflow-hidden rounded-[32px] border border-[#EFD8AE] bg-white shadow-lg"
+            >
             <div className="relative aspect-[4/5] bg-[#FFF4DE]">
               <Image
                 src={plate.image}
