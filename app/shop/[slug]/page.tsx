@@ -1,4 +1,7 @@
-import type { ReactNode } from "react";
+import {
+  cache,
+  type ReactNode,
+} from "react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -15,10 +18,9 @@ import Footer from "@/components/layout/footer";
 import Navbar from "@/components/layout/Navbar";
 import ProductActions from "@/components/shop/ProductActions";
 import RelatedProducts from "@/components/shop/RelatedProducts";
-import { formatCurrency } from "@/lib/shop";
 import prisma from "@/lib/prisma";
+import { formatCurrency } from "@/lib/shop";
 import type { ProductWithCategory } from "@/types/product";
-
 
 const siteUrl =
   "https://www.omshreefoodsandcaterers.com";
@@ -26,13 +28,30 @@ const siteUrl =
 const brandName =
   "Om Shree Foods & Caterers";
 
-function getAbsoluteUrl(url: string | null) {
-  if (!url) {
+interface ProductPageProps {
+  params: Promise<{
+    slug: string;
+  }>;
+}
+
+interface FeatureCardProps {
+  icon: ReactNode;
+  title: string;
+  description: string;
+}
+
+function getAbsoluteUrl(
+  value: string | null,
+) {
+  if (!value) {
     return `${siteUrl}/images/no-image.jpg`;
   }
 
   try {
-    return new URL(url, siteUrl).toString();
+    return new URL(
+      value,
+      siteUrl,
+    ).toString();
   } catch {
     return `${siteUrl}/images/no-image.jpg`;
   }
@@ -47,59 +66,62 @@ function serializeStructuredData(
   );
 }
 
-interface ProductPageProps {
-  params: Promise<{
-    slug: string;
-  }>;
-}
+const getProduct = cache(
+  async (slug: string) => {
+    const normalizedSlug =
+      slug.trim();
 
-async function getProduct(slug: string) {
-  const normalizedSlug = slug.trim();
+    if (!normalizedSlug) {
+      return null;
+    }
 
-  if (!normalizedSlug) {
-    return null;
-  }
+    return prisma.product.findUnique({
+      where: {
+        slug: normalizedSlug,
+      },
 
-  return prisma.product.findUnique({
-    where: {
-      slug: normalizedSlug,
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      description: true,
-      price: true,
-      image: true,
-      stock: true,
-      featured: true,
-      shippingWeightGrams: true,
-      categoryId: true,
-      createdAt: true,
-      updatedAt: true,
-      category: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          image: true,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        description: true,
+        price: true,
+        image: true,
+        stock: true,
+        featured: true,
+        shippingWeightGrams: true,
+        categoryId: true,
+        createdAt: true,
+        updatedAt: true,
+
+        category: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            image: true,
+          },
         },
       },
-    },
-  });
-}
+    });
+  },
+);
 
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getProduct(slug);
+
+  const product =
+    await getProduct(slug);
 
   if (!product) {
     return {
       title: "Product Not Found",
+
       description:
         "The requested product could not be found.",
+
       robots: {
         index: false,
         follow: false,
@@ -107,32 +129,42 @@ export async function generateMetadata({
     };
   }
 
-  const productUrl =
-    `/shop/${encodeURIComponent(product.slug)}`;
+  const productPath =
+    `/shop/${encodeURIComponent(
+      product.slug,
+    )}`;
 
-  const imageUrl = getAbsoluteUrl(
-    product.image,
-  );
+  const imageUrl =
+    getAbsoluteUrl(
+      product.image,
+    );
 
   const description =
     product.description?.trim() ||
     `Buy ${product.name} online from ${brandName}. Freshly prepared, hygienically packed and delivered across India.`;
+
+  const inStock =
+    Number(product.stock) > 0;
 
   return {
     title: product.name,
     description,
 
     alternates: {
-      canonical: productUrl,
+      canonical: productPath,
     },
 
     openGraph: {
       type: "website",
-      url: productUrl,
+      url: productPath,
       siteName: brandName,
       locale: "en_IN",
-      title: `${product.name} | ${brandName}`,
+
+      title:
+        `${product.name} | ${brandName}`,
+
       description,
+
       images: [
         {
           url: imageUrl,
@@ -143,7 +175,10 @@ export async function generateMetadata({
 
     twitter: {
       card: "summary_large_image",
-      title: `${product.name} | ${brandName}`,
+
+      title:
+        `${product.name} | ${brandName}`,
+
       description,
       images: [imageUrl],
     },
@@ -151,23 +186,34 @@ export async function generateMetadata({
     robots: {
       index: true,
       follow: true,
+
       googleBot: {
         index: true,
         follow: true,
-        "max-image-preview": "large",
+
+        "max-image-preview":
+          "large",
+
         "max-snippet": -1,
+
         "max-video-preview": -1,
       },
     },
 
     other: {
       "product:price:amount":
-        Number(product.price).toFixed(2),
-      "product:price:currency": "INR",
+        Number(
+          product.price,
+        ).toFixed(2),
+
+      "product:price:currency":
+        "INR",
+
       "product:availability":
-        product.stock > 0
+        inStock
           ? "in stock"
           : "out of stock",
+
       "product:category":
         product.category.name,
     },
@@ -178,145 +224,225 @@ export default async function ProductPage({
   params,
 }: ProductPageProps) {
   const { slug } = await params;
-  const product = await getProduct(slug);
+
+  const product =
+    await getProduct(slug);
 
   if (!product) {
     notFound();
   }
 
-  const normalizedProduct: ProductWithCategory = {
-    id: product.id,
-    name: product.name,
-    slug: product.slug,
-    description: product.description,
-    price: Number(product.price),
-    image:
-      product.image ||
-      "/images/no-image.jpg",
-    stock: Math.max(
-      0,
-      Math.floor(Number(product.stock) || 0),
-    ),
-    featured: product.featured,
-    shippingWeightGrams: Math.max(
-      0,
-      Math.floor(
-        Number(product.shippingWeightGrams) || 0,
+  const normalizedProduct: ProductWithCategory =
+    {
+      id: product.id,
+      name: product.name,
+      slug: product.slug,
+
+      description:
+        product.description,
+
+      price:
+        Number(product.price),
+
+      image:
+        product.image ||
+        "/images/no-image.jpg",
+
+      stock: Math.max(
+        0,
+        Math.floor(
+          Number(
+            product.stock,
+          ) || 0,
+        ),
       ),
-    ),
-    categoryId: product.categoryId,
-    category: {
-      id: product.category.id,
-      name: product.category.name,
-      slug: product.category.slug,
-      image: product.category.image,
-    },
-    createdAt: product.createdAt,
-    updatedAt: product.updatedAt,
-  };
+
+      featured:
+        product.featured,
+
+      shippingWeightGrams:
+        Math.max(
+          0,
+          Math.floor(
+            Number(
+              product
+                .shippingWeightGrams,
+            ) || 0,
+          ),
+        ),
+
+      categoryId:
+        product.categoryId,
+
+      category: {
+        id: product.category.id,
+
+        name:
+          product.category.name,
+
+        slug:
+          product.category.slug,
+
+        image:
+          product.category.image,
+      },
+
+      createdAt:
+        product.createdAt,
+
+      updatedAt:
+        product.updatedAt,
+    };
 
   const inStock =
     normalizedProduct.stock > 0;
 
   const productUrl =
-  `${siteUrl}/shop/${encodeURIComponent(
-    product.slug,
-  )}`;
+    `${siteUrl}/shop/${encodeURIComponent(
+      product.slug,
+    )}`;
 
-const productImage = getAbsoluteUrl(
-  product.image,
-);
+  const productImage =
+    getAbsoluteUrl(
+      product.image,
+    );
 
-const productStructuredData = {
-  "@context": "https://schema.org",
-  "@type": "Product",
-  "@id": `${productUrl}#product`,
-  name: product.name,
-  description: product.description,
-  url: productUrl,
-  image: [productImage],
-  sku: product.id,
-  category: product.category.name,
+  const structuredDataDescription =
+    product.description?.trim() ||
+    `Buy ${product.name} online from ${brandName}. Freshly prepared, hygienically packed and delivered across India.`;
 
-  brand: {
-    "@type": "Brand",
-    name: brandName,
-  },
+  const productStructuredData = {
+    "@context":
+      "https://schema.org",
 
-  offers: {
-    "@type": "Offer",
+    "@type": "Product",
+
+    "@id":
+      `${productUrl}#product`,
+
+    name: product.name,
+
+    description:
+      structuredDataDescription,
+
     url: productUrl,
-    priceCurrency: "INR",
-    price: normalizedProduct.price.toFixed(2),
-    availability: inStock
-      ? "https://schema.org/InStock"
-      : "https://schema.org/OutOfStock",
-    itemCondition:
-      "https://schema.org/NewCondition",
-    seller: {
-      "@type": "Organization",
+
+    image: [productImage],
+
+    sku: product.id,
+
+    category:
+      product.category.name,
+
+    brand: {
+      "@type": "Brand",
       name: brandName,
-      url: siteUrl,
     },
-  },
-};
 
-const breadcrumbStructuredData = {
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  itemListElement: [
-    {
-      "@type": "ListItem",
-      position: 1,
-      name: "Home",
-      item: siteUrl,
-    },
-    {
-      "@type": "ListItem",
-      position: 2,
-      name: "Shop",
-      item: `${siteUrl}/shop`,
-    },
-    {
-      "@type": "ListItem",
-      position: 3,
-      name: product.category.name,
-      item: `${siteUrl}/shop?category=${encodeURIComponent(
-        product.category.slug,
-      )}`,
-    },
-    {
-      "@type": "ListItem",
-      position: 4,
-      name: product.name,
-      item: productUrl,
-    },
-  ],
-};  
+    offers: {
+      "@type": "Offer",
 
-  return (
+      url: productUrl,
+
+      priceCurrency: "INR",
+
+      price:
+        normalizedProduct.price.toFixed(
+          2,
+        ),
+
+      availability: inStock
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+
+      itemCondition:
+        "https://schema.org/NewCondition",
+
+      seller: {
+        "@type":
+          "Organization",
+
+        "@id":
+          `${siteUrl}/#organization`,
+
+        name: brandName,
+
+        url: siteUrl,
+      },
+    },
+  };
+
+  const breadcrumbStructuredData = {
+    "@context":
+      "https://schema.org",
+
+    "@type":
+      "BreadcrumbList",
+
+    "@id":
+      `${productUrl}#breadcrumb`,
+
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: siteUrl,
+      },
+
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Shop",
+        item:
+          `${siteUrl}/shop`,
+      },
+
+      {
+        "@type": "ListItem",
+        position: 3,
+
+        name:
+          product.category.name,
+
+        item:
+          `${siteUrl}/shop?category=${encodeURIComponent(
+            product.category.slug,
+          )}`,
+      },
+
+      {
+        "@type": "ListItem",
+        position: 4,
+
+        name: product.name,
+
+        item: productUrl,
+      },
+    ],
+  };
+
+    return (
     <>
-      
       <script
-  type="application/ld+json"
-  dangerouslySetInnerHTML={{
-    __html: serializeStructuredData(
-      productStructuredData,
-    ),
-  }}
-/>
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html:
+            serializeStructuredData(
+              productStructuredData,
+            ),
+        }}
+      />
 
-<script
-  type="application/ld+json"
-  dangerouslySetInnerHTML={{
-    __html: serializeStructuredData(
-      breadcrumbStructuredData,
-    ),
-  }}
-/>
-
-<Navbar />
-
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html:
+            serializeStructuredData(
+              breadcrumbStructuredData,
+            ),
+        }}
+      />
 
       <Navbar />
 
@@ -365,8 +491,8 @@ const breadcrumbStructuredData = {
             />
 
             <span
-              className="max-w-full truncate font-semibold text-[#6D2E00]"
               aria-current="page"
+              className="max-w-full truncate font-semibold text-[#6D2E00]"
             >
               {product.name}
             </span>
@@ -376,7 +502,9 @@ const breadcrumbStructuredData = {
             <div className="overflow-hidden rounded-[36px] border border-[#F3DFC2] bg-white p-4 shadow-2xl">
               <div className="relative aspect-square overflow-hidden rounded-[28px] bg-[#FFF8EE] lg:aspect-auto lg:h-[560px]">
                 <Image
-                  src={normalizedProduct.image}
+                  src={
+                    normalizedProduct.image
+                  }
                   alt={product.name}
                   fill
                   priority
@@ -417,13 +545,17 @@ const breadcrumbStructuredData = {
                   aria-hidden="true"
                 />
 
-                <span>Freshly Prepared</span>
+                <span>
+                  Freshly Prepared
+                </span>
 
                 <span aria-hidden="true">
                   •
                 </span>
 
-                <span>Premium Ingredients</span>
+                <span>
+                  Premium Ingredients
+                </span>
               </div>
 
               <h1 className="mt-5 text-4xl font-bold leading-tight text-[#6D2E00] sm:text-5xl">
@@ -443,7 +575,9 @@ const breadcrumbStructuredData = {
               </div>
 
               <p className="mt-8 whitespace-pre-line text-lg leading-9 text-gray-700">
-                {product.description}
+                {
+                  structuredDataDescription
+                }
               </p>
 
               <div className="mt-8">
@@ -470,7 +604,9 @@ const breadcrumbStructuredData = {
               </div>
 
               <ProductActions
-                product={normalizedProduct}
+                product={
+                  normalizedProduct
+                }
               />
 
               <div className="mt-10 grid gap-5 sm:grid-cols-2">
@@ -527,8 +663,8 @@ const breadcrumbStructuredData = {
             </h2>
 
             <p className="mb-8 mt-3 text-gray-500">
-              Learn more about this handcrafted product
-              and what makes it special.
+              Learn more about this handcrafted product and what
+              makes it special.
             </p>
 
             <div
@@ -537,7 +673,9 @@ const breadcrumbStructuredData = {
             />
 
             <p className="mt-8 whitespace-pre-line leading-9 text-gray-700">
-              {product.description}
+              {
+                structuredDataDescription
+              }
             </p>
           </section>
 
@@ -551,7 +689,6 @@ const breadcrumbStructuredData = {
     </>
   );
 }
-
 interface FeatureCardProps {
   icon: ReactNode;
   title: string;
