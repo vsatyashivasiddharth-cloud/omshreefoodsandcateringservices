@@ -8,72 +8,54 @@ const baseUrl =
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const now = new Date();
-
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: baseUrl,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 1,
     },
     {
       url: `${baseUrl}/shop`,
-      lastModified: now,
       changeFrequency: "daily",
       priority: 0.9,
     },
     {
       url: `${baseUrl}/categories`,
-      lastModified: now,
       changeFrequency: "weekly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/catering`,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.9,
     },
     {
       url: `${baseUrl}/catering/plates`,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/catering/plates/veg`,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/catering/plates/non-veg`,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.8,
     },
     {
       url: `${baseUrl}/about`,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.6,
     },
     {
       url: `${baseUrl}/contact`,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.6,
     },
     {
       url: `${baseUrl}/faq`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
-    {
-      url: `${baseUrl}/track-order`,
-      lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
     },
@@ -92,21 +74,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     const productPages: MetadataRoute.Sitemap =
       products
-        .filter(
-          (product) =>
+        .filter((product) => {
+          return (
             typeof product.slug === "string" &&
-            product.slug.trim().length > 0,
-        )
+            product.slug.trim().length > 0
+          );
+        })
         .map((product) => ({
           url: `${baseUrl}/shop/${encodeURIComponent(
-            product.slug,
+            product.slug.trim(),
           )}`,
-          lastModified: product.updatedAt ?? now,
+          lastModified: product.updatedAt,
           changeFrequency: "weekly",
           priority: 0.8,
         }));
 
-    return [...staticPages, ...productPages];
+    return [
+      ...staticPages,
+      ...productPages,
+    ];
   } catch (error) {
     console.error(
       "Failed to generate product sitemap entries:",
