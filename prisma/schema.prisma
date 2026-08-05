@@ -106,22 +106,27 @@ model Product {
 
   description String
 
+  /// Temporary default-variant price mirror.
+  /// Keep this field until all variant-aware flows are deployed.
   price Decimal @db.Decimal(10, 2)
 
   image String
 
+  /// Temporary default-variant stock mirror.
+  /// Keep this field until all variant-aware flows are deployed.
   stock Int @default(0)
 
   featured Boolean @default(false)
 
   /// Approximate packed contribution of one sellable product unit.
-  /// Includes the product container and immediate packaging, but not
-  /// the outer shipping package selected for the whole order.
+  /// During the compatibility period, this mirrors the default
+  /// variant's shippingWeightGrams.
   shippingWeightGrams Int @default(0)
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
+  variants   ProductVariant[]
   orderItems OrderItem[]
 
   createdAt DateTime @default(now())
@@ -134,6 +139,47 @@ model Product {
   @@index([createdAt])
   @@index([categoryId, createdAt])
   @@index([featured, createdAt])
+}
+
+model ProductVariant {
+  id String @id @default(cuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Customer-facing package label.
+  /// Examples: "250 g", "500 g", "1 kg".
+  label String
+
+  /// Customer-facing net package weight.
+  /// Examples: 250, 500, 1000.
+  weightGrams Int
+
+  /// Packed contribution used for shipping calculations.
+  /// This may be greater than weightGrams.
+  shippingWeightGrams Int
+
+  price Decimal @db.Decimal(10, 2)
+  stock Int     @default(0)
+
+  sku String? @unique
+
+  isActive  Boolean @default(true)
+  isDefault Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, weightGrams])
+  @@index([productId])
+  @@index([productId, isActive])
+  @@index([productId, sortOrder])
+  @@index([isActive])
+  @@index([stock])
+  @@index([createdAt])
 }
 
 model ShippingPackage {
@@ -178,9 +224,6 @@ model Order {
   phone String
 
   /// Digits-only Indian mobile number used for phone-based tracking.
-  ///
-  /// Example:
-  /// +91 70138 20854 becomes 7013820854.
   phoneNormalized String?
 
   email String?
@@ -276,18 +319,37 @@ model OrderItem {
   orderId   String
   productId String
 
-  quantity Int
-  price    Decimal @db.Decimal(10, 2)
+  /// Null for orders created before product variants were introduced.
+  variantId String?
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  quantity Int
+
+  /// Purchase-time unit-price snapshot.
+  price Decimal @db.Decimal(10, 2)
+
+  /// Product snapshots for historical order rendering.
+  productName  String?
+  productSlug  String?
+  productImage String?
+
+  /// Variant snapshots for historical order rendering.
+  variantLabel               String?
+  variantSku                 String?
+  variantWeightGrams         Int?
+  variantShippingWeightGrams Int?
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
   @@index([orderId])
   @@index([productId])
+  @@index([variantId])
   @@index([createdAt])
   @@index([orderId, productId])
+  @@index([orderId, variantId])
 }
 
 model ContactInquiry {
