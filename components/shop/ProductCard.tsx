@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -10,6 +11,7 @@ import {
   ArrowRight,
   Check,
   Eye,
+  ImageOff,
   ShoppingCart,
   Star,
   X,
@@ -153,9 +155,24 @@ export default function ProductCard({
   const productUrl =
     `/shop/${product.slug}`;
 
-  const image =
-    product.image ||
+  const rawImage =
+    product.image?.trim() ?? "";
+
+  const cartImage =
+    rawImage ||
     "/images/no-image.jpg";
+
+  const [
+    imageFailed,
+    setImageFailed,
+  ] = useState(!rawImage);
+
+  useEffect(() => {
+    setImageFailed(!rawImage);
+  }, [rawImage]);
+
+  const showImagePlaceholder =
+    !rawImage || imageFailed;
 
   const activeVariants =
     useMemo(
@@ -287,7 +304,7 @@ export default function ProductCard({
           product.description,
 
         price,
-        image,
+        image: cartImage,
         stock,
 
         featured:
@@ -365,24 +382,50 @@ export default function ProductCard({
       padding="none"
       className="group flex h-full flex-col overflow-hidden bg-white/90 backdrop-blur-sm"
     >
-      <div className="relative h-64 overflow-hidden bg-[#FFF8EE] sm:h-68">
+      <div className="relative h-64 overflow-hidden bg-gradient-to-br from-[#FFF8EA] via-[#FFF4DE] to-[#FFE8BF] sm:h-68">
         <Link
           href={productUrl}
           aria-label={`View ${product.name}`}
           className="absolute inset-0 focus:outline-none focus:ring-4 focus:ring-inset focus:ring-[#C89B3C]/25"
         >
-          <Image
-            src={image}
-            alt={product.name}
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
-            className="object-cover transition-transform duration-700 group-hover:scale-110"
-          />
+          {!showImagePlaceholder ? (
+            <>
+              <Image
+                src={rawImage}
+                alt={product.name}
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                className="object-cover transition-transform duration-700 group-hover:scale-110"
+                onError={() => {
+                  setImageFailed(true);
+                }}
+              />
 
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent"
-          />
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent"
+              />
+            </>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-full border border-[#C89B3C]/20 bg-white/75 shadow-sm backdrop-blur-sm">
+                <ImageOff
+                  size={34}
+                  className="text-[#C89B3C]"
+                  aria-hidden="true"
+                />
+              </div>
+
+              <p className="mt-4 text-base font-bold text-[#6D2E00]">
+                Image unavailable
+              </p>
+
+              <p className="mt-1 max-w-[220px] text-sm leading-5 text-[#6D2E00]/60">
+                A product image has not
+                been added yet.
+              </p>
+            </div>
+          )}
 
           {product.featured && (
             <div className="absolute left-4 top-4">
@@ -402,7 +445,7 @@ export default function ProductCard({
           )}
 
           <div className="absolute bottom-4 left-4">
-            <Badge className="bg-white/90 text-[#6D2E00] backdrop-blur-md">
+            <Badge className="bg-white/90 text-[#6D2E00] shadow-sm backdrop-blur-md">
               {
                 product.category
                   .name
@@ -411,7 +454,7 @@ export default function ProductCard({
           </div>
 
           {!inStock && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/45">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/45 backdrop-blur-sm">
               <span className="rounded-full bg-white px-5 py-2 text-sm font-bold text-[#6D2E00] shadow-lg">
                 Out of Stock
               </span>
