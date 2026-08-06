@@ -174,7 +174,7 @@ export default function SearchContent() {
 
       {/* Results section */}
 
-      <section className="min-h-[45vh] bg-[#FFFDF8] pb-24 pt-10 sm:pt-12">
+      <section className="bg-[#FFFDF8] pb-16 pt-10 sm:pt-12">
         <Container>
           {/* Initial message */}
 
