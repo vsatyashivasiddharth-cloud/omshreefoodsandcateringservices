@@ -10,7 +10,6 @@ import {
   ImageIcon,
   Package,
   RefreshCw,
-  Scale,
   Star,
   X,
 } from "lucide-react";
@@ -21,23 +20,41 @@ import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 
 import ImageUploader from "./ImageUploader";
+import ProductVariantFields, {
+  createInitialVariantRows,
+  createVariantRow,
+  serializeVariantRows,
+  validateVariantRows,
+  type ProductVariantFormData,
+} from "./ProductVariantFields";
 
 interface Category {
   id: string;
   name: string;
 }
 
-interface Product {
+interface ProductVariantResponse {
+  id: string;
+  label: string;
+  weightGrams: number;
+  shippingWeightGrams: number;
+  price: number | string;
+  stock: number;
+  sku: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+}
+
+interface ProductResponse {
   id: string;
   name: string;
   slug: string;
   description: string;
-  price: number | string;
-  stock: number;
-  shippingWeightGrams: number;
   featured: boolean;
   image: string | null;
   categoryId: string;
+  variants: ProductVariantResponse[];
 }
 
 interface EditProductModalProps {
@@ -51,9 +68,6 @@ interface ProductFormData {
   name: string;
   slug: string;
   description: string;
-  price: string;
-  stock: string;
-  shippingWeightGrams: string;
   categoryId: string;
   featured: boolean;
   image: string;
@@ -63,9 +77,6 @@ const initialFormData: ProductFormData = {
   name: "",
   slug: "",
   description: "",
-  price: "",
-  stock: "0",
-  shippingWeightGrams: "",
   categoryId: "",
   featured: false,
   image: "",
@@ -74,12 +85,20 @@ const initialFormData: ProductFormData = {
 const inputClassName =
   "h-13 w-full rounded-2xl border border-[#E7C98C] bg-[#FFFDF8] px-4 text-[#6D2E00] outline-none transition focus:border-[#C89B3C] focus:bg-white focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60";
 
-function createSlug(value: string) {
+function createSlug(
+  value: string,
+) {
   return value
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(
+      /[^a-z0-9]+/g,
+      "-",
+    )
+    .replace(
+      /^-+|-+$/g,
+      "",
+    );
 }
 
 export default function EditProductModal({
@@ -89,13 +108,27 @@ export default function EditProductModal({
   onSuccess,
 }: EditProductModalProps) {
   const [formData, setFormData] =
-    useState<ProductFormData>(initialFormData);
+    useState<ProductFormData>(
+      initialFormData,
+    );
+
+  const [variants, setVariants] =
+    useState<
+      ProductVariantFormData[]
+    >([]);
+
+  const [
+    legacyProductWarning,
+    setLegacyProductWarning,
+  ] = useState(false);
 
   const [categories, setCategories] =
     useState<Category[]>([]);
 
-  const [loadingProduct, setLoadingProduct] =
-    useState(false);
+  const [
+    loadingProduct,
+    setLoadingProduct,
+  ] = useState(false);
 
   const [
     loadingCategories,
@@ -114,38 +147,40 @@ export default function EditProductModal({
     field: K,
     value: ProductFormData[K],
   ) {
-    setFormData((current) => ({
-      ...current,
-      [field]: value,
-    }));
+    setFormData(
+      (current) => ({
+        ...current,
+        [field]: value,
+      }),
+    );
   }
 
   const loadCategories =
     useCallback(async () => {
       try {
-        setLoadingCategories(true);
-
-        const response = await fetch(
-          "/api/categories",
-          {
-            cache: "no-store",
-          },
+        setLoadingCategories(
+          true,
         );
+
+        const response =
+          await fetch(
+            "/api/categories",
+            {
+              cache: "no-store",
+            },
+          );
 
         const result: unknown =
           await response
             .json()
             .catch(() => null);
 
-        if (!response.ok) {
+        if (
+          !response.ok ||
+          !Array.isArray(result)
+        ) {
           throw new Error(
             "Failed to load categories.",
-          );
-        }
-
-        if (!Array.isArray(result)) {
-          throw new Error(
-            "Invalid categories response.",
           );
         }
 
@@ -153,124 +188,180 @@ export default function EditProductModal({
           result as Category[],
         );
       } catch (error) {
-        console.error(
-          "Category loading error:",
-          error,
-        );
-
         toast.error(
           error instanceof Error
             ? error.message
             : "Failed to load categories.",
         );
       } finally {
-        setLoadingCategories(false);
+        setLoadingCategories(
+          false,
+        );
       }
     }, []);
 
-  const loadProduct = useCallback(
-    async (signal?: AbortSignal) => {
-      const normalizedProductId =
-        productId.trim();
+  const loadProduct =
+    useCallback(
+      async (
+        signal?: AbortSignal,
+      ) => {
+        const normalizedId =
+          productId.trim();
 
-      if (!normalizedProductId) {
-        return;
-      }
-
-      try {
-        setLoadingProduct(true);
-        setLoadError("");
-
-        const response = await fetch(
-          `/api/products/${encodeURIComponent(
-            normalizedProductId,
-          )}`,
-          {
-            cache: "no-store",
-            signal,
-          },
-        );
-
-        const result:
-          | Product
-          | {
-              error?: string;
-              message?: string;
-            } = await response
-          .json()
-          .catch(() => ({}));
-
-        if (!response.ok) {
-          const errorResult =
-            result as {
-              error?: string;
-              message?: string;
-            };
-
-          throw new Error(
-            errorResult.error ||
-              errorResult.message ||
-              "Failed to load product.",
-          );
-        }
-
-        const product =
-          result as Product;
-
-        setFormData({
-          name: product.name,
-          slug: product.slug,
-          description:
-            product.description,
-          price: String(product.price),
-          stock: String(product.stock),
-          shippingWeightGrams: String(
-            Math.max(
-              0,
-              Math.floor(
-                Number(
-                  product.shippingWeightGrams,
-                ) || 0,
-              ),
-            ),
-          ),
-          featured:
-            product.featured,
-          image: product.image || "",
-          categoryId:
-            product.categoryId,
-        });
-      } catch (error) {
-        if (
-          error instanceof DOMException &&
-          error.name === "AbortError"
-        ) {
+        if (!normalizedId) {
           return;
         }
 
-        console.error(
-          "Product loading error:",
-          error,
-        );
+        try {
+          setLoadingProduct(
+            true,
+          );
 
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Failed to load product.";
+          setLoadError("");
 
-        setLoadError(message);
-        toast.error(message);
-      } finally {
-        if (!signal?.aborted) {
-          setLoadingProduct(false);
+          const response =
+            await fetch(
+              `/api/products/${encodeURIComponent(
+                normalizedId,
+              )}`,
+              {
+                cache:
+                  "no-store",
+                signal,
+              },
+            );
+
+          const result:
+            | ProductResponse
+            | {
+                error?: string;
+                message?: string;
+              } =
+            await response
+              .json()
+              .catch(() => ({}));
+
+          if (!response.ok) {
+            const failure =
+              result as {
+                error?: string;
+                message?: string;
+              };
+
+            throw new Error(
+              failure.error ||
+                failure.message ||
+                "Failed to load product.",
+            );
+          }
+
+          const product =
+            result as ProductResponse;
+
+          setFormData({
+            name: product.name,
+            slug: product.slug,
+            description:
+              product.description,
+            featured:
+              product.featured,
+            image:
+              product.image ||
+              "",
+            categoryId:
+              product.categoryId,
+          });
+
+          if (
+            product.variants
+              .length === 0
+          ) {
+            setLegacyProductWarning(
+              true,
+            );
+
+            setVariants(
+              createInitialVariantRows(),
+            );
+          } else {
+            setLegacyProductWarning(
+              false,
+            );
+
+            setVariants(
+              product.variants.map(
+                (
+                  variant,
+                  index,
+                ) => ({
+                  ...createVariantRow(),
+                  id:
+                    variant.id,
+                  label:
+                    variant.label,
+                  weightGrams:
+                    String(
+                      variant.weightGrams,
+                    ),
+                  shippingWeightGrams:
+                    String(
+                      variant.shippingWeightGrams,
+                    ),
+                  price:
+                    String(
+                      variant.price,
+                    ),
+                  stock:
+                    String(
+                      variant.stock,
+                    ),
+                  sku:
+                    variant.sku ||
+                    "",
+                  isActive:
+                    variant.isActive,
+                  isDefault:
+                    variant.isDefault,
+                  sortOrder:
+                    variant.sortOrder ??
+                    index,
+                }),
+              ),
+            );
+          }
+        } catch (error) {
+          if (
+            error instanceof
+              DOMException &&
+            error.name ===
+              "AbortError"
+          ) {
+            return;
+          }
+
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Failed to load product.";
+
+          setLoadError(message);
+          toast.error(message);
+        } finally {
+          if (!signal?.aborted) {
+            setLoadingProduct(
+              false,
+            );
+          }
         }
-      }
-    },
-    [productId],
-  );
+      },
+      [productId],
+    );
 
   useEffect(() => {
-    if (!open || !productId.trim()) {
+    if (
+      !open ||
+      !productId.trim()
+    ) {
       return;
     }
 
@@ -279,7 +370,9 @@ export default function EditProductModal({
 
     void Promise.all([
       loadCategories(),
-      loadProduct(controller.signal),
+      loadProduct(
+        controller.signal,
+      ),
     ]);
 
     return () => {
@@ -292,30 +385,34 @@ export default function EditProductModal({
     loadProduct,
   ]);
 
-  function handleNameChange(value: string) {
-    setFormData((current) => {
-      const previousGeneratedSlug =
-        createSlug(current.name);
+  function handleNameChange(
+    value: string,
+  ) {
+    setFormData(
+      (current) => {
+        const previousSlug =
+          createSlug(
+            current.name,
+          );
 
-      return {
-        ...current,
-        name: value,
-        slug:
-          !current.slug ||
-          current.slug ===
-            previousGeneratedSlug
-            ? createSlug(value)
-            : current.slug,
-      };
-    });
+        return {
+          ...current,
+          name: value,
+          slug:
+            !current.slug ||
+            current.slug ===
+              previousSlug
+              ? createSlug(value)
+              : current.slug,
+        };
+      },
+    );
   }
 
   function closeModal() {
-    if (saving) {
-      return;
+    if (!saving) {
+      onClose();
     }
-
-    onClose();
   }
 
   async function handleUpdate(
@@ -327,18 +424,14 @@ export default function EditProductModal({
       return;
     }
 
-    const name = formData.name.trim();
-    const slug = createSlug(formData.slug);
+    const name =
+      formData.name.trim();
+
+    const slug =
+      createSlug(formData.slug);
 
     const description =
       formData.description.trim();
-
-    const price = Number(formData.price);
-    const stock = Number(formData.stock);
-
-    const shippingWeightGrams = Number(
-      formData.shippingWeightGrams,
-    );
 
     if (
       !name ||
@@ -347,72 +440,59 @@ export default function EditProductModal({
       !formData.categoryId
     ) {
       toast.error(
-        "Please complete all required fields.",
+        "Please complete all required product fields.",
       );
+
       return;
     }
 
-    if (
-      !Number.isFinite(price) ||
-      price <= 0
-    ) {
-      toast.error(
-        "Enter a valid product price greater than zero.",
+    const variantError =
+      validateVariantRows(
+        variants,
       );
-      return;
-    }
 
-    if (
-      !Number.isInteger(stock) ||
-      stock < 0
-    ) {
+    if (variantError) {
       toast.error(
-        "Stock must be a whole number of zero or more.",
+        variantError,
       );
-      return;
-    }
 
-    if (
-      !Number.isInteger(
-        shippingWeightGrams,
-      ) ||
-      shippingWeightGrams < 1
-    ) {
-      toast.error(
-        "Shipping weight must be a whole number greater than zero.",
-      );
       return;
     }
 
     try {
       setSaving(true);
 
-      const response = await fetch(
-        `/api/products/${encodeURIComponent(
-          productId,
-        )}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type":
-              "application/json",
+      const response =
+        await fetch(
+          `/api/products/${encodeURIComponent(
+            productId,
+          )}`,
+          {
+            method: "PUT",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                name,
+                slug,
+                description,
+                featured:
+                  formData.featured,
+                image:
+                  formData.image.trim(),
+                categoryId:
+                  formData.categoryId,
+                variants:
+                  serializeVariantRows(
+                    variants,
+                  ),
+              }),
           },
-          body: JSON.stringify({
-            name,
-            slug,
-            description,
-            price,
-            stock,
-            shippingWeightGrams,
-            featured:
-              formData.featured,
-            image:
-              formData.image.trim(),
-            categoryId:
-              formData.categoryId,
-          }),
-        },
-      );
+        );
 
       const result: {
         error?: string;
@@ -430,7 +510,7 @@ export default function EditProductModal({
       }
 
       toast.success(
-        "Product updated successfully.",
+        "Product and variants updated successfully.",
       );
 
       onSuccess();
@@ -477,17 +557,19 @@ export default function EditProductModal({
       <div className="flex min-h-full items-center justify-center">
         <Card
           padding="none"
-          className="w-full max-w-3xl overflow-hidden bg-white shadow-2xl"
+          className="w-full max-w-5xl overflow-hidden bg-white shadow-2xl"
         >
-          <form onSubmit={handleUpdate}>
+          <form
+            onSubmit={
+              handleUpdate
+            }
+          >
             <div className="flex items-start justify-between gap-5 border-b border-[#F3DFC2] bg-gradient-to-r from-[#FFF8EE] to-white px-6 py-6 sm:px-8">
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DE] text-[#C89B3C]">
-                  <Package
-                    size={24}
-                    aria-hidden="true"
-                  />
-                </div>
+                <Package
+                  size={28}
+                  className="text-[#C89B3C]"
+                />
 
                 <div>
                   <h2
@@ -497,25 +579,23 @@ export default function EditProductModal({
                     Edit Product
                   </h2>
 
-                  <p className="mt-2 leading-7 text-gray-600">
-                    Update the product
-                    information, stock, shipping
-                    weight and image.
+                  <p className="mt-2 text-gray-600">
+                    Update product
+                    information and
+                    package variants.
                   </p>
                 </div>
               </div>
 
               <button
                 type="button"
-                aria-label="Close edit product dialog"
-                onClick={closeModal}
+                onClick={
+                  closeModal
+                }
                 disabled={saving}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-gray-500 transition hover:bg-[#FFF4DE] hover:text-[#6D2E00] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 hover:bg-[#FFF4DE]"
               >
-                <X
-                  size={21}
-                  aria-hidden="true"
-                />
+                <X size={21} />
               </button>
             </div>
 
@@ -527,360 +607,255 @@ export default function EditProductModal({
                 />
               </div>
             ) : loadError ? (
-              <div className="p-6 sm:p-8">
-                <Card
-                  padding="lg"
-                  className="border-red-200 bg-red-50 text-center shadow-none"
+              <div className="p-8 text-center">
+                <p className="font-semibold text-red-700">
+                  {loadError}
+                </p>
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  leftIcon={
+                    <RefreshCw
+                      size={17}
+                    />
+                  }
+                  className="mt-5"
+                  onClick={() =>
+                    void loadProduct()
+                  }
                 >
-                  <h3 className="text-xl font-bold text-red-700">
-                    Product unavailable
-                  </h3>
-
-                  <p className="mt-3 leading-7 text-red-600">
-                    {loadError}
-                  </p>
-
-                  <Button
-                    type="button"
-                    variant="primary"
-                    leftIcon={
-                      <RefreshCw
-                        size={18}
-                        aria-hidden="true"
-                      />
-                    }
-                    className="mt-6"
-                    onClick={() => {
-                      void Promise.all([
-                        loadCategories(),
-                        loadProduct(),
-                      ]);
-                    }}
-                  >
-                    Try Again
-                  </Button>
-                </Card>
+                  Try Again
+                </Button>
               </div>
             ) : (
               <div className="max-h-[calc(100vh-150px)] space-y-6 overflow-y-auto p-6 sm:p-8">
                 <div className="grid gap-6 md:grid-cols-2">
                   <div>
-                    <label
-                      htmlFor="edit-product-name"
-                      className="mb-2 block text-sm font-semibold text-[#6D2E00]"
-                    >
+                    <label className="mb-2 block text-sm font-semibold text-[#6D2E00]">
                       Product Name
                     </label>
 
                     <input
-                      id="edit-product-name"
-                      value={formData.name}
-                      onChange={(event) =>
+                      value={
+                        formData.name
+                      }
+                      onChange={(
+                        event,
+                      ) =>
                         handleNameChange(
-                          event.target.value,
+                          event.target
+                            .value,
                         )
                       }
-                      placeholder="Mango Pickle"
                       required
-                      disabled={saving}
-                      className={inputClassName}
+                      disabled={
+                        saving
+                      }
+                      className={
+                        inputClassName
+                      }
                     />
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="edit-product-slug"
-                      className="mb-2 block text-sm font-semibold text-[#6D2E00]"
-                    >
+                    <label className="mb-2 block text-sm font-semibold text-[#6D2E00]">
                       Slug
                     </label>
 
                     <input
-                      id="edit-product-slug"
-                      value={formData.slug}
-                      onChange={(event) =>
+                      value={
+                        formData.slug
+                      }
+                      onChange={(
+                        event,
+                      ) =>
                         updateField(
                           "slug",
                           createSlug(
-                            event.target.value,
+                            event.target
+                              .value,
                           ),
                         )
                       }
-                      placeholder="mango-pickle"
                       required
-                      disabled={saving}
-                      className={inputClassName}
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="edit-product-price"
-                      className="mb-2 block text-sm font-semibold text-[#6D2E00]"
-                    >
-                      Price
-                    </label>
-
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-semibold text-[#C89B3C]">
-                        ₹
-                      </span>
-
-                      <input
-                        id="edit-product-price"
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={formData.price}
-                        onChange={(event) =>
-                          updateField(
-                            "price",
-                            event.target.value,
-                          )
-                        }
-                        required
-                        disabled={saving}
-                        className={`${inputClassName} pl-9`}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="edit-product-stock"
-                      className="mb-2 block text-sm font-semibold text-[#6D2E00]"
-                    >
-                      Stock
-                    </label>
-
-                    <input
-                      id="edit-product-stock"
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={formData.stock}
-                      onChange={(event) =>
-                        updateField(
-                          "stock",
-                          event.target.value,
-                        )
+                      disabled={
+                        saving
                       }
-                      required
-                      disabled={saving}
-                      className={inputClassName}
+                      className={
+                        inputClassName
+                      }
                     />
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="edit-product-shipping-weight"
-                      className="mb-2 block text-sm font-semibold text-[#6D2E00]"
-                    >
-                      Shipping Weight
-                    </label>
-
-                    <div className="relative">
-                      <Scale
-                        size={18}
-                        aria-hidden="true"
-                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#C89B3C]"
-                      />
-
-                      <input
-                        id="edit-product-shipping-weight"
-                        type="number"
-                        min="1"
-                        step="1"
-                        inputMode="numeric"
-                        value={
-                          formData.shippingWeightGrams
-                        }
-                        onChange={(event) =>
-                          updateField(
-                            "shippingWeightGrams",
-                            event.target.value,
-                          )
-                        }
-                        required
-                        disabled={saving}
-                        className={`${inputClassName} pl-11 pr-16`}
-                      />
-
-                      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">
-                        grams
-                      </span>
-                    </div>
-
-                    <p className="mt-2 text-xs leading-5 text-gray-500">
-                      Weight of one unit,
-                      including the product
-                      container and immediate
-                      packaging.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="edit-product-category"
-                      className="mb-2 block text-sm font-semibold text-[#6D2E00]"
-                    >
+                    <label className="mb-2 block text-sm font-semibold text-[#6D2E00]">
                       Category
                     </label>
 
                     <select
-                      id="edit-product-category"
                       value={
                         formData.categoryId
                       }
-                      onChange={(event) =>
+                      onChange={(
+                        event,
+                      ) =>
                         updateField(
                           "categoryId",
-                          event.target.value,
+                          event.target
+                            .value,
                         )
                       }
                       required
                       disabled={
                         saving ||
-                        categories.length === 0
+                        categories.length ===
+                          0
                       }
-                      className={inputClassName}
+                      className={
+                        inputClassName
+                      }
                     >
-                      {categories.length === 0 ? (
-                        <option value="">
-                          No categories available
-                        </option>
-                      ) : (
-                        categories.map(
-                          (category) => (
-                            <option
-                              key={category.id}
-                              value={category.id}
-                            >
-                              {category.name}
-                            </option>
-                          ),
-                        )
+                      {categories.map(
+                        (
+                          category,
+                        ) => (
+                          <option
+                            key={
+                              category.id
+                            }
+                            value={
+                              category.id
+                            }
+                          >
+                            {
+                              category.name
+                            }
+                          </option>
+                        ),
                       )}
                     </select>
                   </div>
 
-                  <div className="flex items-end md:col-span-2">
-                    <label className="flex min-h-13 w-full cursor-pointer items-center gap-3 rounded-2xl border border-[#E7C98C] bg-[#FFFDF8] px-4 py-3 transition hover:border-[#C89B3C]">
+                  <div className="flex items-end">
+                    <label className="flex min-h-13 w-full cursor-pointer items-center gap-3 rounded-2xl border border-[#E7C98C] bg-[#FFFDF8] px-4 py-3">
                       <input
                         type="checkbox"
                         checked={
                           formData.featured
                         }
-                        onChange={(event) =>
+                        onChange={(
+                          event,
+                        ) =>
                           updateField(
                             "featured",
-                            event.target.checked,
+                            event.target
+                              .checked,
                           )
                         }
-                        disabled={saving}
+                        disabled={
+                          saving
+                        }
                         className="h-5 w-5 accent-[#6D2E00]"
                       />
 
                       <Star
                         size={20}
-                        className="shrink-0 text-[#C89B3C]"
-                        aria-hidden="true"
+                        className="text-[#C89B3C]"
                       />
 
-                      <div>
-                        <p className="font-semibold text-[#6D2E00]">
-                          Featured Product
-                        </p>
-
-                        <p className="text-sm text-gray-500">
-                          Display this product on
-                          the homepage.
-                        </p>
-                      </div>
+                      <span className="font-semibold text-[#6D2E00]">
+                        Featured
+                        Product
+                      </span>
                     </label>
                   </div>
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="edit-product-description"
-                    className="mb-2 block text-sm font-semibold text-[#6D2E00]"
-                  >
-                    Product Description
+                  <label className="mb-2 block text-sm font-semibold text-[#6D2E00]">
+                    Description
                   </label>
 
                   <textarea
-                    id="edit-product-description"
                     value={
                       formData.description
                     }
-                    onChange={(event) =>
+                    onChange={(
+                      event,
+                    ) =>
                       updateField(
                         "description",
-                        event.target.value,
+                        event.target
+                          .value,
                       )
                     }
                     rows={5}
-                    placeholder="Write a detailed product description..."
                     required
-                    disabled={saving}
-                    className="w-full resize-y rounded-2xl border border-[#E7C98C] bg-[#FFFDF8] px-4 py-3 text-[#6D2E00] outline-none transition focus:border-[#C89B3C] focus:bg-white focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={
+                      saving
+                    }
+                    className="w-full resize-y rounded-2xl border border-[#E7C98C] bg-[#FFFDF8] px-4 py-3 text-[#6D2E00] outline-none focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15"
                   />
                 </div>
+
+                <ProductVariantFields
+                  variants={
+                    variants
+                  }
+                  disabled={
+                    saving
+                  }
+                  legacyProductWarning={
+                    legacyProductWarning
+                  }
+                  onChange={
+                    setVariants
+                  }
+                />
 
                 <Card
                   variant="filled"
                   padding="md"
                   className="shadow-none"
                 >
-                  <div className="mb-5 flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#C89B3C] shadow-sm">
-                      <ImageIcon
-                        size={20}
-                        aria-hidden="true"
-                      />
-                    </div>
+                  <div className="mb-5 flex items-center gap-3">
+                    <ImageIcon
+                      size={20}
+                      className="text-[#C89B3C]"
+                    />
 
-                    <div>
-                      <h3 className="font-semibold text-[#6D2E00]">
-                        Product Image
-                      </h3>
-
-                      <p className="mt-1 text-sm leading-6 text-gray-500">
-                        Replace the current image
-                        or keep it unchanged.
-                      </p>
-                    </div>
+                    <h3 className="font-semibold text-[#6D2E00]">
+                      Product Image
+                    </h3>
                   </div>
 
                   <ImageUploader
                     bucket="products"
-                    value={formData.image}
-                    onChange={(url) =>
-                      updateField("image", url)
+                    value={
+                      formData.image
+                    }
+                    onChange={(
+                      url,
+                    ) =>
+                      updateField(
+                        "image",
+                        url,
+                      )
                     }
                   />
-
-                  {formData.image && (
-                    <div className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4">
-                      <p className="font-semibold text-green-800">
-                        Image ready
-                      </p>
-
-                      <p className="mt-1 text-sm leading-6 text-green-700">
-                        This image will be saved
-                        with the product.
-                      </p>
-                    </div>
-                  )}
                 </Card>
 
                 <div className="flex flex-col-reverse gap-3 border-t border-[#F3DFC2] pt-6 sm:flex-row sm:justify-end">
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={saving}
-                    onClick={closeModal}
+                    disabled={
+                      saving
+                    }
+                    onClick={
+                      closeModal
+                    }
                   >
                     Cancel
                   </Button>
@@ -888,9 +863,12 @@ export default function EditProductModal({
                   <Button
                     type="submit"
                     variant="primary"
-                    loading={saving}
+                    loading={
+                      saving
+                    }
                     disabled={
-                      categories.length === 0
+                      categories.length ===
+                      0
                     }
                   >
                     Save Changes

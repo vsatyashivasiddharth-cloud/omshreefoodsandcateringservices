@@ -2,9 +2,18 @@ import {
   NextRequest,
   NextResponse,
 } from "next/server";
-import { Prisma } from "@prisma/client";
+import {
+  Prisma,
+} from "@prisma/client";
 
+import {
+  requireAdmin,
+} from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import {
+  normalizeProductWithVariants,
+  parseProductVariants,
+} from "@/lib/product-variant-input";
 
 interface RouteContext {
   params: Promise<{
@@ -12,62 +21,72 @@ interface RouteContext {
   }>;
 }
 
-function normalizeProduct<
-  T extends {
-    price: unknown;
-    shippingWeightGrams: number;
-  },
->(product: T) {
-  return {
-    ...product,
-    price: Number(product.price),
-    shippingWeightGrams: Math.max(
-      0,
-      Math.floor(
-        Number(
-          product.shippingWeightGrams,
-        ) || 0,
-      ),
-    ),
-  };
-}
-
-function createSlug(value: string) {
+function createSlug(
+  value: string,
+) {
   return value
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(
+      /[^a-z0-9]+/g,
+      "-",
+    )
+    .replace(
+      /^-+|-+$/g,
+      "",
+    );
 }
 
-function readWholeNumber(value: unknown) {
-  if (
-    typeof value !== "string" &&
-    typeof value !== "number"
-  ) {
-    return Number.NaN;
-  }
+function isRecord(
+  value: unknown,
+): value is Record<
+  string,
+  unknown
+> {
+  return (
+    value !== null &&
+    typeof value ===
+      "object" &&
+    !Array.isArray(value)
+  );
+}
 
-  return Number(value);
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers: {
+        "Cache-Control":
+          "private, no-store, max-age=0",
+      },
+    },
+  );
 }
 
 export async function GET(
   _request: NextRequest,
-  { params }: RouteContext,
+  {
+    params,
+  }: RouteContext,
 ) {
   try {
-    const { id } = await params;
-    const productId = id.trim();
+    const {
+      id,
+    } = await params;
+
+    const productId =
+      id.trim();
 
     if (!productId) {
-      return NextResponse.json(
-        {
-          error:
-            "Product ID is required.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "Product ID is required.",
+        400,
       );
     }
 
@@ -76,28 +95,40 @@ export async function GET(
         where: {
           id: productId,
         },
+
         include: {
           category: true,
+
+          variants: {
+            orderBy: [
+              {
+                sortOrder: "asc",
+              },
+              {
+                weightGrams:
+                  "asc",
+              },
+            ],
+          },
         },
       });
 
     if (!product) {
-      return NextResponse.json(
-        {
-          error: "Product not found.",
-        },
-        {
-          status: 404,
-        },
+      return errorResponse(
+        "Product not found.",
+        404,
       );
     }
 
     return NextResponse.json(
-      normalizeProduct(product),
+      normalizeProductWithVariants(
+        product,
+      ),
       {
         status: 200,
         headers: {
-          "Cache-Control": "no-store",
+          "Cache-Control":
+            "no-store",
         },
       },
     );
@@ -107,184 +138,153 @@ export async function GET(
       error,
     );
 
-    return NextResponse.json(
-      {
-        error:
-          "Failed to fetch product.",
-      },
-      {
-        status: 500,
-      },
+    return errorResponse(
+      "Failed to fetch product.",
+      500,
     );
   }
 }
 
 export async function PUT(
   request: NextRequest,
-  { params }: RouteContext,
+  {
+    params,
+  }: RouteContext,
 ) {
   try {
-    const { id } = await params;
-    const productId = id.trim();
+    const authentication =
+      await requireAdmin(
+        request,
+      );
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
+    const {
+      id,
+    } = await params;
+
+    const productId =
+      id.trim();
 
     if (!productId) {
-      return NextResponse.json(
-        {
-          error:
-            "Product ID is required.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "Product ID is required.",
+        400,
       );
     }
 
     const body: unknown =
       await request.json();
 
-    if (
-      !body ||
-      typeof body !== "object" ||
-      Array.isArray(body)
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid request body.",
-        },
-        {
-          status: 400,
-        },
+    if (!isRecord(body)) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
       );
     }
 
-    const data =
-      body as Record<string, unknown>;
-
     const name =
-      typeof data.name === "string"
-        ? data.name.trim()
+      typeof body.name ===
+      "string"
+        ? body.name.trim()
+        : "";
+
+    const rawSlug =
+      typeof body.slug ===
+      "string"
+        ? body.slug
         : "";
 
     const slug =
-      typeof data.slug === "string"
-        ? createSlug(data.slug)
-        : "";
+      createSlug(rawSlug);
 
     const description =
-      typeof data.description === "string"
-        ? data.description.trim()
+      typeof body.description ===
+      "string"
+        ? body.description.trim()
         : "";
 
     const categoryId =
-      typeof data.categoryId === "string"
-        ? data.categoryId.trim()
+      typeof body.categoryId ===
+      "string"
+        ? body.categoryId.trim()
         : "";
 
     const image =
-      typeof data.image === "string"
-        ? data.image.trim()
+      typeof body.image ===
+      "string"
+        ? body.image.trim()
         : "";
-
-    const priceValue =
-      typeof data.price === "string" ||
-      typeof data.price === "number"
-        ? String(data.price).trim()
-        : "";
-
-    const stockValue = readWholeNumber(
-      data.stock,
-    );
-
-    const shippingWeightGrams =
-      readWholeNumber(
-        data.shippingWeightGrams,
-      );
 
     const featured =
-      typeof data.featured === "boolean"
-        ? data.featured
+      typeof body.featured ===
+      "boolean"
+        ? body.featured
         : false;
 
     if (
-      !name ||
+      name.length < 1 ||
+      name.length > 150
+    ) {
+      return errorResponse(
+        "Product name must be between 1 and 150 characters.",
+        400,
+      );
+    }
+
+    if (
       !slug ||
-      !description ||
-      !priceValue ||
-      !categoryId
+      slug.length > 180
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Please fill all required fields.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    let decimalPrice: Prisma.Decimal;
-
-    try {
-      decimalPrice =
-        new Prisma.Decimal(priceValue);
-    } catch {
-      return NextResponse.json(
-        {
-          error:
-            "Enter a valid product price.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "Enter a valid product slug.",
+        400,
       );
     }
 
     if (
-      !decimalPrice.isFinite() ||
-      decimalPrice.lte(0)
+      description.length < 1 ||
+      description.length >
+        10_000
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Price must be greater than zero.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "Product description must be between 1 and 10000 characters.",
+        400,
       );
     }
 
-    if (
-      !Number.isInteger(stockValue) ||
-      stockValue < 0
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Stock must be a whole number of zero or more.",
-        },
-        {
-          status: 400,
-        },
+    if (!categoryId) {
+      return errorResponse(
+        "Select a product category.",
+        400,
       );
     }
 
+    if (image.length > 2_000) {
+      return errorResponse(
+        "The product image URL is too long.",
+        400,
+      );
+    }
+
+    const variantResult =
+      parseProductVariants(
+        body.variants,
+      );
+
     if (
-      !Number.isInteger(
-        shippingWeightGrams,
-      ) ||
-      shippingWeightGrams < 1
+      !variantResult.success
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Shipping weight must be a whole number greater than zero.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        variantResult.error,
+        400,
       );
     }
 
@@ -297,25 +297,37 @@ export async function PUT(
         where: {
           id: productId,
         },
+
         select: {
           id: true,
+
+          variants: {
+            select: {
+              id: true,
+            },
+          },
         },
       }),
+
       prisma.product.findFirst({
         where: {
           slug,
+
           NOT: {
             id: productId,
           },
         },
+
         select: {
           id: true,
         },
       }),
+
       prisma.category.findUnique({
         where: {
           id: categoryId,
         },
+
         select: {
           id: true,
         },
@@ -323,63 +335,312 @@ export async function PUT(
     ]);
 
     if (!existingProduct) {
-      return NextResponse.json(
-        {
-          error: "Product not found.",
-        },
-        {
-          status: 404,
-        },
+      return errorResponse(
+        "Product not found.",
+        404,
       );
     }
 
     if (conflictingSlug) {
-      return NextResponse.json(
-        {
-          error:
-            "A product with this slug already exists.",
-        },
-        {
-          status: 409,
-        },
+      return errorResponse(
+        "A product with this slug already exists.",
+        409,
       );
     }
 
     if (!category) {
-      return NextResponse.json(
-        {
-          error:
-            "The selected category does not exist.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "The selected category does not exist.",
+        400,
       );
     }
 
-    const product =
-      await prisma.product.update({
-        where: {
-          id: productId,
+    const existingVariantIds =
+      new Set(
+        existingProduct.variants.map(
+          (variant) =>
+            variant.id,
+        ),
+      );
+
+    for (
+      const variant of
+      variantResult.variants
+    ) {
+      if (
+        variant.id &&
+        !existingVariantIds.has(
+          variant.id,
+        )
+      ) {
+        return errorResponse(
+          "One or more variants do not belong to this product.",
+          400,
+        );
+      }
+    }
+
+    const submittedVariantIds =
+      new Set(
+        variantResult.variants
+          .map(
+            (variant) =>
+              variant.id,
+          )
+          .filter(
+            (
+              id,
+            ): id is string =>
+              Boolean(id),
+          ),
+      );
+
+    const variantIdsToDelete =
+      existingProduct.variants
+        .map(
+          (variant) =>
+            variant.id,
+        )
+        .filter(
+          (id) =>
+            !submittedVariantIds.has(
+              id,
+            ),
+        );
+
+    const {
+      defaultVariant,
+      variants,
+    } = variantResult;
+
+    const updatedProduct =
+      await prisma.$transaction(
+        async (transaction) => {
+          /*
+           * Clear the existing default first.
+           * This avoids conflict with the partial
+           * PostgreSQL unique index while the
+           * selected default is being changed.
+           */
+          await transaction.productVariant.updateMany({
+            where: {
+              productId,
+              isDefault: true,
+            },
+
+            data: {
+              isDefault: false,
+            },
+          });
+
+          for (
+            const variant of variants
+          ) {
+            if (variant.id) {
+              await transaction.productVariant.update({
+                where: {
+                  id: variant.id,
+                },
+
+                data: {
+                  label:
+                    variant.label,
+
+                  weightGrams:
+                    variant
+                      .weightGrams,
+
+                  shippingWeightGrams:
+                    variant
+                      .shippingWeightGrams,
+
+                  price:
+                    variant.price,
+
+                  stock:
+                    variant.stock,
+
+                  sku:
+                    variant.sku,
+
+                  isActive:
+                    variant.isActive,
+
+                  /*
+                   * Set default after all other
+                   * fields are updated.
+                   */
+                  isDefault:
+                    false,
+
+                  sortOrder:
+                    variant.sortOrder,
+                },
+              });
+            } else {
+              await transaction.productVariant.create({
+                data: {
+                  productId,
+
+                  label:
+                    variant.label,
+
+                  weightGrams:
+                    variant
+                      .weightGrams,
+
+                  shippingWeightGrams:
+                    variant
+                      .shippingWeightGrams,
+
+                  price:
+                    variant.price,
+
+                  stock:
+                    variant.stock,
+
+                  sku:
+                    variant.sku,
+
+                  isActive:
+                    variant.isActive,
+
+                  isDefault:
+                    false,
+
+                  sortOrder:
+                    variant.sortOrder,
+                },
+              });
+            }
+          }
+
+          if (
+            variantIdsToDelete.length >
+            0
+          ) {
+            await transaction.productVariant.deleteMany({
+              where: {
+                productId,
+
+                id: {
+                  in:
+                    variantIdsToDelete,
+                },
+              },
+            });
+          }
+
+          let resolvedDefaultId =
+            defaultVariant.id;
+
+          if (
+            !resolvedDefaultId
+          ) {
+            const newlyCreatedDefault =
+              await transaction.productVariant.findFirst({
+                where: {
+                  productId,
+
+                  label:
+                    defaultVariant.label,
+
+                  weightGrams:
+                    defaultVariant
+                      .weightGrams,
+
+                  isActive: true,
+                },
+
+                select: {
+                  id: true,
+                },
+              });
+
+            resolvedDefaultId =
+              newlyCreatedDefault?.id ??
+              null;
+          }
+
+          if (
+            !resolvedDefaultId
+          ) {
+            throw new Error(
+              "DEFAULT_VARIANT_NOT_FOUND",
+            );
+          }
+
+          await transaction.productVariant.update({
+            where: {
+              id:
+                resolvedDefaultId,
+            },
+
+            data: {
+              isDefault: true,
+              isActive: true,
+            },
+          });
+
+          return transaction.product.update({
+            where: {
+              id: productId,
+            },
+
+            data: {
+              name,
+              slug,
+              description,
+              image,
+              featured,
+              categoryId,
+
+              /*
+               * Compatibility mirrors for
+               * existing storefront, order and
+               * shipping code.
+               */
+              price:
+                defaultVariant.price,
+
+              stock:
+                defaultVariant.stock,
+
+              shippingWeightGrams:
+                defaultVariant
+                  .shippingWeightGrams,
+            },
+
+            include: {
+              category: true,
+
+              variants: {
+                orderBy: [
+                  {
+                    sortOrder:
+                      "asc",
+                  },
+                  {
+                    weightGrams:
+                      "asc",
+                  },
+                ],
+              },
+            },
+          });
         },
-        data: {
-          name,
-          slug,
-          description,
-          price: decimalPrice,
-          image,
-          stock: stockValue,
-          shippingWeightGrams,
-          featured,
-          categoryId,
+        {
+          isolationLevel:
+            Prisma
+              .TransactionIsolationLevel
+              .Serializable,
         },
-        include: {
-          category: true,
-        },
-      });
+      );
 
     return NextResponse.json(
-      normalizeProduct(product),
+      normalizeProductWithVariants(
+        updatedProduct,
+      ),
       {
         status: 200,
       },
@@ -392,80 +653,89 @@ export async function PUT(
 
     if (
       error instanceof
-        Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
+        Prisma.PrismaClientKnownRequestError
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "A product with this slug already exists.",
-        },
-        {
-          status: 409,
-        },
-      );
+      if (
+        error.code ===
+        "P2002"
+      ) {
+        return errorResponse(
+          "The product slug, variant weight, or SKU is already in use.",
+          409,
+        );
+      }
+
+      if (
+        error.code ===
+        "P2003"
+      ) {
+        return errorResponse(
+          "The selected category or variant relationship is invalid.",
+          400,
+        );
+      }
+
+      if (
+        error.code ===
+        "P2025"
+      ) {
+        return errorResponse(
+          "Product or variant not found.",
+          404,
+        );
+      }
     }
 
     if (
-      error instanceof
-        Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2003"
+      error instanceof Error &&
+      error.message ===
+        "DEFAULT_VARIANT_NOT_FOUND"
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "The selected category does not exist.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "The selected default variant could not be saved.",
+        400,
       );
     }
 
-    if (
-      error instanceof
-        Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
-    ) {
-      return NextResponse.json(
-        {
-          error: "Product not found.",
-        },
-        {
-          status: 404,
-        },
-      );
-    }
-
-    return NextResponse.json(
-      {
-        error:
-          "Failed to update product.",
-      },
-      {
-        status: 500,
-      },
+    return errorResponse(
+      "Failed to update product.",
+      500,
     );
   }
 }
 
 export async function DELETE(
-  _request: NextRequest,
-  { params }: RouteContext,
+  request: NextRequest,
+  {
+    params,
+  }: RouteContext,
 ) {
   try {
-    const { id } = await params;
-    const productId = id.trim();
+    const authentication =
+      await requireAdmin(
+        request,
+      );
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
+    const {
+      id,
+    } = await params;
+
+    const productId =
+      id.trim();
 
     if (!productId) {
-      return NextResponse.json(
-        {
-          error:
-            "Product ID is required.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "Product ID is required.",
+        400,
       );
     }
 
@@ -474,19 +744,32 @@ export async function DELETE(
         where: {
           id: productId,
         },
+
         select: {
           id: true,
+
+          _count: {
+            select: {
+              orderItems: true,
+            },
+          },
         },
       });
 
     if (!product) {
-      return NextResponse.json(
-        {
-          error: "Product not found.",
-        },
-        {
-          status: 404,
-        },
+      return errorResponse(
+        "Product not found.",
+        404,
+      );
+    }
+
+    if (
+      product._count.orderItems >
+      0
+    ) {
+      return errorResponse(
+        "This product belongs to existing orders and cannot be deleted. Deactivate its variants instead.",
+        409,
       );
     }
 
@@ -513,27 +796,32 @@ export async function DELETE(
 
     if (
       error instanceof
-        Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
+        Prisma.PrismaClientKnownRequestError
     ) {
-      return NextResponse.json(
-        {
-          error: "Product not found.",
-        },
-        {
-          status: 404,
-        },
-      );
+      if (
+        error.code ===
+        "P2025"
+      ) {
+        return errorResponse(
+          "Product not found.",
+          404,
+        );
+      }
+
+      if (
+        error.code ===
+        "P2003"
+      ) {
+        return errorResponse(
+          "This product is referenced by existing records and cannot be deleted.",
+          409,
+        );
+      }
     }
 
-    return NextResponse.json(
-      {
-        error:
-          "Failed to delete product.",
-      },
-      {
-        status: 500,
-      },
+    return errorResponse(
+      "Failed to delete product.",
+      500,
     );
   }
 }
