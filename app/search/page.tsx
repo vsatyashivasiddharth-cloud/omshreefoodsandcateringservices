@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+
+import Footer from "@/components/layout/footer";
+import Navbar from "@/components/layout/Navbar";
 import SearchContent from "@/components/search/SearchContent";
 
 export const metadata: Metadata = {
@@ -8,5 +11,15 @@ export const metadata: Metadata = {
 };
 
 export default function SearchPage() {
-  return <SearchContent />;
+  return (
+    <>
+      <Navbar />
+
+      <main>
+        <SearchContent />
+      </main>
+
+      <Footer />
+    </>
+  );
 }

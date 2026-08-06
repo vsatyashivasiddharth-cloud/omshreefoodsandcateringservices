@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 import {
   PackageSearch,
   Search,
@@ -28,6 +31,7 @@ export interface SearchProduct {
   price: number;
   image: string;
   stock: number;
+
   category: {
     id: string;
     name: string;
@@ -36,43 +40,64 @@ export interface SearchProduct {
 }
 
 export default function SearchContent() {
-  const [query, setQuery] = useState("");
-  const [products, setProducts] = useState<SearchProduct[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [query, setQuery] =
+    useState("");
+
+  const [products, setProducts] =
+    useState<SearchProduct[]>([]);
+
+  const [loading, setLoading] =
+    useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (!query.trim()) {
-        setProducts([]);
-        return;
-      }
+    const timer = window.setTimeout(
+      async () => {
+        const normalizedQuery =
+          query.trim();
 
-      try {
-        setLoading(true);
-
-        const data = await searchProducts(query);
-
-        if (Array.isArray(data)) {
-          setProducts(data);
-        } else {
+        if (!normalizedQuery) {
           setProducts([]);
+          setLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error(err);
-        setProducts([]);
-      } finally {
-        setLoading(false);
-      }
-    }, 300);
 
-    return () => clearTimeout(timer);
+        try {
+          setLoading(true);
+
+          const data =
+            await searchProducts(
+              normalizedQuery,
+            );
+
+          setProducts(
+            Array.isArray(data)
+              ? data
+              : [],
+          );
+        } catch (error) {
+          console.error(
+            "Product search error:",
+            error,
+          );
+
+          setProducts([]);
+        } finally {
+          setLoading(false);
+        }
+      },
+      300,
+    );
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [query]);
 
   return (
     <>
-      {/* Hero */}
+      {/* Hero and search */}
 
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#6D2E00] via-[#8B4513] to-[#C89B3C] py-28 text-white">
+      <section className="relative overflow-hidden bg-gradient-to-br from-[#6D2E00] via-[#8B4513] to-[#C89B3C] pb-20 pt-20 text-white sm:pb-24 sm:pt-24 lg:pb-28 lg:pt-28">
         <div className="absolute inset-0 bg-black/15" />
 
         <div className="absolute -left-24 top-0 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
@@ -81,12 +106,21 @@ export default function SearchContent() {
 
         <Container className="relative max-w-5xl text-center">
           <Badge className="border border-white/20 bg-white/10 px-5 py-2 text-white backdrop-blur-md">
-            <Sparkles size={16} />
-            <span>Product Search</span>
+            <Sparkles
+              size={16}
+              aria-hidden="true"
+            />
+
+            <span>
+              Product Search
+            </span>
           </Badge>
 
           <div className="mx-auto mt-8 flex h-24 w-24 items-center justify-center rounded-full border border-white/20 bg-white/10 shadow-xl backdrop-blur-md">
-            <PackageSearch size={42} />
+            <PackageSearch
+              size={42}
+              aria-hidden="true"
+            />
           </div>
 
           <SectionHeader
@@ -101,24 +135,19 @@ export default function SearchContent() {
             align="center"
             className="mt-8 text-white [&_h2]:text-white [&_p]:text-white/90"
           />
-        </Container>
-      </section>
 
-      {/* Content */}
-
-      <section className="relative -mt-12 min-h-screen bg-[#FFFDF8] pb-24">
-        <Container>
-          {/* Search Card */}
+          {/* Search card inside brown section */}
 
           <Card
             padding="lg"
-            className="bg-white/90 shadow-2xl backdrop-blur-sm"
+            className="mx-auto mt-10 max-w-4xl border border-white/20 bg-white/95 text-left shadow-2xl backdrop-blur-xl sm:mt-12"
           >
             <div className="mb-6 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FFF4DE] to-[#FFE8BF]">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FFF4DE] to-[#FFE8BF]">
                 <Search
                   size={22}
                   className="text-[#C89B3C]"
+                  aria-hidden="true"
                 />
               </div>
 
@@ -128,7 +157,9 @@ export default function SearchContent() {
                 </h2>
 
                 <p className="text-sm text-gray-500">
-                  Find exactly what you're looking for
+                  Find exactly what
+                  you&apos;re looking
+                  for
                 </p>
               </div>
             </div>
@@ -138,6 +169,36 @@ export default function SearchContent() {
               onChange={setQuery}
             />
           </Card>
+        </Container>
+      </section>
+
+      {/* Results section */}
+
+      <section className="min-h-[45vh] bg-[#FFFDF8] pb-24 pt-10 sm:pt-12">
+        <Container>
+          {/* Initial message */}
+
+          {!loading &&
+            !query.trim() && (
+              <div className="py-10 text-center">
+                <PackageSearch
+                  size={44}
+                  className="mx-auto text-[#C89B3C]"
+                  aria-hidden="true"
+                />
+
+                <h2 className="mt-5 text-2xl font-bold text-[#6D2E00]">
+                  Start Your Search
+                </h2>
+
+                <p className="mx-auto mt-2 max-w-xl leading-7 text-gray-500">
+                  Enter a product name
+                  or category above to
+                  explore our homemade
+                  foods.
+                </p>
+              </div>
+            )}
 
           {/* Loading */}
 
@@ -152,28 +213,39 @@ export default function SearchContent() {
 
           {/* Results */}
 
-          {!loading && products.length > 0 && (
-            <>
-              <div className="mt-12 flex justify-center">
-                <Badge
-                  variant="secondary"
-                  className="px-6 py-3"
-                >
-                  Found {products.length} product
-                  {products.length !== 1 ? "s" : ""}
-                </Badge>
-              </div>
+          {!loading &&
+            products.length > 0 && (
+              <>
+                <div className="flex justify-center">
+                  <Badge
+                    variant="secondary"
+                    className="px-6 py-3"
+                  >
+                    Found{" "}
+                    {products.length}{" "}
+                    product
+                    {products.length !==
+                    1
+                      ? "s"
+                      : ""}
+                  </Badge>
+                </div>
 
-              <SearchResults products={products} />
-            </>
-          )}
+                <SearchResults
+                  products={products}
+                />
+              </>
+            )}
 
           {/* Empty */}
 
           {!loading &&
             query.trim() !== "" &&
-            products.length === 0 && (
-              <SearchEmpty query={query} />
+            products.length ===
+              0 && (
+              <SearchEmpty
+                query={query}
+              />
             )}
         </Container>
       </section>
