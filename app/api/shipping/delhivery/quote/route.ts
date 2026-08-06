@@ -13,6 +13,7 @@ import { shopConfig } from "@/lib/shop";
 
 interface QuoteItemInput {
   productId?: unknown;
+  variantId?: unknown;
   quantity?: unknown;
 }
 
@@ -24,6 +25,7 @@ interface QuoteRequestBody {
 
 interface ValidatedQuoteItem {
   productId: string;
+  variantId: string | null;
   quantity: number;
 }
 
@@ -37,6 +39,33 @@ function isRecord(
     value !== null &&
     typeof value === "object" &&
     !Array.isArray(value)
+  );
+}
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+  };
+}
+
+function errorResponse(
+  error: string,
+  status: number,
+  additionalData?: Record<
+    string,
+    unknown
+  >,
+) {
+  return NextResponse.json(
+    {
+      error,
+      ...additionalData,
+    },
+    {
+      status,
+      headers: noStoreHeaders(),
+    },
   );
 }
 
@@ -75,6 +104,36 @@ function parsePaymentMode(
   );
 }
 
+function parseNullableVariantId(
+  value: unknown,
+) {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new Error(
+      "One or more cart items contain an invalid variant ID.",
+    );
+  }
+
+  const variantId = value.trim();
+
+  return variantId || null;
+}
+
+function createItemKey(
+  productId: string,
+  variantId: string | null,
+) {
+  return `${productId}:${
+    variantId ?? "legacy"
+  }`;
+}
+
 function parseItems(
   value: unknown,
 ): ValidatedQuoteItem[] {
@@ -95,12 +154,15 @@ function parseItems(
     MAX_DISTINCT_ITEMS
   ) {
     throw new Error(
-      "Your cart contains too many different products.",
+      "Your cart contains too many different product options.",
     );
   }
 
-  const quantityByProductId =
-    new Map<string, number>();
+  const itemByKey =
+    new Map<
+      string,
+      ValidatedQuoteItem
+    >();
 
   for (const rawItem of value) {
     if (!isRecord(rawItem)) {
@@ -117,6 +179,11 @@ function parseItems(
       "string"
         ? item.productId.trim()
         : "";
+
+    const variantId =
+      parseNullableVariantId(
+        item.variantId,
+      );
 
     const quantity = Number(
       item.quantity,
@@ -139,93 +206,149 @@ function parseItems(
       );
     }
 
-    const existingQuantity =
-      quantityByProductId.get(
-        productId,
-      ) ?? 0;
+    const key = createItemKey(
+      productId,
+      variantId,
+    );
+
+    const existing =
+      itemByKey.get(key);
 
     const combinedQuantity =
-      existingQuantity + quantity;
+      (existing?.quantity ?? 0) +
+      quantity;
 
     if (
       combinedQuantity >
       MAX_QUANTITY_PER_ITEM
     ) {
       throw new Error(
-        `The total quantity for a product cannot exceed ${MAX_QUANTITY_PER_ITEM}.`,
+        `The total quantity for one product option cannot exceed ${MAX_QUANTITY_PER_ITEM}.`,
       );
     }
 
-    quantityByProductId.set(
+    itemByKey.set(key, {
       productId,
-      combinedQuantity,
-    );
+      variantId,
+      quantity:
+        combinedQuantity,
+    });
   }
 
   return Array.from(
-    quantityByProductId.entries(),
-  ).map(
-    ([productId, quantity]) => ({
-      productId,
-      quantity,
-    }),
+    itemByKey.values(),
   );
+}
+
+function normalizeNonNegativeInteger(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.floor(number),
+  );
+}
+
+function normalizeMoney(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number < 0
+  ) {
+    return null;
+  }
+
+  return number;
+}
+
+function normalizePositiveNumber(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number <= 0
+  ) {
+    return null;
+  }
+
+  return number;
 }
 
 function roundMoney(
   value: number,
 ) {
   return (
-    Math.round(value * 100) / 100
+    Math.round(value * 100) /
+    100
   );
 }
 
-function noStoreHeaders() {
-  return {
-    "Cache-Control":
-      "private, no-store, max-age=0",
-  };
+function isClientInputError(
+  message: string,
+) {
+  return [
+    "Destination pincode is required.",
+    "Destination pincode must contain exactly 6 digits.",
+    "Only prepaid orders are currently supported.",
+    "Cart items are required.",
+    "Your cart is empty.",
+    "Your cart contains too many different product options.",
+    "One or more cart items are invalid.",
+    "One or more cart items are missing a product ID.",
+    "One or more cart items contain an invalid variant ID.",
+  ].includes(message);
 }
 
 export async function POST(
   request: NextRequest,
 ) {
   try {
-    const body: unknown =
+    const rawBody: unknown =
       await request.json();
 
-    if (!isRecord(body)) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid request body.",
-        },
-        {
-          status: 400,
-          headers: noStoreHeaders(),
-        },
+    if (!isRecord(rawBody)) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
       );
     }
 
-    const input =
-      body as QuoteRequestBody;
+    const body =
+      rawBody as QuoteRequestBody;
 
     const destinationPincode =
       parsePincode(
-        input.destinationPincode,
+        body.destinationPincode,
       );
 
     const paymentMode =
       parsePaymentMode(
-        input.paymentMode,
+        body.paymentMode,
       );
 
     const items =
-      parseItems(input.items);
+      parseItems(body.items);
 
-    const productIds = items.map(
-      (item) => item.productId,
-    );
+    const productIds =
+      Array.from(
+        new Set(
+          items.map(
+            (item) =>
+              item.productId,
+          ),
+        ),
+      );
 
     const products =
       await prisma.product.findMany({
@@ -240,7 +363,23 @@ export async function POST(
           name: true,
           price: true,
           stock: true,
-          shippingWeightGrams: true,
+          shippingWeightGrams:
+            true,
+
+          variants: {
+            select: {
+              id: true,
+              productId: true,
+              label: true,
+              price: true,
+              stock: true,
+
+              shippingWeightGrams:
+                true,
+
+              isActive: true,
+            },
+          },
         },
       });
 
@@ -248,24 +387,21 @@ export async function POST(
       products.length !==
       productIds.length
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "One or more products are no longer available.",
-        },
-        {
-          status: 400,
-          headers: noStoreHeaders(),
-        },
+      return errorResponse(
+        "One or more products are no longer available.",
+        400,
       );
     }
 
-    const productById = new Map(
-      products.map((product) => [
-        product.id,
-        product,
-      ]),
-    );
+    const productById =
+      new Map(
+        products.map(
+          (product) => [
+            product.id,
+            product,
+          ],
+        ),
+      );
 
     let subtotal = 0;
     let productWeightGrams = 0;
@@ -277,87 +413,143 @@ export async function POST(
         );
 
       if (!product) {
-        return NextResponse.json(
-          {
-            error:
-              "One or more products are no longer available.",
-          },
-          {
-            status: 400,
-            headers:
-              noStoreHeaders(),
-          },
+        return errorResponse(
+          "One or more products are no longer available.",
+          400,
         );
       }
 
-      if (
-        !Number.isInteger(
-          product.stock,
-        ) ||
-        product.stock < 1 ||
-        item.quantity >
-          product.stock
-      ) {
-        return NextResponse.json(
-          {
-            error: `${product.name} does not have enough stock.`,
+      const variant =
+        item.variantId
+          ? product.variants.find(
+              (
+                candidateVariant,
+              ) =>
+                candidateVariant.id ===
+                  item.variantId &&
+                candidateVariant.productId ===
+                  product.id,
+            )
+          : null;
 
+      if (
+        item.variantId &&
+        !variant
+      ) {
+        return errorResponse(
+          `${product.name}: the selected package option no longer exists.`,
+          409,
+          {
             productId:
               product.id,
 
-            availableStock:
-              Math.max(
-                0,
-                product.stock,
-              ),
-          },
-          {
-            status: 409,
-            headers:
-              noStoreHeaders(),
+            variantId:
+              item.variantId,
           },
         );
       }
 
-      const unitPrice = Number(
-        product.price,
-      );
+      if (
+        variant &&
+        !variant.isActive
+      ) {
+        return errorResponse(
+          `${product.name} (${variant.label}) is no longer available.`,
+          409,
+          {
+            productId:
+              product.id,
+
+            variantId:
+              variant.id,
+          },
+        );
+      }
+
+      /*
+       * A cart line containing variantId uses the
+       * ProductVariant values.
+       *
+       * A null variantId remains backward-compatible
+       * with products and carts created before variants.
+       */
+      const selectedName =
+        variant
+          ? `${product.name} (${variant.label})`
+          : product.name;
+
+      const availableStock =
+        normalizeNonNegativeInteger(
+          variant
+            ? variant.stock
+            : product.stock,
+        );
 
       if (
-        !Number.isFinite(
-          unitPrice,
-        ) ||
-        unitPrice < 0
+        availableStock < 1 ||
+        item.quantity >
+          availableStock
       ) {
-        throw new Error(
-          `The price for ${product.name} is invalid.`,
+        return errorResponse(
+          `${selectedName} does not have enough stock.`,
+          409,
+          {
+            productId:
+              product.id,
+
+            variantId:
+              variant?.id ??
+              null,
+
+            availableStock,
+          },
+        );
+      }
+
+      const unitPrice =
+        normalizeMoney(
+          variant
+            ? variant.price
+            : product.price,
+        );
+
+      if (unitPrice === null) {
+        return errorResponse(
+          `${selectedName} does not have a valid price.`,
+          422,
+          {
+            productId:
+              product.id,
+
+            variantId:
+              variant?.id ??
+              null,
+          },
         );
       }
 
       const unitWeightGrams =
-        Math.max(
-          0,
-          Math.floor(
-            Number(
-              product.shippingWeightGrams,
-            ) || 0,
-          ),
+        normalizeNonNegativeInteger(
+          variant
+            ? variant
+                .shippingWeightGrams
+            : product
+                .shippingWeightGrams,
         );
 
       if (
         unitWeightGrams < 1
       ) {
-        return NextResponse.json(
+        return errorResponse(
+          `${selectedName} does not have a packed shipping weight configured.`,
+          422,
           {
-            error: `${product.name} does not have a shipping weight configured.`,
-
             productId:
               product.id,
-          },
-          {
-            status: 422,
-            headers:
-              noStoreHeaders(),
+
+            variantId:
+              variant?.id ??
+              null,
           },
         );
       }
@@ -401,78 +593,91 @@ export async function POST(
             breadthCm: true,
             heightCm: true,
 
-            emptyWeightGrams: true,
-            maxWeightGrams: true,
+            emptyWeightGrams:
+              true,
+
+            maxWeightGrams:
+              true,
           },
         },
       );
 
+    if (
+      packages.length === 0
+    ) {
+      return errorResponse(
+        "No active shipping package is configured.",
+        422,
+      );
+    }
+
     const shippingPackage =
       packages.find(
         (packageOption) => {
-          const packedWeight =
-            productWeightGrams +
-            Math.max(
-              0,
+          const emptyWeightGrams =
+            normalizeNonNegativeInteger(
               packageOption
                 .emptyWeightGrams,
             );
 
+          const maxWeightGrams =
+            normalizeNonNegativeInteger(
+              packageOption
+                .maxWeightGrams,
+            );
+
           return (
-            packedWeight <=
-            packageOption
-              .maxWeightGrams
+            maxWeightGrams > 0 &&
+            productWeightGrams +
+              emptyWeightGrams <=
+              maxWeightGrams
           );
         },
       );
 
     if (!shippingPackage) {
-      return NextResponse.json(
+      return errorResponse(
+        "This order is too heavy for the available shipping packages.",
+        422,
         {
-          error:
-            packages.length === 0
-              ? "No active shipping package is configured."
-              : "This order is too heavy for the available shipping packages.",
-        },
-        {
-          status: 422,
-          headers: noStoreHeaders(),
+          productWeightGrams,
         },
       );
     }
 
-    const packedWeightGrams =
-      productWeightGrams +
-      Math.max(
-        0,
+    const emptyWeightGrams =
+      normalizeNonNegativeInteger(
         shippingPackage
           .emptyWeightGrams,
       );
 
-    const lengthCm = Number(
-      shippingPackage.lengthCm,
-    );
+    const packedWeightGrams =
+      productWeightGrams +
+      emptyWeightGrams;
 
-    const breadthCm = Number(
-      shippingPackage.breadthCm,
-    );
+    const lengthCm =
+      normalizePositiveNumber(
+        shippingPackage.lengthCm,
+      );
 
-    const heightCm = Number(
-      shippingPackage.heightCm,
-    );
+    const breadthCm =
+      normalizePositiveNumber(
+        shippingPackage.breadthCm,
+      );
+
+    const heightCm =
+      normalizePositiveNumber(
+        shippingPackage.heightCm,
+      );
 
     if (
-      !Number.isFinite(lengthCm) ||
-      lengthCm <= 0 ||
-      !Number.isFinite(
-        breadthCm,
-      ) ||
-      breadthCm <= 0 ||
-      !Number.isFinite(heightCm) ||
-      heightCm <= 0
+      lengthCm === null ||
+      breadthCm === null ||
+      heightCm === null
     ) {
-      throw new Error(
+      return errorResponse(
         `Shipping package "${shippingPackage.name}" has invalid dimensions.`,
+        500,
       );
     }
 
@@ -488,10 +693,26 @@ export async function POST(
         {
           serviceable: false,
           prepaid: false,
-          cod: false,
+
+          reversePickup:
+            serviceability.reversePickup,
 
           message:
             "Delivery is not available for this pincode.",
+
+          location: {
+            city:
+              serviceability.city ??
+              null,
+
+            district:
+              serviceability.district ??
+              null,
+
+            state:
+              serviceability.state ??
+              null,
+          },
         },
         {
           status: 200,
@@ -501,19 +722,38 @@ export async function POST(
     }
 
     if (!serviceability.prepaid) {
-     return NextResponse.json(
-  {
-    serviceable: false,
-    prepaid:
-      serviceability.prepaid,
-    message:
-      "Prepaid delivery is not available for this pincode.",
-  },
-  {
-    status: 200,
-    headers: noStoreHeaders(),
-  },
-);
+      return NextResponse.json(
+        {
+          serviceable: false,
+
+          prepaid:
+            serviceability.prepaid,
+
+          reversePickup:
+            serviceability.reversePickup,
+
+          message:
+            "Prepaid delivery is not available for this pincode.",
+
+          location: {
+            city:
+              serviceability.city ??
+              null,
+
+            district:
+              serviceability.district ??
+              null,
+
+            state:
+              serviceability.state ??
+              null,
+          },
+        },
+        {
+          status: 200,
+          headers: noStoreHeaders(),
+        },
+      );
     }
 
     const rate =
@@ -531,24 +771,47 @@ export async function POST(
 
         codAmount: 0,
 
+        /*
+         * Delhivery helper accepts:
+         * "S" = surface shipping.
+         */
         shippingMode: "S",
       });
 
     const estimatedShippingAmount =
       roundMoney(
-        rate.estimatedAmount,
+        Number(
+          rate.estimatedAmount,
+        ),
       );
 
-    const freeShippingThreshold =
+    if (
+      !Number.isFinite(
+        estimatedShippingAmount,
+      ) ||
+      estimatedShippingAmount < 0
+    ) {
+      throw new Error(
+        "Delhivery returned an invalid shipping amount.",
+      );
+    }
+
+    const configuredThreshold =
       Number(
         shopConfig.freeShippingAbove,
       );
 
-    const qualifiesForFreeShipping =
+    const freeShippingThreshold =
       Number.isFinite(
-        freeShippingThreshold,
+        configuredThreshold,
       ) &&
-      freeShippingThreshold > 0 &&
+      configuredThreshold > 0
+        ? configuredThreshold
+        : null;
+
+    const qualifiesForFreeShipping =
+      freeShippingThreshold !==
+        null &&
       subtotal >=
         freeShippingThreshold;
 
@@ -570,16 +833,16 @@ export async function POST(
       );
 
     return NextResponse.json(
-  {
-    serviceable: true,
-    prepaid:
-      serviceability.prepaid,
-      
-    reversePickup:
-      serviceability.reversePickup,
+      {
+        serviceable: true,
 
-        paymentMode:
-          "Prepaid",
+        prepaid:
+          serviceability.prepaid,
+
+        reversePickup:
+          serviceability.reversePickup,
+
+        paymentMode,
 
         location: {
           city:
@@ -587,8 +850,8 @@ export async function POST(
             null,
 
           district:
-            serviceability
-              .district ?? null,
+            serviceability.district ??
+            null,
 
           state:
             serviceability.state ??
@@ -596,17 +859,18 @@ export async function POST(
         },
 
         package: {
-          id: shippingPackage.id,
+          id:
+            shippingPackage.id,
+
           name:
             shippingPackage.name,
+
           code:
             shippingPackage.code,
 
           productWeightGrams,
 
-          emptyWeightGrams:
-            shippingPackage
-              .emptyWeightGrams,
+          emptyWeightGrams,
 
           packedWeightGrams,
 
@@ -630,7 +894,10 @@ export async function POST(
           totalAmount,
 
           chargeableWeightGrams:
-            rate.chargeableWeightGrams,
+            normalizeNonNegativeInteger(
+              rate.chargeableWeightGrams,
+            ) ||
+            packedWeightGrams,
 
           shippingMode:
             rate.shippingMode,
@@ -638,12 +905,7 @@ export async function POST(
           freeShipping:
             qualifiesForFreeShipping,
 
-          freeShippingThreshold:
-            Number.isFinite(
-              freeShippingThreshold,
-            )
-              ? freeShippingThreshold
-              : null,
+          freeShippingThreshold,
 
           quotedAt:
             new Date().toISOString(),
@@ -663,15 +925,9 @@ export async function POST(
     if (
       error instanceof SyntaxError
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid JSON request body.",
-        },
-        {
-          status: 400,
-          headers: noStoreHeaders(),
-        },
+      return errorResponse(
+        "Invalid JSON request body.",
+        400,
       );
     }
 
@@ -679,43 +935,40 @@ export async function POST(
       error instanceof
       DelhiveryApiError
     ) {
-      return NextResponse.json(
-        {
-          error: error.message,
-        },
-        {
-          status:
-            error.status >= 400 &&
-            error.status < 500
-              ? error.status
-              : 502,
+      const status =
+        error.status >= 400 &&
+        error.status < 500
+          ? error.status
+          : 502;
 
-          headers: noStoreHeaders(),
-        },
+      return errorResponse(
+        error.message,
+        status,
       );
     }
 
     if (error instanceof Error) {
-      return NextResponse.json(
-        {
-          error: error.message,
-        },
-        {
-          status: 400,
-          headers: noStoreHeaders(),
-        },
-      );
+      if (
+        isClientInputError(
+          error.message,
+        ) ||
+        error.message.startsWith(
+          "Quantity must be between",
+        ) ||
+        error.message.startsWith(
+          "The total quantity for one product option",
+        )
+      ) {
+        return errorResponse(
+          error.message,
+          400,
+        );
+      }
     }
 
-    return NextResponse.json(
-      {
-        error:
-          "Unable to calculate shipping.",
-      },
-      {
-        status: 500,
-        headers: noStoreHeaders(),
-      },
+    return errorResponse(
+      "Unable to calculate shipping for this order.",
+      500,
     );
   }
 }

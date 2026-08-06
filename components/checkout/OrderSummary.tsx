@@ -22,7 +22,6 @@ import {
 } from "@/lib/shop";
 
 import type {
-  PaymentMode,
   ShippingQuoteState,
 } from "./CheckoutContent";
 
@@ -156,8 +155,8 @@ export default function OrderSummary({
           <span className="text-gray-500">
             {cart.length}{" "}
             {cart.length === 1
-              ? "product"
-              : "products"}
+              ? "cart line"
+              : "cart lines"}
           </span>
 
           <span className="font-semibold text-[#6D2E00]">
@@ -195,7 +194,7 @@ export default function OrderSummary({
 
             return (
               <Card
-                key={item.id}
+                key={item.lineId}
                 variant="filled"
                 padding="sm"
                 className="shadow-none"
@@ -221,13 +220,28 @@ export default function OrderSummary({
                           {item.name}
                         </h3>
 
-                        <p className="mt-1 text-xs uppercase tracking-wide text-[#C89B3C]">
-                          {
-                            item
-                              .category
-                              .name
-                          }
-                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-[#C89B3C]">
+                          <span>
+                            {
+                              item.category
+                                .name
+                            }
+                          </span>
+
+                          {item.variantLabel && (
+                            <>
+                              <span aria-hidden="true">
+                                •
+                              </span>
+
+                              <span className="font-semibold text-[#6D2E00]">
+                                {
+                                  item.variantLabel
+                                }
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       <p className="shrink-0 font-bold text-[#6D2E00]">
@@ -252,6 +266,23 @@ export default function OrderSummary({
                         )}{" "}
                         each
                       </span>
+
+                      {item.variantWeightGrams !==
+                        null && (
+                        <>
+                          <span aria-hidden="true">
+                            •
+                          </span>
+
+                          <span>
+                            Net weight:{" "}
+                            {
+                              item.variantWeightGrams
+                            }{" "}
+                            g
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -284,6 +315,7 @@ export default function OrderSummary({
                       className="animate-spin"
                       aria-hidden="true"
                     />
+
                     Calculating
                   </span>
                 ) : quote ? (
@@ -321,9 +353,9 @@ export default function OrderSummary({
               )}
 
             <SummaryRow
-  label="Payment"
-  value="Prepaid"
-/>
+              label="Payment"
+              value="Prepaid"
+            />
 
             <div className="border-t border-[#F3DFC2]" />
 
@@ -357,8 +389,8 @@ export default function OrderSummary({
 
               <div>
                 <h3 className="font-semibold text-[#6D2E00]">
-  Standard Delivery
-</h3>
+                  Standard Delivery
+                </h3>
 
                 <p className="mt-1 text-sm leading-6 text-gray-500">
                   Packed using{" "}
@@ -367,7 +399,8 @@ export default function OrderSummary({
                   {Math.ceil(
                     quote
                       ?.chargeableWeightGrams ??
-                      packageDetails.packedWeightGrams,
+                      packageDetails
+                        .packedWeightGrams,
                   )}{" "}
                   grams.
                 </p>

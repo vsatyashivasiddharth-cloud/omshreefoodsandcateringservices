@@ -7,7 +7,6 @@ import {
   ShippingMode,
   ShippingProvider,
   ShipmentStatus,
-  type Product,
 } from "@prisma/client";
 
 import {
@@ -21,6 +20,7 @@ import { shopConfig } from "@/lib/shop";
 
 interface OrderItemInput {
   productId: string;
+  variantId: string | null;
   quantity: number;
 }
 
@@ -38,14 +38,27 @@ interface CreateOrderBody {
   items?: unknown;
 }
 
-interface OrderProduct {
-  id: Product["id"];
-  name: Product["name"];
-  price: Product["price"];
-  stock: Product["stock"];
+interface ResolvedOrderLine {
+  productId: string;
+  variantId: string | null;
 
-  shippingWeightGrams:
-    Product["shippingWeightGrams"];
+  quantity: number;
+
+  productName: string;
+  productSlug: string;
+  productImage: string | null;
+
+  variantLabel: string | null;
+  variantSku: string | null;
+  variantWeightGrams: number | null;
+
+  variantShippingWeightGrams:
+    | number
+    | null;
+
+  unitPrice: Prisma.Decimal;
+  availableStock: number;
+  shippingWeightGrams: number;
 }
 
 const MAX_ORDER_ITEMS = 100;
@@ -63,10 +76,29 @@ function isRecord(
 
 function getTrimmedString(
   value: unknown,
-): string {
+) {
   return typeof value === "string"
     ? value.trim()
     : "";
+}
+
+function parseNullableVariantId(
+  value: unknown,
+) {
+  if (
+    value === undefined ||
+    value === null
+  ) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const variantId = value.trim();
+
+  return variantId || null;
 }
 
 function isValidEmail(
@@ -93,6 +125,15 @@ function parsePaymentMode(
   return null;
 }
 
+function createLineKey(
+  productId: string,
+  variantId: string | null,
+) {
+  return `${productId}:${
+    variantId ?? "legacy"
+  }`;
+}
+
 function parseItems(
   value: unknown,
 ): OrderItemInput[] | null {
@@ -104,8 +145,11 @@ function parseItems(
     return null;
   }
 
-  const quantityByProductId =
-    new Map<string, number>();
+  const itemByKey =
+    new Map<
+      string,
+      OrderItemInput
+    >();
 
   for (const rawItem of value) {
     if (!isRecord(rawItem)) {
@@ -117,12 +161,18 @@ function parseItems(
         rawItem.productId,
       );
 
+    const variantId =
+      parseNullableVariantId(
+        rawItem.variantId,
+      );
+
     const quantity = Number(
       rawItem.quantity,
     );
 
     if (
       !productId ||
+      variantId === undefined ||
       !Number.isInteger(quantity) ||
       quantity < 1 ||
       quantity >
@@ -131,10 +181,14 @@ function parseItems(
       return null;
     }
 
+    const key = createLineKey(
+      productId,
+      variantId,
+    );
+
     const currentQuantity =
-      quantityByProductId.get(
-        productId,
-      ) ?? 0;
+      itemByKey.get(key)
+        ?.quantity ?? 0;
 
     const combinedQuantity =
       currentQuantity + quantity;
@@ -146,31 +200,62 @@ function parseItems(
       return null;
     }
 
-    quantityByProductId.set(
+    itemByKey.set(key, {
       productId,
-      combinedQuantity,
-    );
+      variantId,
+      quantity:
+        combinedQuantity,
+    });
   }
 
   return Array.from(
-    quantityByProductId.entries(),
-  ).map(
-    ([productId, quantity]) => ({
-      productId,
-      quantity,
-    }),
+    itemByKey.values(),
   );
 }
 
-function createProductMap(
-  products: OrderProduct[],
+function normalizeNonNegativeInteger(
+  value: unknown,
 ) {
-  return new Map(
-    products.map((product) => [
-      product.id,
-      product,
-    ]),
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.floor(number),
   );
+}
+
+function normalizePositiveNumber(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number <= 0
+  ) {
+    return null;
+  }
+
+  return number;
+}
+
+function normalizeMoney(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number < 0
+  ) {
+    return null;
+  }
+
+  return number;
 }
 
 function decimalMoney(
@@ -187,7 +272,8 @@ function roundMoney(
   value: number,
 ) {
   return (
-    Math.round(value * 100) / 100
+    Math.round(value * 100) /
+    100
   );
 }
 
@@ -201,10 +287,15 @@ function noStoreHeaders() {
 function errorResponse(
   error: string,
   status: number,
+  additionalData?: Record<
+    string,
+    unknown
+  >,
 ) {
   return NextResponse.json(
     {
       error,
+      ...additionalData,
     },
     {
       status,
@@ -236,10 +327,14 @@ export async function POST(
       );
 
     const phone =
-      getTrimmedString(body.phone);
+      getTrimmedString(
+        body.phone,
+      );
 
     const email =
-      getTrimmedString(body.email);
+      getTrimmedString(
+        body.email,
+      );
 
     const address =
       getTrimmedString(
@@ -247,10 +342,14 @@ export async function POST(
       );
 
     const city =
-      getTrimmedString(body.city);
+      getTrimmedString(
+        body.city,
+      );
 
     const state =
-      getTrimmedString(body.state);
+      getTrimmedString(
+        body.state,
+      );
 
     const pincode =
       getTrimmedString(
@@ -346,9 +445,15 @@ export async function POST(
       );
     }
 
-    const productIds = items.map(
-      (item) => item.productId,
-    );
+    const productIds =
+      Array.from(
+        new Set(
+          items.map(
+            (item) =>
+              item.productId,
+          ),
+        ),
+      );
 
     const products =
       await prisma.product.findMany({
@@ -361,9 +466,34 @@ export async function POST(
         select: {
           id: true,
           name: true,
+          slug: true,
+          image: true,
+
           price: true,
           stock: true,
-          shippingWeightGrams: true,
+
+          shippingWeightGrams:
+            true,
+
+          variants: {
+            select: {
+              id: true,
+              productId: true,
+
+              label: true,
+              sku: true,
+
+              weightGrams: true,
+
+              shippingWeightGrams:
+                true,
+
+              price: true,
+              stock: true,
+
+              isActive: true,
+            },
+          },
         },
       });
 
@@ -378,7 +508,17 @@ export async function POST(
     }
 
     const productMap =
-      createProductMap(products);
+      new Map(
+        products.map(
+          (product) => [
+            product.id,
+            product,
+          ],
+        ),
+      );
+
+    const resolvedLines:
+      ResolvedOrderLine[] = [];
 
     let subtotalDecimal =
       new Prisma.Decimal(0);
@@ -398,60 +538,207 @@ export async function POST(
         );
       }
 
-      /*
-       * This is only an early availability check.
-       * Inventory is not deducted until payment
-       * has been captured and verified.
-       */
+      const variant =
+        item.variantId
+          ? product.variants.find(
+              (
+                candidateVariant,
+              ) =>
+                candidateVariant.id ===
+                  item.variantId &&
+                candidateVariant.productId ===
+                  product.id,
+            )
+          : null;
+
       if (
-        product.stock <
-        item.quantity
+        item.variantId &&
+        !variant
       ) {
         return errorResponse(
-          `${product.name} has only ${Math.max(
-            0,
-            product.stock,
-          )} item(s) left.`,
+          `${product.name}: the selected package option no longer exists.`,
           409,
+          {
+            productId:
+              product.id,
+
+            variantId:
+              item.variantId,
+          },
         );
       }
 
-      const unitWeightGrams =
-        Math.max(
-          0,
-          Math.floor(
-            Number(
-              product.shippingWeightGrams,
-            ) || 0,
-          ),
-        );
-
-      if (unitWeightGrams < 1) {
-        return NextResponse.json(
+      if (
+        variant &&
+        !variant.isActive
+      ) {
+        return errorResponse(
+          `${product.name} (${variant.label}) is no longer available.`,
+          409,
           {
-            error: `${product.name} does not have a shipping weight configured.`,
-
             productId:
               product.id,
+
+            variantId:
+              variant.id,
           },
+        );
+      }
+
+      /*
+       * Variant lines always use variant-level
+       * price, stock and packed weight.
+       *
+       * A null variantId remains compatible with
+       * products and carts created before variants.
+       */
+      const selectedName =
+        variant
+          ? `${product.name} (${variant.label})`
+          : product.name;
+
+      const availableStock =
+        normalizeNonNegativeInteger(
+          variant
+            ? variant.stock
+            : product.stock,
+        );
+
+      if (
+        availableStock < 1 ||
+        item.quantity >
+          availableStock
+      ) {
+        return errorResponse(
+          `${selectedName} has only ${availableStock} item(s) left.`,
+          409,
           {
-            status: 422,
-            headers:
-              noStoreHeaders(),
+            productId:
+              product.id,
+
+            variantId:
+              variant?.id ??
+              null,
+
+            availableStock,
+          },
+        );
+      }
+
+      const unitPriceNumber =
+        normalizeMoney(
+          variant
+            ? variant.price
+            : product.price,
+        );
+
+      if (
+        unitPriceNumber === null
+      ) {
+        return errorResponse(
+          `${selectedName} does not have a valid price.`,
+          422,
+          {
+            productId:
+              product.id,
+
+            variantId:
+              variant?.id ??
+              null,
+          },
+        );
+      }
+
+      const unitPrice =
+        decimalMoney(
+          unitPriceNumber,
+        );
+
+      const unitShippingWeightGrams =
+        normalizeNonNegativeInteger(
+          variant
+            ? variant
+                .shippingWeightGrams
+            : product
+                .shippingWeightGrams,
+        );
+
+      if (
+        unitShippingWeightGrams < 1
+      ) {
+        return errorResponse(
+          `${selectedName} does not have a packed shipping weight configured.`,
+          422,
+          {
+            productId:
+              product.id,
+
+            variantId:
+              variant?.id ??
+              null,
           },
         );
       }
 
       subtotalDecimal =
         subtotalDecimal.plus(
-          product.price.mul(
+          unitPrice.mul(
             item.quantity,
           ),
         );
 
       productWeightGrams +=
-        unitWeightGrams *
+        unitShippingWeightGrams *
         item.quantity;
+
+      resolvedLines.push({
+        productId:
+          product.id,
+
+        variantId:
+          variant?.id ??
+          null,
+
+        quantity:
+          item.quantity,
+
+        productName:
+          product.name,
+
+        productSlug:
+          product.slug,
+
+        productImage:
+          product.image ||
+          null,
+
+        variantLabel:
+          variant?.label ??
+          null,
+
+        variantSku:
+          variant?.sku ??
+          null,
+
+        variantWeightGrams:
+          variant
+            ? normalizeNonNegativeInteger(
+                variant.weightGrams,
+              )
+            : null,
+
+        variantShippingWeightGrams:
+          variant
+            ? unitShippingWeightGrams
+            : null,
+
+        unitPrice,
+
+        availableStock,
+
+        shippingWeightGrams:
+          unitShippingWeightGrams,
+      });
     }
 
     const subtotalAmount =
@@ -460,8 +747,8 @@ export async function POST(
       );
 
     const packages =
-      await prisma.shippingPackage
-        .findMany({
+      await prisma.shippingPackage.findMany(
+        {
           where: {
             active: true,
           },
@@ -486,12 +773,18 @@ export async function POST(
             breadthCm: true,
             heightCm: true,
 
-            emptyWeightGrams: true,
-            maxWeightGrams: true,
-          },
-        });
+            emptyWeightGrams:
+              true,
 
-    if (packages.length === 0) {
+            maxWeightGrams:
+              true,
+          },
+        },
+      );
+
+    if (
+      packages.length === 0
+    ) {
       return errorResponse(
         "No active shipping package is configured.",
         422,
@@ -501,18 +794,23 @@ export async function POST(
     const shippingPackage =
       packages.find(
         (packageOption) => {
-          const packedWeight =
-            productWeightGrams +
-            Math.max(
-              0,
+          const emptyWeightGrams =
+            normalizeNonNegativeInteger(
               packageOption
                 .emptyWeightGrams,
             );
 
+          const maxWeightGrams =
+            normalizeNonNegativeInteger(
+              packageOption
+                .maxWeightGrams,
+            );
+
           return (
-            packedWeight <=
-            packageOption
-              .maxWeightGrams
+            maxWeightGrams > 0 &&
+            productWeightGrams +
+              emptyWeightGrams <=
+              maxWeightGrams
           );
         },
       );
@@ -521,45 +819,41 @@ export async function POST(
       return errorResponse(
         "This order is too heavy for the available shipping packages.",
         422,
+        {
+          productWeightGrams,
+        },
       );
     }
 
-    const packedWeightGrams =
-      productWeightGrams +
-      Math.max(
-        0,
+    const emptyWeightGrams =
+      normalizeNonNegativeInteger(
         shippingPackage
           .emptyWeightGrams,
       );
 
+    const packedWeightGrams =
+      productWeightGrams +
+      emptyWeightGrams;
+
     const packageLengthCm =
-      Number(
+      normalizePositiveNumber(
         shippingPackage.lengthCm,
       );
 
     const packageBreadthCm =
-      Number(
+      normalizePositiveNumber(
         shippingPackage.breadthCm,
       );
 
     const packageHeightCm =
-      Number(
+      normalizePositiveNumber(
         shippingPackage.heightCm,
       );
 
     if (
-      !Number.isFinite(
-        packageLengthCm,
-      ) ||
-      packageLengthCm <= 0 ||
-      !Number.isFinite(
-        packageBreadthCm,
-      ) ||
-      packageBreadthCm <= 0 ||
-      !Number.isFinite(
-        packageHeightCm,
-      ) ||
-      packageHeightCm <= 0
+      packageLengthCm === null ||
+      packageBreadthCm === null ||
+      packageHeightCm === null
     ) {
       return errorResponse(
         "The selected shipping package has invalid dimensions.",
@@ -588,9 +882,6 @@ export async function POST(
       );
     }
 
-    const subtotalNumber =
-      Number(subtotalAmount);
-
     const shippingRate =
       await getDelhiveryShippingRate({
         destinationPincode:
@@ -618,19 +909,41 @@ export async function POST(
 
     const estimatedShippingNumber =
       roundMoney(
-        shippingRate.estimatedAmount,
+        Number(
+          shippingRate.estimatedAmount,
+        ),
       );
 
-    const freeShippingThreshold =
+    if (
+      !Number.isFinite(
+        estimatedShippingNumber,
+      ) ||
+      estimatedShippingNumber < 0
+    ) {
+      throw new Error(
+        "Delhivery returned an invalid shipping amount.",
+      );
+    }
+
+    const subtotalNumber =
+      Number(subtotalAmount);
+
+    const configuredThreshold =
       Number(
         shopConfig.freeShippingAbove,
       );
 
-    const qualifiesForFreeShipping =
+    const freeShippingThreshold =
       Number.isFinite(
-        freeShippingThreshold,
+        configuredThreshold,
       ) &&
-      freeShippingThreshold > 0 &&
+      configuredThreshold > 0
+        ? configuredThreshold
+        : null;
+
+    const qualifiesForFreeShipping =
+      freeShippingThreshold !==
+        null &&
       subtotalNumber >=
         freeShippingThreshold;
 
@@ -681,8 +994,9 @@ export async function POST(
       new Date();
 
     /*
-     * Create the unpaid order and its item
-     * snapshots without modifying product stock.
+     * The unpaid order stores immutable product and
+     * variant snapshots. Inventory is intentionally
+     * not deducted until Razorpay payment succeeds.
      */
     const order =
       await prisma.order.create({
@@ -742,31 +1056,45 @@ export async function POST(
           shippingQuotedAt,
 
           items: {
-            create: items.map(
-              (item) => {
-                const product =
-                  productMap.get(
-                    item.productId,
-                  );
-
-                if (!product) {
-                  throw new Error(
-                    "PRODUCT_NOT_FOUND_DURING_ORDER",
-                  );
-                }
-
-                return {
+            create:
+              resolvedLines.map(
+                (line) => ({
                   productId:
-                    item.productId,
+                    line.productId,
+
+                  variantId:
+                    line.variantId,
 
                   quantity:
-                    item.quantity,
+                    line.quantity,
 
                   price:
-                    product.price,
-                };
-              },
-            ),
+                    line.unitPrice,
+
+                  productName:
+                    line.productName,
+
+                  productSlug:
+                    line.productSlug,
+
+                  productImage:
+                    line.productImage,
+
+                  variantLabel:
+                    line.variantLabel,
+
+                  variantSku:
+                    line.variantSku,
+
+                  variantWeightGrams:
+                    line
+                      .variantWeightGrams,
+
+                  variantShippingWeightGrams:
+                    line
+                      .variantShippingWeightGrams,
+                }),
+              ),
           },
         },
 
@@ -779,6 +1107,18 @@ export async function POST(
                   name: true,
                   slug: true,
                   image: true,
+                },
+              },
+
+              variant: {
+                select: {
+                  id: true,
+                  label: true,
+                  sku: true,
+                  weightGrams: true,
+
+                  shippingWeightGrams:
+                    true,
                 },
               },
             },
@@ -795,142 +1135,228 @@ export async function POST(
       });
 
     return NextResponse.json(
-  {
-    id: order.id,
+      {
+        id: order.id,
 
-    /*
-     * Return the customer-facing token only during order creation.
-     * The checkout page must preserve this token and include it in
-     * the order-success URL after payment succeeds.
-     */
-    orderAccessToken:
-      order.publicAccessToken,
+        /*
+         * This token is shown only during creation
+         * and is required by the customer-facing
+         * order-success route.
+         */
+        orderAccessToken:
+          order.publicAccessToken,
 
-    customerName:
-      order.customerName,
+        customerName:
+          order.customerName,
 
-    phone: order.phone,
-    email: order.email,
+        phone:
+          order.phone,
 
-    deliveryAddress: {
-      address: order.address,
-      city: order.city,
-      state: order.state,
-      pincode: order.pincode,
-    },
+        email:
+          order.email,
 
-    subtotalAmount: Number(
-      order.subtotalAmount,
-    ),
+        deliveryAddress: {
+          address:
+            order.address,
 
-    shippingEstimatedAmount:
-      Number(
-        order.shippingEstimatedAmount,
-      ),
+          city:
+            order.city,
 
-    shippingChargedAmount:
-      Number(
-        order.shippingChargedAmount,
-      ),
+          state:
+            order.state,
 
-    shippingDiscountAmount:
-      Number(
-        order.shippingDiscountAmount,
-      ),
+          pincode:
+            order.pincode,
+        },
 
-    totalAmount: Number(
-      order.totalAmount,
-    ),
+        subtotalAmount:
+          Number(
+            order.subtotalAmount,
+          ),
 
-    status: order.status,
+        shippingEstimatedAmount:
+          Number(
+            order
+              .shippingEstimatedAmount,
+          ),
 
-    paymentStatus:
-      order.paymentStatus,
+        shippingChargedAmount:
+          Number(
+            order
+              .shippingChargedAmount,
+          ),
 
-    paymentMethod:
-      order.paymentMethod,
+        shippingDiscountAmount:
+          Number(
+            order
+              .shippingDiscountAmount,
+          ),
 
-    shipping: {
-      mode: order.shippingMode,
+        totalAmount:
+          Number(
+            order.totalAmount,
+          ),
 
-      status:
-        order.shipmentStatus,
+        status:
+          order.status,
 
-      quotedAt:
-        order.shippingQuotedAt,
+        paymentStatus:
+          order.paymentStatus,
 
-      package: order.package
-        ? {
-            id: order.package.id,
-            name: order.package.name,
-            code: order.package.code,
+        paymentMethod:
+          order.paymentMethod,
 
-            packedWeightGrams:
-              order.packageWeightGrams,
+        shipping: {
+          mode:
+            order.shippingMode,
 
-            dimensions: {
-              lengthCm:
-                order.packageLengthCm
-                  ? Number(
-                      order.packageLengthCm,
-                    )
-                  : null,
+          status:
+            order.shipmentStatus,
 
-              breadthCm:
-                order.packageBreadthCm
-                  ? Number(
-                      order.packageBreadthCm,
-                    )
-                  : null,
+          quotedAt:
+            order.shippingQuotedAt,
 
-              heightCm:
-                order.packageHeightCm
-                  ? Number(
-                      order.packageHeightCm,
-                    )
-                  : null,
+          package:
+            order.package
+              ? {
+                  id:
+                    order.package.id,
+
+                  name:
+                    order.package
+                      .name,
+
+                  code:
+                    order.package
+                      .code,
+
+                  packedWeightGrams:
+                    order
+                      .packageWeightGrams,
+
+                  dimensions: {
+                    lengthCm:
+                      order.packageLengthCm
+                        ? Number(
+                            order
+                              .packageLengthCm,
+                          )
+                        : null,
+
+                    breadthCm:
+                      order.packageBreadthCm
+                        ? Number(
+                            order
+                              .packageBreadthCm,
+                          )
+                        : null,
+
+                    heightCm:
+                      order.packageHeightCm
+                        ? Number(
+                            order
+                              .packageHeightCm,
+                          )
+                        : null,
+                  },
+                }
+              : null,
+        },
+
+        items:
+          order.items.map(
+            (item) => {
+              const unitPrice =
+                Number(
+                  item.price,
+                );
+
+              return {
+                id:
+                  item.id,
+
+                productId:
+                  item.productId,
+
+                variantId:
+                  item.variantId,
+
+                quantity:
+                  item.quantity,
+
+                unitPrice,
+
+                lineTotal:
+                  roundMoney(
+                    unitPrice *
+                      item.quantity,
+                  ),
+
+                product: {
+                  id:
+                    item.productId,
+
+                  name:
+                    item.productName ??
+                    item.product.name,
+
+                  slug:
+                    item.productSlug ??
+                    item.product.slug,
+
+                  image:
+                    item.productImage ??
+                    item.product.image,
+                },
+
+                variant:
+                  item.variantId
+                    ? {
+                        id:
+                          item.variantId,
+
+                        label:
+                          item.variantLabel ??
+                          item.variant
+                            ?.label ??
+                          null,
+
+                        sku:
+                          item.variantSku ??
+                          item.variant
+                            ?.sku ??
+                          null,
+
+                        weightGrams:
+                          item
+                            .variantWeightGrams ??
+                          item.variant
+                            ?.weightGrams ??
+                          null,
+
+                        shippingWeightGrams:
+                          item
+                            .variantShippingWeightGrams ??
+                          item.variant
+                            ?.shippingWeightGrams ??
+                          null,
+                      }
+                    : null,
+              };
             },
-          }
-        : null,
-    },
+          ),
 
-    items: order.items.map(
-      (item) => {
-        const unitPrice =
-          Number(item.price);
+        createdAt:
+          order.createdAt,
 
-        return {
-          id: item.id,
-
-          quantity:
-            item.quantity,
-
-          unitPrice,
-
-          lineTotal:
-            Math.round(
-              unitPrice *
-                item.quantity *
-                100,
-            ) / 100,
-
-          product:
-            item.product,
-        };
+        updatedAt:
+          order.updatedAt,
       },
-    ),
-
-    createdAt:
-      order.createdAt,
-
-    updatedAt:
-      order.updatedAt,
-  },
-  {
-    status: 201,
-    headers: noStoreHeaders(),
-  },
-);
+      {
+        status: 201,
+        headers: noStoreHeaders(),
+      },
+    );
   } catch (error) {
     console.error(
       "Order creation failed:",
@@ -975,10 +1401,21 @@ export async function POST(
     if (
       error instanceof
         Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return errorResponse(
+        "A duplicate order item was detected. Please refresh your cart and try again.",
+        409,
+      );
+    }
+
+    if (
+      error instanceof
+        Prisma.PrismaClientKnownRequestError &&
       error.code === "P2003"
     ) {
       return errorResponse(
-        "The selected product or shipping package is no longer available.",
+        "The selected product, package option, or shipping package is no longer available.",
         409,
       );
     }

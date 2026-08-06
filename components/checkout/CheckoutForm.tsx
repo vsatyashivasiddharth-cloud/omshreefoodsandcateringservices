@@ -108,6 +108,7 @@ interface RazorpayFailureResponse {
     source?: string;
     step?: string;
     reason?: string;
+
     metadata?: {
       order_id?: string;
       payment_id?: string;
@@ -155,8 +156,7 @@ interface RazorpayInstance {
   open: () => void;
 
   on: (
-    event:
-      | "payment.failed",
+    event: "payment.failed",
     handler: (
       response: RazorpayFailureResponse,
     ) => void,
@@ -572,7 +572,8 @@ export default function CheckoutForm({
         );
 
         return (
-          !item.id ||
+          !item.productId ||
+          !item.lineId ||
           !Number.isInteger(
             quantity,
           ) ||
@@ -655,7 +656,12 @@ export default function CheckoutForm({
 
           items: cart.map(
             (item) => ({
-              productId: item.id,
+              productId:
+                item.productId,
+
+              variantId:
+                item.variantId,
+
               quantity:
                 item.quantity,
             }),

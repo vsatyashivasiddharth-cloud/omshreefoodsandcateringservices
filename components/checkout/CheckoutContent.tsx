@@ -247,7 +247,9 @@ export default function CheckoutContent() {
   const quoteItems = useMemo(
     () =>
       cart.map((item) => ({
-        productId: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+
         quantity: Math.max(
           1,
           Math.floor(
