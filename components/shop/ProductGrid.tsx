@@ -1,8 +1,11 @@
-import { PackageSearch } from "lucide-react";
-
-import type { ProductWithCategory } from "@/types/product";
+import {
+  PackageSearch,
+} from "lucide-react";
 
 import EmptyState from "@/components/ui/EmptyState";
+import type {
+  ProductWithCategory,
+} from "@/types/product";
 
 import ProductCard from "./ProductCard";
 
@@ -29,13 +32,15 @@ export default function ProductGrid({
   }
 
   return (
-    <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-3">
-      {products.map((product) => (
-        <ProductCard
-          key={product.id}
-          product={product}
-        />
-      ))}
+    <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+      {products.map(
+        (product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+          />
+        ),
+      )}
     </div>
   );
 }

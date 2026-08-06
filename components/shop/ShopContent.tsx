@@ -17,7 +17,10 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-import type { ProductWithCategory } from "@/types/product";
+import type {
+  ProductVariant,
+  ProductWithCategory,
+} from "@/types/product";
 
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -45,6 +48,19 @@ interface RawCategory {
   image: string | null;
 }
 
+interface RawVariant {
+  id: string;
+  label: string;
+  weightGrams: unknown;
+  shippingWeightGrams: unknown;
+  price: unknown;
+  stock: unknown;
+  sku: string | null;
+  isActive: boolean;
+  isDefault: boolean;
+  sortOrder: unknown;
+}
+
 interface RawProduct {
   id: string;
   name: string;
@@ -57,6 +73,7 @@ interface RawProduct {
   shippingWeightGrams: unknown;
   categoryId: string;
   category: RawCategory;
+  variants?: RawVariant[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -67,20 +84,32 @@ interface CategoryRecord {
   slug: string;
 }
 
-function createSlug(value: string) {
+function createSlug(
+  value: string,
+) {
   return value
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+    .replace(
+      /[^a-z0-9]+/g,
+      "-",
+    )
+    .replace(
+      /^-+|-+$/g,
+      "",
+    );
 }
 
 function isRecord(
   value: unknown,
-): value is Record<string, unknown> {
+): value is Record<
+  string,
+  unknown
+> {
   return (
     value !== null &&
-    typeof value === "object" &&
+    typeof value ===
+      "object" &&
     !Array.isArray(value)
   );
 }
@@ -93,11 +122,37 @@ function isRawCategory(
   }
 
   return (
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.slug === "string" &&
-    (typeof value.image === "string" ||
+    typeof value.id ===
+      "string" &&
+    typeof value.name ===
+      "string" &&
+    typeof value.slug ===
+      "string" &&
+    (typeof value.image ===
+      "string" ||
       value.image === null)
+  );
+}
+
+function isRawVariant(
+  value: unknown,
+): value is RawVariant {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id ===
+      "string" &&
+    typeof value.label ===
+      "string" &&
+    (typeof value.sku ===
+      "string" ||
+      value.sku === null) &&
+    typeof value.isActive ===
+      "boolean" &&
+    typeof value.isDefault ===
+      "boolean"
   );
 }
 
@@ -108,14 +163,30 @@ function isRawProduct(
     return false;
   }
 
+  const variants =
+    value.variants;
+
   return (
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.slug === "string" &&
-    typeof value.description === "string" &&
-    typeof value.featured === "boolean" &&
-    typeof value.categoryId === "string" &&
-    isRawCategory(value.category)
+    typeof value.id ===
+      "string" &&
+    typeof value.name ===
+      "string" &&
+    typeof value.slug ===
+      "string" &&
+    typeof value.description ===
+      "string" &&
+    typeof value.featured ===
+      "boolean" &&
+    typeof value.categoryId ===
+      "string" &&
+    isRawCategory(
+      value.category,
+    ) &&
+    (variants === undefined ||
+      (Array.isArray(variants) &&
+        variants.every(
+          isRawVariant,
+        )))
   );
 }
 
@@ -128,78 +199,225 @@ function normalizeNonNegativeNumber(
     return 0;
   }
 
-  return Math.max(0, number);
+  return Math.max(
+    0,
+    number,
+  );
 }
 
 function normalizeNonNegativeInteger(
   value: unknown,
 ) {
   return Math.floor(
-    normalizeNonNegativeNumber(value),
+    normalizeNonNegativeNumber(
+      value,
+    ),
   );
+}
+
+function normalizeVariant(
+  variant: RawVariant,
+): ProductVariant {
+  return {
+    id: variant.id,
+    label:
+      variant.label.trim(),
+
+    weightGrams:
+      normalizeNonNegativeInteger(
+        variant.weightGrams,
+      ),
+
+    shippingWeightGrams:
+      normalizeNonNegativeInteger(
+        variant
+          .shippingWeightGrams,
+      ),
+
+    price:
+      normalizeNonNegativeNumber(
+        variant.price,
+      ),
+
+    stock:
+      normalizeNonNegativeInteger(
+        variant.stock,
+      ),
+
+    sku: variant.sku,
+
+    isActive:
+      variant.isActive,
+
+    isDefault:
+      variant.isDefault,
+
+    sortOrder:
+      normalizeNonNegativeInteger(
+        variant.sortOrder,
+      ),
+  };
 }
 
 function normalizeProduct(
   product: RawProduct,
 ): ProductWithCategory {
+  const variants =
+    (product.variants ?? [])
+      .filter(
+        (variant) =>
+          variant.isActive,
+      )
+      .map(
+        normalizeVariant,
+      )
+      .sort(
+        (first, second) =>
+          first.sortOrder -
+            second.sortOrder ||
+          first.weightGrams -
+            second.weightGrams,
+      );
+
   return {
     id: product.id,
     name: product.name,
     slug: product.slug,
-    description: product.description,
-    price: normalizeNonNegativeNumber(
-      product.price,
-    ),
+
+    description:
+      product.description,
+
+    price:
+      normalizeNonNegativeNumber(
+        product.price,
+      ),
+
     image:
       product.image ||
       "/images/no-image.jpg",
-    stock: normalizeNonNegativeInteger(
-      product.stock,
-    ),
-    featured: product.featured,
+
+    stock:
+      normalizeNonNegativeInteger(
+        product.stock,
+      ),
+
+    featured:
+      product.featured,
+
     shippingWeightGrams:
       normalizeNonNegativeInteger(
-        product.shippingWeightGrams,
+        product
+          .shippingWeightGrams,
       ),
-    categoryId: product.categoryId,
+
+    categoryId:
+      product.categoryId,
+
     category: {
-      id: product.category.id,
-      name: product.category.name,
+      id:
+        product.category.id,
+
+      name:
+        product.category.name,
+
       slug:
         product.category.slug ||
-        createSlug(product.category.name),
-      image: product.category.image,
+        createSlug(
+          product.category.name,
+        ),
+
+      image:
+        product.category.image,
     },
-    createdAt: product.createdAt,
-    updatedAt: product.updatedAt,
+
+    variants,
+
+    createdAt:
+      product.createdAt,
+
+    updatedAt:
+      product.updatedAt,
   };
 }
 
-export default function ShopContent() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+function getLowestPrice(
+  product: ProductWithCategory,
+) {
+  const prices =
+    (product.variants ?? [])
+      .filter(
+        (variant) =>
+          variant.isActive,
+      )
+      .map(
+        (variant) =>
+          Number(
+            variant.price,
+          ),
+      )
+      .filter(
+        (price) =>
+          Number.isFinite(
+            price,
+          ) &&
+          price >= 0,
+      );
 
-  const [products, setProducts] = useState<
+  if (prices.length === 0) {
+    return product.price;
+  }
+
+  return Math.min(...prices);
+}
+
+export default function ShopContent() {
+  const router =
+    useRouter();
+
+  const pathname =
+    usePathname();
+
+  const searchParams =
+    useSearchParams();
+
+  const [
+    products,
+    setProducts,
+  ] = useState<
     ProductWithCategory[]
   >([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [loadError, setLoadError] =
-    useState<string | null>(null);
+  const [
+    loadError,
+    setLoadError,
+  ] = useState<
+    string | null
+  >(null);
 
-  const [search, setSearch] =
-    useState("");
+  const [
+    search,
+    setSearch,
+  ] = useState("");
 
-  const [category, setCategory] =
-    useState("All");
+  const [
+    category,
+    setCategory,
+  ] = useState("All");
 
-  const [sort, setSort] =
-    useState("default");
+  const [
+    sort,
+    setSort,
+  ] = useState("default");
 
-  const [visible, setVisible] = useState(
+  const [
+    visible,
+    setVisible,
+  ] = useState(
     PRODUCTS_PER_PAGE,
   );
 
@@ -209,158 +427,214 @@ export default function ShopContent() {
       ?.trim()
       .toLowerCase() ?? "";
 
-  const loadProducts = useCallback(
-    async (signal?: AbortSignal) => {
-      setLoading(true);
-      setLoadError(null);
+  const loadProducts =
+    useCallback(
+      async (
+        signal?: AbortSignal,
+      ) => {
+        setLoading(true);
+        setLoadError(null);
 
-      try {
-        const response = await fetch(
-          "/api/home/products",
-          {
-            method: "GET",
-            cache: "no-store",
-            signal,
-          },
-        );
+        try {
+          const response =
+            await fetch(
+              "/api/home/products",
+              {
+                method: "GET",
+                cache: "no-store",
+                signal,
+              },
+            );
 
-        const data: unknown = await response
-          .json()
-          .catch(() => null);
+          const data: unknown =
+            await response
+              .json()
+              .catch(
+                () => null,
+              );
 
-        if (!response.ok) {
-          const apiError =
-            isRecord(data)
-              ? (data as ApiError)
-              : null;
+          if (!response.ok) {
+            const apiError =
+              isRecord(data)
+                ? (data as ApiError)
+                : null;
 
-          throw new Error(
-            apiError?.error ||
-              apiError?.message ||
-              "Failed to fetch products.",
+            throw new Error(
+              apiError?.error ||
+                apiError?.message ||
+                "Failed to fetch products.",
+            );
+          }
+
+          if (
+            !Array.isArray(data)
+          ) {
+            throw new Error(
+              "The products response was invalid.",
+            );
+          }
+
+          setProducts(
+            data
+              .filter(
+                isRawProduct,
+              )
+              .map(
+                normalizeProduct,
+              ),
           );
-        }
+        } catch (error) {
+          if (
+            error instanceof
+              DOMException &&
+            error.name ===
+              "AbortError"
+          ) {
+            return;
+          }
 
-        if (!Array.isArray(data)) {
-          throw new Error(
-            "The products response was invalid.",
+          console.error(
+            "Failed to load shop products:",
+            error,
           );
+
+          setProducts([]);
+
+          setLoadError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load products.",
+          );
+        } finally {
+          if (
+            !signal?.aborted
+          ) {
+            setLoading(false);
+          }
         }
-
-        setProducts(
-          data
-            .filter(isRawProduct)
-            .map(normalizeProduct),
-        );
-      } catch (error) {
-        if (
-          error instanceof DOMException &&
-          error.name === "AbortError"
-        ) {
-          return;
-        }
-
-        console.error(
-          "Failed to load shop products:",
-          error,
-        );
-
-        setProducts([]);
-
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load products.",
-        );
-      } finally {
-        if (!signal?.aborted) {
-          setLoading(false);
-        }
-      }
-    },
-    [],
-  );
+      },
+      [],
+    );
 
   useEffect(() => {
     const controller =
       new AbortController();
 
-    void loadProducts(controller.signal);
+    void loadProducts(
+      controller.signal,
+    );
 
     return () => {
       controller.abort();
     };
   }, [loadProducts]);
 
-  const categoryRecords = useMemo<
-    CategoryRecord[]
-  >(() => {
-    const categoryMap = new Map<
-      string,
-      CategoryRecord
-    >();
+  const categoryRecords =
+    useMemo<
+      CategoryRecord[]
+    >(() => {
+      const categoryMap =
+        new Map<
+          string,
+          CategoryRecord
+        >();
 
-    for (const product of products) {
-      const slug =
-        product.category.slug ||
-        createSlug(product.category.name);
+      for (
+        const product of
+        products
+      ) {
+        const slug =
+          product.category
+            .slug ||
+          createSlug(
+            product.category
+              .name,
+          );
 
-      if (!categoryMap.has(slug)) {
-        categoryMap.set(slug, {
-          id: product.category.id,
-          name: product.category.name,
-          slug,
-        });
+        if (
+          !categoryMap.has(
+            slug,
+          )
+        ) {
+          categoryMap.set(
+            slug,
+            {
+              id:
+                product.category
+                  .id,
+
+              name:
+                product.category
+                  .name,
+
+              slug,
+            },
+          );
+        }
       }
-    }
 
-    return Array.from(
-      categoryMap.values(),
-    ).sort(
-      (
-        firstCategory,
-        secondCategory,
-      ) =>
-        firstCategory.name.localeCompare(
-          secondCategory.name,
+      return Array.from(
+        categoryMap.values(),
+      ).sort(
+        (
+          firstCategory,
+          secondCategory,
+        ) =>
+          firstCategory.name.localeCompare(
+            secondCategory.name,
+          ),
+      );
+    }, [products]);
+
+  const categories =
+    useMemo(
+      () => [
+        "All",
+
+        ...categoryRecords.map(
+          (
+            categoryRecord,
+          ) =>
+            categoryRecord.name,
         ),
+      ],
+      [categoryRecords],
     );
-  }, [products]);
-
-  const categories = useMemo(
-    () => [
-      "All",
-      ...categoryRecords.map(
-        (categoryRecord) =>
-          categoryRecord.name,
-      ),
-    ],
-    [categoryRecords],
-  );
 
   useEffect(() => {
     if (loading) {
       return;
     }
 
-    if (!requestedCategorySlug) {
+    if (
+      !requestedCategorySlug
+    ) {
       setCategory("All");
-      setVisible(PRODUCTS_PER_PAGE);
+
+      setVisible(
+        PRODUCTS_PER_PAGE,
+      );
+
       return;
     }
 
     const matchingCategory =
       categoryRecords.find(
-        (categoryRecord) =>
+        (
+          categoryRecord,
+        ) =>
           categoryRecord.slug ===
           requestedCategorySlug,
       );
 
     setCategory(
-      matchingCategory?.name || "All",
+      matchingCategory?.name ||
+        "All",
     );
 
-    setVisible(PRODUCTS_PER_PAGE);
+    setVisible(
+      PRODUCTS_PER_PAGE,
+    );
   }, [
     categoryRecords,
     loading,
@@ -371,7 +645,10 @@ export default function ShopContent() {
     value: string,
   ) {
     setCategory(value);
-    setVisible(PRODUCTS_PER_PAGE);
+
+    setVisible(
+      PRODUCTS_PER_PAGE,
+    );
 
     const nextSearchParams =
       new URLSearchParams(
@@ -379,16 +656,22 @@ export default function ShopContent() {
       );
 
     if (value === "All") {
-      nextSearchParams.delete("category");
+      nextSearchParams.delete(
+        "category",
+      );
     } else {
       const selectedCategory =
         categoryRecords.find(
-          (categoryRecord) =>
-            categoryRecord.name === value,
+          (
+            categoryRecord,
+          ) =>
+            categoryRecord.name ===
+            value,
         );
 
       nextSearchParams.set(
         "category",
+
         selectedCategory?.slug ||
           createSlug(value),
       );
@@ -411,46 +694,67 @@ export default function ShopContent() {
     value: string,
   ) {
     setSearch(value);
-    setVisible(PRODUCTS_PER_PAGE);
+
+    setVisible(
+      PRODUCTS_PER_PAGE,
+    );
   }
 
   function handleSortChange(
     value: string,
   ) {
     setSort(value);
-    setVisible(PRODUCTS_PER_PAGE);
+
+    setVisible(
+      PRODUCTS_PER_PAGE,
+    );
   }
 
-  const filteredProducts = useMemo(
-    () => {
+  const filteredProducts =
+    useMemo(() => {
       const filteredList =
-        products.filter((product) => {
-          if (
-            category !== "All" &&
-            product.category.name !== category
-          ) {
-            return false;
-          }
+        products.filter(
+          (product) => {
+            if (
+              category !==
+                "All" &&
+              product.category
+                .name !==
+                category
+            ) {
+              return false;
+            }
 
-          const normalizedSearch =
-            search.trim().toLowerCase();
+            const normalizedSearch =
+              search
+                .trim()
+                .toLowerCase();
 
-          if (!normalizedSearch) {
-            return true;
-          }
+            if (
+              !normalizedSearch
+            ) {
+              return true;
+            }
 
-          return (
-            product.name
-              .toLowerCase()
-              .includes(normalizedSearch) ||
-            product.description
-              .toLowerCase()
-              .includes(normalizedSearch) ||
-            product.category.name
-              .toLowerCase()
-              .includes(normalizedSearch)
-          );
-        });
+            return (
+              product.name
+                .toLowerCase()
+                .includes(
+                  normalizedSearch,
+                ) ||
+              product.description
+                .toLowerCase()
+                .includes(
+                  normalizedSearch,
+                ) ||
+              product.category.name
+                .toLowerCase()
+                .includes(
+                  normalizedSearch,
+                )
+            );
+          },
+        );
 
       switch (sort) {
         case "price-low":
@@ -459,9 +763,14 @@ export default function ShopContent() {
               firstProduct,
               secondProduct,
             ) =>
-              firstProduct.price -
-              secondProduct.price,
+              getLowestPrice(
+                firstProduct,
+              ) -
+              getLowestPrice(
+                secondProduct,
+              ),
           );
+
           break;
 
         case "price-high":
@@ -470,9 +779,14 @@ export default function ShopContent() {
               firstProduct,
               secondProduct,
             ) =>
-              secondProduct.price -
-              firstProduct.price,
+              getLowestPrice(
+                secondProduct,
+              ) -
+              getLowestPrice(
+                firstProduct,
+              ),
           );
+
           break;
 
         case "name":
@@ -485,6 +799,7 @@ export default function ShopContent() {
                 secondProduct.name,
               ),
           );
+
           break;
 
         default:
@@ -492,23 +807,28 @@ export default function ShopContent() {
       }
 
       return filteredList;
-    },
-    [
+    }, [
       category,
       products,
       search,
       sort,
-    ],
-  );
+    ]);
 
   const displayedProducts =
-    filteredProducts.slice(0, visible);
+    filteredProducts.slice(
+      0,
+      visible,
+    );
 
   const selectedCategoryMissing =
-    Boolean(requestedCategorySlug) &&
+    Boolean(
+      requestedCategorySlug,
+    ) &&
     category === "All" &&
     !categoryRecords.some(
-      (categoryRecord) =>
+      (
+        categoryRecord,
+      ) =>
         categoryRecord.slug ===
         requestedCategorySlug,
     );
@@ -538,7 +858,8 @@ export default function ShopContent() {
         />
 
         <h2 className="mt-4 text-2xl font-bold text-[#6D2E00]">
-          Unable to Load Products
+          Unable to Load
+          Products
         </h2>
 
         <p className="mt-2 text-gray-600">
@@ -571,20 +892,28 @@ export default function ShopContent() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <SearchBar
             value={search}
-            onChange={handleSearchChange}
+            onChange={
+              handleSearchChange
+            }
           />
 
           <SortDropdown
             value={sort}
-            onChange={handleSortChange}
+            onChange={
+              handleSortChange
+            }
           />
         </div>
       </Card>
 
       <ProductFilters
-        categories={categories}
+        categories={
+          categories
+        }
         selected={category}
-        onChange={handleCategoryChange}
+        onChange={
+          handleCategoryChange
+        }
       />
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -611,16 +940,22 @@ export default function ShopContent() {
             aria-hidden="true"
           />
 
-          {filteredProducts.length}{" "}
-          {filteredProducts.length === 1
+          {
+            filteredProducts.length
+          }{" "}
+          {filteredProducts.length ===
+          1
             ? "Product"
             : "Products"}
         </Badge>
       </div>
 
-      {displayedProducts.length > 0 ? (
+      {displayedProducts.length >
+      0 ? (
         <ProductGrid
-          products={displayedProducts}
+          products={
+            displayedProducts
+          }
         />
       ) : (
         <EmptyState
@@ -647,7 +982,9 @@ export default function ShopContent() {
             variant="primary"
             onClick={() =>
               setVisible(
-                (currentVisible) =>
+                (
+                  currentVisible,
+                ) =>
                   currentVisible +
                   PRODUCTS_PER_PAGE,
               )
