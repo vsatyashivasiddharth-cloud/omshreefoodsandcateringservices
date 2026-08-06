@@ -19,7 +19,6 @@ import Navbar from "@/components/layout/Navbar";
 import ProductActions from "@/components/shop/ProductActions";
 import RelatedProducts from "@/components/shop/RelatedProducts";
 import prisma from "@/lib/prisma";
-import { formatCurrency } from "@/lib/shop";
 import type { ProductWithCategory } from "@/types/product";
 
 const siteUrl =
@@ -58,16 +57,61 @@ function getAbsoluteUrl(
 }
 
 function serializeStructuredData(
-  value: Record<string, unknown>,
+  value: Record<
+    string,
+    unknown
+  >,
 ) {
-  return JSON.stringify(value).replace(
+  return JSON.stringify(
+    value,
+  ).replace(
     /</g,
     "\\u003c",
   );
 }
 
+function normalizeNonNegativeInteger(
+  value: unknown,
+) {
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(
+      number,
+    )
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.floor(number),
+  );
+}
+
+function normalizePrice(
+  value: unknown,
+) {
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(
+      number,
+    ) ||
+    number < 0
+  ) {
+    return 0;
+  }
+
+  return number;
+}
+
 const getProduct = cache(
-  async (slug: string) => {
+  async (
+    slug: string,
+  ) => {
     const normalizedSlug =
       slug.trim();
 
@@ -77,7 +121,8 @@ const getProduct = cache(
 
     return prisma.product.findUnique({
       where: {
-        slug: normalizedSlug,
+        slug:
+          normalizedSlug,
       },
 
       select: {
@@ -89,7 +134,8 @@ const getProduct = cache(
         image: true,
         stock: true,
         featured: true,
-        shippingWeightGrams: true,
+        shippingWeightGrams:
+          true,
         categoryId: true,
         createdAt: true,
         updatedAt: true,
@@ -102,22 +148,80 @@ const getProduct = cache(
             image: true,
           },
         },
+
+        variants: {
+          where: {
+            isActive: true,
+          },
+
+          orderBy: [
+            {
+              sortOrder:
+                "asc",
+            },
+            {
+              weightGrams:
+                "asc",
+            },
+          ],
+
+          select: {
+            id: true,
+            label: true,
+            weightGrams:
+              true,
+            shippingWeightGrams:
+              true,
+            price: true,
+            stock: true,
+            sku: true,
+            isActive: true,
+            isDefault:
+              true,
+            sortOrder: true,
+          },
+        },
       },
     });
   },
 );
 
+function getDefaultVariant<
+  T extends {
+    isDefault: boolean;
+    isActive: boolean;
+  },
+>(
+  variants: T[],
+) {
+  return (
+    variants.find(
+      (variant) =>
+        variant.isActive &&
+        variant.isDefault,
+    ) ??
+    variants.find(
+      (variant) =>
+        variant.isActive,
+    ) ??
+    null
+  );
+}
+
 export async function generateMetadata({
   params,
 }: ProductPageProps): Promise<Metadata> {
-  const { slug } = await params;
+  const {
+    slug,
+  } = await params;
 
   const product =
     await getProduct(slug);
 
   if (!product) {
     return {
-      title: "Product Not Found",
+      title:
+        "Product Not Found",
 
       description:
         "The requested product could not be found.",
@@ -128,6 +232,33 @@ export async function generateMetadata({
       },
     };
   }
+
+  const defaultVariant =
+    getDefaultVariant(
+      product.variants,
+    );
+
+  const metadataPrice =
+    defaultVariant
+      ? normalizePrice(
+          defaultVariant.price,
+        )
+      : normalizePrice(
+          product.price,
+        );
+
+  const inStock =
+    product.variants.length >
+    0
+      ? product.variants.some(
+          (variant) =>
+            normalizeNonNegativeInteger(
+              variant.stock,
+            ) > 0,
+        )
+      : normalizeNonNegativeInteger(
+          product.stock,
+        ) > 0;
 
   const productPath =
     `/shop/${encodeURIComponent(
@@ -143,21 +274,20 @@ export async function generateMetadata({
     product.description?.trim() ||
     `Buy ${product.name} online from ${brandName}. Freshly prepared, hygienically packed and delivered across India.`;
 
-  const inStock =
-    Number(product.stock) > 0;
-
   return {
     title: product.name,
     description,
 
     alternates: {
-      canonical: productPath,
+      canonical:
+        productPath,
     },
 
     openGraph: {
       type: "website",
       url: productPath,
-      siteName: brandName,
+      siteName:
+        brandName,
       locale: "en_IN",
 
       title:
@@ -167,20 +297,25 @@ export async function generateMetadata({
 
       images: [
         {
-          url: imageUrl,
-          alt: product.name,
+          url:
+            imageUrl,
+          alt:
+            product.name,
         },
       ],
     },
 
     twitter: {
-      card: "summary_large_image",
+      card:
+        "summary_large_image",
 
       title:
         `${product.name} | ${brandName}`,
 
       description,
-      images: [imageUrl],
+      images: [
+        imageUrl,
+      ],
     },
 
     robots: {
@@ -194,17 +329,19 @@ export async function generateMetadata({
         "max-image-preview":
           "large",
 
-        "max-snippet": -1,
+        "max-snippet":
+          -1,
 
-        "max-video-preview": -1,
+        "max-video-preview":
+          -1,
       },
     },
 
     other: {
       "product:price:amount":
-        Number(
-          product.price,
-        ).toFixed(2),
+        metadataPrice.toFixed(
+          2,
+        ),
 
       "product:price:currency":
         "INR",
@@ -215,7 +352,8 @@ export async function generateMetadata({
           : "out of stock",
 
       "product:category":
-        product.category.name,
+        product.category
+          .name,
     },
   };
 }
@@ -223,7 +361,9 @@ export async function generateMetadata({
 export default async function ProductPage({
   params,
 }: ProductPageProps) {
-  const { slug } = await params;
+  const {
+    slug,
+  } = await params;
 
   const product =
     await getProduct(slug);
@@ -232,50 +372,93 @@ export default async function ProductPage({
     notFound();
   }
 
+  const normalizedVariants =
+    product.variants.map(
+      (variant) => ({
+        id:
+          variant.id,
+
+        label:
+          variant.label,
+
+        weightGrams:
+          normalizeNonNegativeInteger(
+            variant.weightGrams,
+          ),
+
+        shippingWeightGrams:
+          normalizeNonNegativeInteger(
+            variant
+              .shippingWeightGrams,
+          ),
+
+        price:
+          normalizePrice(
+            variant.price,
+          ),
+
+        stock:
+          normalizeNonNegativeInteger(
+            variant.stock,
+          ),
+
+        sku:
+          variant.sku,
+
+        isActive:
+          variant.isActive,
+
+        isDefault:
+          variant.isDefault,
+
+        sortOrder:
+          variant.sortOrder,
+      }),
+    );
+
   const normalizedProduct: ProductWithCategory =
     {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
+      id:
+        product.id,
+
+      name:
+        product.name,
+
+      slug:
+        product.slug,
 
       description:
         product.description,
 
       price:
-        Number(product.price),
+        normalizePrice(
+          product.price,
+        ),
 
       image:
         product.image ||
         "/images/no-image.jpg",
 
-      stock: Math.max(
-        0,
-        Math.floor(
-          Number(
-            product.stock,
-          ) || 0,
+      stock:
+        normalizeNonNegativeInteger(
+          product.stock,
         ),
-      ),
 
       featured:
         product.featured,
 
       shippingWeightGrams:
-        Math.max(
-          0,
-          Math.floor(
-            Number(
-              product
-                .shippingWeightGrams,
-            ) || 0,
-          ),
+        normalizeNonNegativeInteger(
+          product
+            .shippingWeightGrams,
         ),
 
       categoryId:
         product.categoryId,
 
       category: {
-        id: product.category.id,
+        id:
+          product.category.id,
 
         name:
           product.category.name,
@@ -287,6 +470,9 @@ export default async function ProductPage({
           product.category.image,
       },
 
+      variants:
+        normalizedVariants,
+
       createdAt:
         product.createdAt,
 
@@ -294,8 +480,25 @@ export default async function ProductPage({
         product.updatedAt,
     };
 
+  const defaultVariant =
+    getDefaultVariant(
+      normalizedVariants,
+    );
+
+  const structuredDataPrice =
+    defaultVariant
+      ? defaultVariant.price
+      : normalizedProduct.price;
+
   const inStock =
-    normalizedProduct.stock > 0;
+    normalizedVariants.length >
+    0
+      ? normalizedVariants.some(
+          (variant) =>
+            variant.stock > 0,
+        )
+      : normalizedProduct.stock >
+        0;
 
   const productUrl =
     `${siteUrl}/shop/${encodeURIComponent(
@@ -311,68 +514,169 @@ export default async function ProductPage({
     product.description?.trim() ||
     `Buy ${product.name} online from ${brandName}. Freshly prepared, hygienically packed and delivered across India.`;
 
-  const productStructuredData = {
+  const activeVariantPrices =
+    normalizedVariants
+      .filter(
+        (variant) =>
+          variant.isActive,
+      )
+      .map(
+        (variant) =>
+          variant.price,
+      )
+      .filter(
+        (price) =>
+          Number.isFinite(
+            price,
+          ) &&
+          price >= 0,
+      );
+
+  const lowestPrice =
+    activeVariantPrices.length >
+    0
+      ? Math.min(
+          ...activeVariantPrices,
+        )
+      : structuredDataPrice;
+
+  const highestPrice =
+    activeVariantPrices.length >
+    0
+      ? Math.max(
+          ...activeVariantPrices,
+        )
+      : structuredDataPrice;
+
+  const productStructuredData: Record<
+    string,
+    unknown
+  > = {
     "@context":
       "https://schema.org",
 
-    "@type": "Product",
+    "@type":
+      "Product",
 
     "@id":
       `${productUrl}#product`,
 
-    name: product.name,
+    name:
+      product.name,
 
     description:
       structuredDataDescription,
 
-    url: productUrl,
+    url:
+      productUrl,
 
-    image: [productImage],
+    image: [
+      productImage,
+    ],
 
-    sku: product.id,
+    sku:
+      defaultVariant?.sku ||
+      product.id,
 
     category:
       product.category.name,
 
     brand: {
-      "@type": "Brand",
-      name: brandName,
+      "@type":
+        "Brand",
+
+      name:
+        brandName,
     },
 
-    offers: {
-      "@type": "Offer",
+    offers:
+      normalizedVariants.length >
+      1
+        ? {
+            "@type":
+              "AggregateOffer",
 
-      url: productUrl,
+            url:
+              productUrl,
 
-      priceCurrency: "INR",
+            priceCurrency:
+              "INR",
 
-      price:
-        normalizedProduct.price.toFixed(
-          2,
-        ),
+            lowPrice:
+              lowestPrice.toFixed(
+                2,
+              ),
 
-      availability: inStock
-        ? "https://schema.org/InStock"
-        : "https://schema.org/OutOfStock",
+            highPrice:
+              highestPrice.toFixed(
+                2,
+              ),
 
-      itemCondition:
-        "https://schema.org/NewCondition",
+            offerCount:
+              normalizedVariants.length,
 
-      seller: {
-        "@type":
-          "Organization",
+            availability:
+              inStock
+                ? "https://schema.org/InStock"
+                : "https://schema.org/OutOfStock",
 
-        "@id":
-          `${siteUrl}/#organization`,
+            seller: {
+              "@type":
+                "Organization",
 
-        name: brandName,
+              "@id":
+                `${siteUrl}/#organization`,
 
-        url: siteUrl,
-      },
-    },
+              name:
+                brandName,
+
+              url:
+                siteUrl,
+            },
+          }
+        : {
+            "@type":
+              "Offer",
+
+            url:
+              productUrl,
+
+            priceCurrency:
+              "INR",
+
+            price:
+              structuredDataPrice.toFixed(
+                2,
+              ),
+
+            availability:
+              inStock
+                ? "https://schema.org/InStock"
+                : "https://schema.org/OutOfStock",
+
+            itemCondition:
+              "https://schema.org/NewCondition",
+
+            seller: {
+              "@type":
+                "Organization",
+
+              "@id":
+                `${siteUrl}/#organization`,
+
+              name:
+                brandName,
+
+              url:
+                siteUrl,
+            },
+          },
   };
 
-  const breadcrumbStructuredData = {
+  const breadcrumbStructuredData: Record<
+    string,
+    unknown
+  > = {
     "@context":
       "https://schema.org",
 
@@ -384,45 +688,64 @@ export default async function ProductPage({
 
     itemListElement: [
       {
-        "@type": "ListItem",
+        "@type":
+          "ListItem",
+
         position: 1,
-        name: "Home",
-        item: siteUrl,
+
+        name:
+          "Home",
+
+        item:
+          siteUrl,
       },
 
       {
-        "@type": "ListItem",
+        "@type":
+          "ListItem",
+
         position: 2,
-        name: "Shop",
+
+        name:
+          "Shop",
+
         item:
           `${siteUrl}/shop`,
       },
 
       {
-        "@type": "ListItem",
+        "@type":
+          "ListItem",
+
         position: 3,
 
         name:
-          product.category.name,
+          product.category
+            .name,
 
         item:
           `${siteUrl}/shop?category=${encodeURIComponent(
-            product.category.slug,
+            product.category
+              .slug,
           )}`,
       },
 
       {
-        "@type": "ListItem",
+        "@type":
+          "ListItem",
+
         position: 4,
 
-        name: product.name,
+        name:
+          product.name,
 
-        item: productUrl,
+        item:
+          productUrl,
       },
     ],
   };
 
-    return (
+  return (
     <>
       <script
         type="application/ld+json"
@@ -478,11 +801,15 @@ export default async function ProductPage({
 
             <Link
               href={`/shop?category=${encodeURIComponent(
-                product.category.slug,
+                product.category
+                  .slug,
               )}`}
               className="rounded transition-colors hover:text-[#C89B3C] focus:outline-none focus:ring-2 focus:ring-[#C89B3C]/30"
             >
-              {product.category.name}
+              {
+                product.category
+                  .name
+              }
             </Link>
 
             <ChevronRight
@@ -505,7 +832,9 @@ export default async function ProductPage({
                   src={
                     normalizedProduct.image
                   }
-                  alt={product.name}
+                  alt={
+                    product.name
+                  }
                   fill
                   priority
                   sizes="(max-width: 1024px) 100vw, 50vw"
@@ -521,7 +850,8 @@ export default async function ProductPage({
                 {!inStock && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/45">
                     <span className="rounded-full bg-white px-6 py-3 font-bold text-[#6D2E00] shadow-xl">
-                      Currently Out of Stock
+                      Currently Out
+                      of Stock
                     </span>
                   </div>
                 )}
@@ -531,11 +861,15 @@ export default async function ProductPage({
             <div className="flex flex-col self-start lg:sticky lg:top-28">
               <Link
                 href={`/shop?category=${encodeURIComponent(
-                  product.category.slug,
+                  product.category
+                    .slug,
                 )}`}
                 className="inline-flex w-fit rounded-full bg-[#FFF3DA] px-4 py-2 text-sm font-semibold uppercase tracking-wider text-[#C89B3C] transition-colors hover:bg-[#F8E7C5] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
               >
-                {product.category.name}
+                {
+                  product.category
+                    .name
+                }
               </Link>
 
               <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
@@ -546,7 +880,8 @@ export default async function ProductPage({
                 />
 
                 <span>
-                  Freshly Prepared
+                  Freshly
+                  Prepared
                 </span>
 
                 <span aria-hidden="true">
@@ -554,7 +889,8 @@ export default async function ProductPage({
                 </span>
 
                 <span>
-                  Premium Ingredients
+                  Premium
+                  Ingredients
                 </span>
               </div>
 
@@ -562,46 +898,11 @@ export default async function ProductPage({
                 {product.name}
               </h1>
 
-              <div className="mt-8 flex flex-wrap items-end gap-4">
-                <span className="text-4xl font-extrabold tracking-tight text-[#6D2E00] sm:text-5xl">
-                  {formatCurrency(
-                    normalizedProduct.price,
-                  )}
-                </span>
-
-                <span className="pb-2 text-sm text-gray-500">
-                  Inclusive of applicable taxes
-                </span>
-              </div>
-
               <p className="mt-8 whitespace-pre-line text-lg leading-9 text-gray-700">
                 {
                   structuredDataDescription
                 }
               </p>
-
-              <div className="mt-8">
-                <span
-                  className={`inline-flex items-center gap-2 rounded-full px-5 py-2 font-semibold ${
-                    inStock
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`h-2.5 w-2.5 rounded-full ${
-                      inStock
-                        ? "bg-green-500"
-                        : "bg-red-500"
-                    }`}
-                  />
-
-                  {inStock
-                    ? `${normalizedProduct.stock} in stock`
-                    : "Out of stock"}
-                </span>
-              </div>
 
               <ProductActions
                 product={
@@ -663,7 +964,9 @@ export default async function ProductPage({
             </h2>
 
             <p className="mb-8 mt-3 text-gray-500">
-              Learn more about this handcrafted product and what
+              Learn more about
+              this handcrafted
+              product and what
               makes it special.
             </p>
 
@@ -680,7 +983,9 @@ export default async function ProductPage({
           </section>
 
           <RelatedProducts
-            productId={product.id}
+            productId={
+              product.id
+            }
           />
         </div>
       </main>
@@ -688,11 +993,6 @@ export default async function ProductPage({
       <Footer />
     </>
   );
-}
-interface FeatureCardProps {
-  icon: ReactNode;
-  title: string;
-  description: string;
 }
 
 function FeatureCard({

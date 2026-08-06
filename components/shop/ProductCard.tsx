@@ -16,7 +16,10 @@ import Card from "@/components/ui/Card";
 import IconButton from "@/components/ui/IconButton";
 import { useCart } from "@/context/CartContext";
 import { formatCurrency } from "@/lib/shop";
-import type { ProductWithCategory } from "@/types/product";
+import type {
+  ProductVariant,
+  ProductWithCategory,
+} from "@/types/product";
 
 interface ProductCardProps {
   product: ProductWithCategory;
@@ -31,13 +34,53 @@ function normalizeNonNegativeInteger(
     return 0;
   }
 
-  return Math.max(0, Math.floor(number));
+  return Math.max(
+    0,
+    Math.floor(number),
+  );
+}
+
+function normalizePrice(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number < 0
+  ) {
+    return 0;
+  }
+
+  return number;
+}
+
+function getDefaultVariant(
+  variants:
+    | ProductVariant[]
+    | undefined,
+) {
+  const activeVariants =
+    (variants ?? []).filter(
+      (variant) =>
+        variant.isActive,
+    );
+
+  return (
+    activeVariants.find(
+      (variant) =>
+        variant.isDefault,
+    ) ??
+    activeVariants[0] ??
+    null
+  );
 }
 
 export default function ProductCard({
   product,
 }: ProductCardProps) {
-  const { addToCart } = useCart();
+  const { addToCart } =
+    useCart();
 
   const productUrl =
     `/shop/${product.slug}`;
@@ -46,23 +89,39 @@ export default function ProductCard({
     product.image ||
     "/images/no-image.jpg";
 
-  const rawPrice = Number(product.price);
+  const defaultVariant =
+    getDefaultVariant(
+      product.variants,
+    );
 
   const price =
-    Number.isFinite(rawPrice) &&
-    rawPrice >= 0
-      ? rawPrice
-      : 0;
+    defaultVariant
+      ? normalizePrice(
+          defaultVariant.price,
+        )
+      : normalizePrice(
+          product.price,
+        );
 
   const stock =
-    normalizeNonNegativeInteger(
-      product.stock,
-    );
+    defaultVariant
+      ? normalizeNonNegativeInteger(
+          defaultVariant.stock,
+        )
+      : normalizeNonNegativeInteger(
+          product.stock,
+        );
 
   const shippingWeightGrams =
-    normalizeNonNegativeInteger(
-      product.shippingWeightGrams,
-    );
+    defaultVariant
+      ? normalizeNonNegativeInteger(
+          defaultVariant
+            .shippingWeightGrams,
+        )
+      : normalizeNonNegativeInteger(
+          product
+            .shippingWeightGrams,
+        );
 
   const inStock = stock > 0;
 
@@ -80,30 +139,68 @@ export default function ProductCard({
         id: product.id,
         name: product.name,
         slug: product.slug,
+
         description:
           product.description,
+
         price,
         image,
         stock,
-        featured: product.featured,
+
+        featured:
+          product.featured,
+
         shippingWeightGrams,
+
         categoryId:
           product.categoryId,
+
         category: {
-          id: product.category.id,
-          name: product.category.name,
+          id:
+            product.category.id,
+
+          name:
+            product.category.name,
+
           slug:
             product.category.slug,
+
           image:
             product.category.image,
         },
+
+        variantId:
+          defaultVariant?.id ??
+          null,
+
+        variantLabel:
+          defaultVariant?.label ??
+          null,
+
+        variantSku:
+          defaultVariant?.sku ??
+          null,
+
+        variantWeightGrams:
+          defaultVariant
+            ?.weightGrams ??
+          null,
       },
       1,
     );
 
-    toast.success("Added to cart", {
-      description: `${product.name} was added successfully.`,
-    });
+    const variantText =
+      defaultVariant?.label
+        ? ` (${defaultVariant.label})`
+        : "";
+
+    toast.success(
+      "Added to cart",
+      {
+        description:
+          `${product.name}${variantText} was added successfully.`,
+      },
+    );
   }
 
   return (
@@ -149,7 +246,10 @@ export default function ProductCard({
 
         <div className="absolute bottom-5 left-5">
           <Badge className="bg-white/90 text-[#6D2E00] backdrop-blur-md">
-            {product.category.name}
+            {
+              product.category
+                .name
+            }
           </Badge>
         </div>
 
@@ -179,11 +279,15 @@ export default function ProductCard({
         <div className="mt-7 flex items-end justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500">
-              Starting from
+              {defaultVariant
+                ? `Default: ${defaultVariant.label}`
+                : "Starting from"}
             </p>
 
             <p className="mt-1 text-3xl font-bold text-[#6D2E00]">
-              {formatCurrency(price)}
+              {formatCurrency(
+                price,
+              )}
             </p>
           </div>
 
@@ -211,10 +315,14 @@ export default function ProductCard({
                 aria-hidden="true"
               />
             }
-            onClick={handleAddToCart}
+            onClick={
+              handleAddToCart
+            }
           >
             {inStock
-              ? "Add to Cart"
+              ? defaultVariant
+                ? `Add ${defaultVariant.label}`
+                : "Add to Cart"
               : "Out of Stock"}
           </Button>
 
@@ -240,7 +348,7 @@ export default function ProductCard({
           href={productUrl}
           className="mt-6 inline-flex items-center gap-2 self-start rounded-lg text-sm font-semibold text-[#6D2E00] transition-colors duration-300 hover:text-[#C89B3C] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
         >
-          View Details
+          Choose Package Size
 
           <ArrowRight
             size={16}

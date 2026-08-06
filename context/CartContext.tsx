@@ -36,6 +36,23 @@ function isRecord(
   );
 }
 
+function normalizeString(
+  value: unknown,
+) {
+  return typeof value === "string"
+    ? value.trim()
+    : "";
+}
+
+function normalizeNullableString(
+  value: unknown,
+) {
+  const normalized =
+    normalizeString(value);
+
+  return normalized || null;
+}
+
 function normalizeNonNegativeNumber(
   value: unknown,
 ) {
@@ -56,46 +73,185 @@ function normalizeNonNegativeInteger(
   );
 }
 
-function isStoredCartItem(
+function createLineId(
+  productId: string,
+  variantId: string | null,
+) {
+  return `${productId}:${
+    variantId ?? "legacy"
+  }`;
+}
+
+function normalizeStoredCartItem(
   value: unknown,
-): value is CartItem {
+): CartItem | null {
   if (!isRecord(value)) {
-    return false;
+    return null;
   }
 
   const category = value.category;
 
   if (!isRecord(category)) {
-    return false;
+    return null;
   }
 
-  const price = Number(value.price);
-  const stock = Number(value.stock);
-  const quantity = Number(value.quantity);
+  /*
+   * Old cart entries used `id` as the product ID
+   * and did not contain productId, variantId or
+   * lineId. Those entries become legacy/default
+   * variant lines instead of being discarded.
+   */
+  const productId =
+    normalizeString(
+      value.productId,
+    ) ||
+    normalizeString(value.id);
+
+  const variantId =
+    normalizeNullableString(
+      value.variantId,
+    );
+
+  const lineId =
+    normalizeString(value.lineId) ||
+    createLineId(
+      productId,
+      variantId,
+    );
+
+  const name =
+    normalizeString(value.name);
+
+  const slug =
+    normalizeString(value.slug);
+
+  const description =
+    typeof value.description ===
+    "string"
+      ? value.description
+      : "";
+
+  const price =
+    normalizeNonNegativeNumber(
+      value.price,
+    );
+
+  const stock =
+    normalizeNonNegativeInteger(
+      value.stock,
+    );
+
+  const quantity =
+    normalizeNonNegativeInteger(
+      value.quantity,
+    );
 
   const shippingWeightGrams =
-    value.shippingWeightGrams === undefined
-      ? 0
-      : Number(value.shippingWeightGrams);
+    normalizeNonNegativeInteger(
+      value.shippingWeightGrams,
+    );
 
-  return (
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.slug === "string" &&
-    typeof value.description === "string" &&
-    Number.isFinite(price) &&
-    price >= 0 &&
-    typeof value.image === "string" &&
-    Number.isFinite(stock) &&
-    stock >= 0 &&
-    typeof value.featured === "boolean" &&
-    Number.isFinite(quantity) &&
-    quantity >= 1 &&
-    Number.isFinite(shippingWeightGrams) &&
-    shippingWeightGrams >= 0 &&
-    typeof category.id === "string" &&
-    typeof category.name === "string"
-  );
+  const categoryId =
+    normalizeString(
+      category.id,
+    );
+
+  const categoryName =
+    normalizeString(
+      category.name,
+    );
+
+  if (
+    !productId ||
+    !lineId ||
+    !name ||
+    !slug ||
+    !categoryId ||
+    !categoryName ||
+    stock < 1 ||
+    quantity < 1
+  ) {
+    return null;
+  }
+
+  return {
+    lineId,
+    productId,
+
+    /*
+     * Keep id as the product ID for compatibility
+     * with existing display components.
+     */
+    id: productId,
+
+    name,
+    slug,
+    description,
+    price,
+
+    image:
+      normalizeString(
+        value.image,
+      ) ||
+      "/images/no-image.jpg",
+
+    stock,
+
+    featured:
+      value.featured === true,
+
+    shippingWeightGrams,
+
+    categoryId:
+      normalizeString(
+        value.categoryId,
+      ) ||
+      categoryId,
+
+    category: {
+      id: categoryId,
+      name: categoryName,
+
+      slug:
+        normalizeString(
+          category.slug,
+        ) || undefined,
+
+      image:
+        typeof category.image ===
+          "string" ||
+        category.image === null
+          ? category.image
+          : undefined,
+    },
+
+    variantId,
+
+    variantLabel:
+      normalizeNullableString(
+        value.variantLabel,
+      ),
+
+    variantSku:
+      normalizeNullableString(
+        value.variantSku,
+      ),
+
+    variantWeightGrams:
+      value.variantWeightGrams ===
+        null ||
+      value.variantWeightGrams ===
+        undefined
+        ? null
+        : normalizeNonNegativeInteger(
+            value.variantWeightGrams,
+          ),
+
+    quantity: Math.min(
+      quantity,
+      stock,
+    ),
+  };
 }
 
 function normalizeStoredCart(
@@ -105,56 +261,76 @@ function normalizeStoredCart(
     return [];
   }
 
-  return value
-    .filter(isStoredCartItem)
-    .map((item) => {
-      const stock =
-        normalizeNonNegativeInteger(
-          item.stock,
-        );
+  const itemByLineId =
+    new Map<string, CartItem>();
 
-      return {
-        id: item.id,
-        name: item.name,
-        slug: item.slug,
-        description: item.description,
-        price: normalizeNonNegativeNumber(
-          item.price,
-        ),
-        image:
-          item.image ||
-          "/images/no-image.jpg",
-        stock,
-        featured: item.featured,
-        shippingWeightGrams:
-          normalizeNonNegativeInteger(
-            item.shippingWeightGrams,
-          ),
-        categoryId: item.categoryId,
-        category: {
-          id: item.category.id,
-          name: item.category.name,
-          slug: item.category.slug,
-          image: item.category.image,
-        },
+  for (const rawItem of value) {
+    const item =
+      normalizeStoredCartItem(
+        rawItem,
+      );
+
+    if (!item) {
+      continue;
+    }
+
+    const existing =
+      itemByLineId.get(
+        item.lineId,
+      );
+
+    if (!existing) {
+      itemByLineId.set(
+        item.lineId,
+        item,
+      );
+
+      continue;
+    }
+
+    itemByLineId.set(
+      item.lineId,
+      {
+        ...item,
+
         quantity: Math.min(
-          Math.max(
-            1,
-            Math.floor(
-              Number(item.quantity) || 1,
-            ),
-          ),
-          Math.max(1, stock),
+          existing.quantity +
+            item.quantity,
+          item.stock,
         ),
-      };
-    })
-    .filter((item) => item.stock > 0);
+      },
+    );
+  }
+
+  return Array.from(
+    itemByLineId.values(),
+  );
 }
 
 function normalizeProduct(
   product: Product,
-): Product | null {
-  const price = Number(product.price);
+): CartItem | null {
+  const productId =
+    normalizeString(product.id);
+
+  const name =
+    normalizeString(product.name);
+
+  const slug =
+    normalizeString(product.slug);
+
+  const categoryId =
+    normalizeString(
+      product.category?.id,
+    );
+
+  const categoryName =
+    normalizeString(
+      product.category?.name,
+    );
+
+  const price =
+    Number(product.price);
 
   const stock =
     normalizeNonNegativeInteger(
@@ -166,38 +342,90 @@ function normalizeProduct(
       product.shippingWeightGrams,
     );
 
+  const variantId =
+    normalizeNullableString(
+      product.variantId,
+    );
+
   if (
-    !product.id ||
-    !product.name ||
-    !product.slug ||
-    !product.category?.id ||
-    !product.category?.name ||
+    !productId ||
+    !name ||
+    !slug ||
+    !categoryId ||
+    !categoryName ||
     !Number.isFinite(price) ||
     price < 0 ||
-    stock === 0
+    stock < 1
   ) {
     return null;
   }
 
   return {
-    id: product.id,
-    name: product.name,
-    slug: product.slug,
-    description: product.description,
+    lineId: createLineId(
+      productId,
+      variantId,
+    ),
+
+    productId,
+    id: productId,
+
+    name,
+    slug,
+
+    description:
+      product.description || "",
+
     price,
+
     image:
       product.image ||
       "/images/no-image.jpg",
+
     stock,
-    featured: product.featured,
+
+    featured:
+      product.featured,
+
     shippingWeightGrams,
-    categoryId: product.categoryId,
+
+    categoryId:
+      product.categoryId ||
+      categoryId,
+
     category: {
-      id: product.category.id,
-      name: product.category.name,
-      slug: product.category.slug,
-      image: product.category.image,
+      id: categoryId,
+      name: categoryName,
+
+      slug:
+        product.category.slug,
+
+      image:
+        product.category.image,
     },
+
+    variantId,
+
+    variantLabel:
+      normalizeNullableString(
+        product.variantLabel,
+      ),
+
+    variantSku:
+      normalizeNullableString(
+        product.variantSku,
+      ),
+
+    variantWeightGrams:
+      product.variantWeightGrams ===
+        null ||
+      product.variantWeightGrams ===
+        undefined
+        ? null
+        : normalizeNonNegativeInteger(
+            product.variantWeightGrams,
+          ),
+
+    quantity: 1,
   };
 }
 
@@ -222,7 +450,9 @@ export function CartProvider({
           JSON.parse(storedCart);
 
         setCart(
-          normalizeStoredCart(parsedCart),
+          normalizeStoredCart(
+            parsedCart,
+          ),
         );
       }
     } catch (error) {
@@ -253,155 +483,194 @@ export function CartProvider({
         error,
       );
     }
-  }, [cart, hydrated]);
+  }, [
+    cart,
+    hydrated,
+  ]);
 
-  const addToCart = useCallback(
-    (
-      product: Product,
-      quantity = 1,
-    ) => {
-      const normalizedProduct =
-        normalizeProduct(product);
-
-      if (!normalizedProduct) {
-        return;
-      }
-
-      const requestedQuantity = Math.max(
-        1,
-        Math.floor(Number(quantity) || 1),
-      );
-
-      setCart((previousCart) => {
-        const existingItem =
-          previousCart.find(
-            (item) =>
-              item.id ===
-              normalizedProduct.id,
+  const addToCart =
+    useCallback(
+      (
+        product: Product,
+        quantity = 1,
+      ) => {
+        const normalizedProduct =
+          normalizeProduct(
+            product,
           );
 
-        if (existingItem) {
-          return previousCart.map(
-            (item) => {
-              if (
-                item.id !==
-                normalizedProduct.id
-              ) {
-                return item;
-              }
-
-              return {
-                ...item,
-                ...normalizedProduct,
-                quantity: Math.min(
-                  item.quantity +
-                    requestedQuantity,
-                  normalizedProduct.stock,
-                ),
-              };
-            },
-          );
+        if (!normalizedProduct) {
+          return;
         }
 
-        return [
-          ...previousCart,
-          {
-            ...normalizedProduct,
-            quantity: Math.min(
-              requestedQuantity,
-              normalizedProduct.stock,
+        const requestedQuantity =
+          Math.max(
+            1,
+            Math.floor(
+              Number(quantity) || 1,
             ),
-          },
-        ];
-      });
-    },
-    [],
-  );
+          );
 
-  const removeFromCart = useCallback(
-    (id: string) => {
-      setCart((previousCart) =>
-        previousCart.filter(
-          (item) => item.id !== id,
-        ),
-      );
-    },
-    [],
-  );
+        setCart(
+          (previousCart) => {
+            const existingItem =
+              previousCart.find(
+                (item) =>
+                  item.lineId ===
+                  normalizedProduct.lineId,
+              );
 
-  const increaseQuantity = useCallback(
-    (id: string) => {
-      setCart((previousCart) =>
-        previousCart.map((item) => {
-          if (
-            item.id !== id ||
-            item.quantity >= item.stock
-          ) {
-            return item;
-          }
+            if (existingItem) {
+              return previousCart.map(
+                (item) => {
+                  if (
+                    item.lineId !==
+                    normalizedProduct.lineId
+                  ) {
+                    return item;
+                  }
 
-          return {
-            ...item,
-            quantity:
-              item.quantity + 1,
-          };
-        }),
-      );
-    },
-    [],
-  );
+                  return {
+                    ...item,
+                    ...normalizedProduct,
 
-  const decreaseQuantity = useCallback(
-    (id: string) => {
-      setCart((previousCart) =>
-        previousCart.flatMap(
-          (item) => {
-            if (item.id !== id) {
-              return [item];
-            }
-
-            if (item.quantity <= 1) {
-              return [];
+                    quantity:
+                      Math.min(
+                        item.quantity +
+                          requestedQuantity,
+                        normalizedProduct.stock,
+                      ),
+                  };
+                },
+              );
             }
 
             return [
+              ...previousCart,
               {
-                ...item,
+                ...normalizedProduct,
+
                 quantity:
-                  item.quantity - 1,
+                  Math.min(
+                    requestedQuantity,
+                    normalizedProduct.stock,
+                  ),
               },
             ];
           },
+        );
+      },
+      [],
+    );
+
+  const removeFromCart =
+    useCallback(
+      (lineId: string) => {
+        setCart(
+          (previousCart) =>
+            previousCart.filter(
+              (item) =>
+                item.lineId !==
+                lineId,
+            ),
+        );
+      },
+      [],
+    );
+
+  const increaseQuantity =
+    useCallback(
+      (lineId: string) => {
+        setCart(
+          (previousCart) =>
+            previousCart.map(
+              (item) => {
+                if (
+                  item.lineId !==
+                    lineId ||
+                  item.quantity >=
+                    item.stock
+                ) {
+                  return item;
+                }
+
+                return {
+                  ...item,
+                  quantity:
+                    item.quantity +
+                    1,
+                };
+              },
+            ),
+        );
+      },
+      [],
+    );
+
+  const decreaseQuantity =
+    useCallback(
+      (lineId: string) => {
+        setCart(
+          (previousCart) =>
+            previousCart.flatMap(
+              (item) => {
+                if (
+                  item.lineId !==
+                  lineId
+                ) {
+                  return [item];
+                }
+
+                if (
+                  item.quantity <= 1
+                ) {
+                  return [];
+                }
+
+                return [
+                  {
+                    ...item,
+                    quantity:
+                      item.quantity -
+                      1,
+                  },
+                ];
+              },
+            ),
+        );
+      },
+      [],
+    );
+
+  const clearCart =
+    useCallback(() => {
+      setCart([]);
+    }, []);
+
+  const totalItems =
+    useMemo(
+      () =>
+        cart.reduce(
+          (total, item) =>
+            total +
+            item.quantity,
+          0,
         ),
-      );
-    },
-    [],
-  );
+      [cart],
+    );
 
-  const clearCart = useCallback(() => {
-    setCart([]);
-  }, []);
-
-  const totalItems = useMemo(
-    () =>
-      cart.reduce(
-        (total, item) =>
-          total + item.quantity,
-        0,
-      ),
-    [cart],
-  );
-
-  const totalPrice = useMemo(
-    () =>
-      cart.reduce(
-        (total, item) =>
-          total +
-          item.price * item.quantity,
-        0,
-      ),
-    [cart],
-  );
+  const totalPrice =
+    useMemo(
+      () =>
+        cart.reduce(
+          (total, item) =>
+            total +
+            item.price *
+              item.quantity,
+          0,
+        ),
+      [cart],
+    );
 
   const totalShippingWeightGrams =
     useMemo(
@@ -409,7 +678,8 @@ export function CartProvider({
         cart.reduce(
           (total, item) =>
             total +
-            item.shippingWeightGrams *
+            item
+              .shippingWeightGrams *
               item.quantity,
           0,
         ),
@@ -443,7 +713,9 @@ export function CartProvider({
     );
 
   return (
-    <CartContext.Provider value={value}>
+    <CartContext.Provider
+      value={value}
+    >
       {children}
     </CartContext.Provider>
   );

@@ -16,13 +16,23 @@ import CartSummary from "./CartSummary";
 import EmptyCart from "./EmptyCart";
 
 export default function CartPage() {
-  const { cart, totalItems } = useCart();
+  const {
+    cart,
+    totalItems,
+  } = useCart();
 
-  const productCount = cart.length;
+  const productCount =
+    cart.length;
+
   const itemLabel =
-    totalItems === 1 ? "item" : "items";
+    totalItems === 1
+      ? "item"
+      : "items";
+
   const productLabel =
-    productCount === 1 ? "product" : "products";
+    productCount === 1
+      ? "cart line"
+      : "cart lines";
 
   if (productCount === 0) {
     return <EmptyCart />;
@@ -46,7 +56,7 @@ export default function CartPage() {
             </Badge>
           }
           title="Review Your Order"
-          description="Check your selected products, adjust quantities and proceed securely to checkout."
+          description="Check your selected products and package sizes, adjust quantities and proceed securely to checkout."
           align="left"
           className="max-w-3xl"
         />
@@ -76,7 +86,9 @@ export default function CartPage() {
               </h2>
 
               <p className="mt-1 text-sm text-gray-500">
-                {productCount} {productLabel} in your cart
+                {productCount}{" "}
+                {productLabel} in
+                your cart
               </p>
             </div>
 
@@ -84,17 +96,22 @@ export default function CartPage() {
               variant="secondary"
               size="sm"
             >
-              {totalItems} {itemLabel}
+              {totalItems}{" "}
+              {itemLabel}
             </Badge>
           </div>
 
           <div className="space-y-6">
-            {cart.map((item) => (
-              <CartItem
-                key={item.id}
-                item={item}
-              />
-            ))}
+            {cart.map(
+              (item) => (
+                <CartItem
+                  key={
+                    item.lineId
+                  }
+                  item={item}
+                />
+              ),
+            )}
           </div>
         </Card>
 

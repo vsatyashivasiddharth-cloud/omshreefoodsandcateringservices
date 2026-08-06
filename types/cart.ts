@@ -1,5 +1,9 @@
 export interface Product {
+  /**
+   * Product database ID.
+   */
   id: string;
+
   name: string;
   slug: string;
   description: string;
@@ -9,8 +13,7 @@ export interface Product {
   featured: boolean;
 
   /**
-   * Packed contribution of one product unit in grams.
-   * This should include the product container and immediate packaging.
+   * Packed contribution of one selected unit.
    */
   shippingWeightGrams: number;
 
@@ -22,9 +25,35 @@ export interface Product {
     slug?: string;
     image?: string | null;
   };
+
+  /**
+   * Selected variant details.
+   * Null represents a legacy/default product line.
+   */
+  variantId?: string | null;
+  variantLabel?: string | null;
+  variantSku?: string | null;
+  variantWeightGrams?: number | null;
 }
 
 export interface CartItem extends Product {
+  /**
+   * Stable cart identity. Different variants of the
+   * same product have different line IDs.
+   */
+  lineId: string;
+
+  /**
+   * Explicit product ID retained separately from
+   * the cart line identity.
+   */
+  productId: string;
+
+  variantId: string | null;
+  variantLabel: string | null;
+  variantSku: string | null;
+  variantWeightGrams: number | null;
+
   quantity: number;
 }
 
@@ -36,20 +65,26 @@ export interface CartContextType {
     quantity?: number,
   ) => void;
 
-  removeFromCart: (id: string) => void;
+  removeFromCart: (
+    lineId: string,
+  ) => void;
 
-  increaseQuantity: (id: string) => void;
+  increaseQuantity: (
+    lineId: string,
+  ) => void;
 
-  decreaseQuantity: (id: string) => void;
+  decreaseQuantity: (
+    lineId: string,
+  ) => void;
 
   clearCart: () => void;
 
   totalItems: number;
-
   totalPrice: number;
 
   /**
-   * Combined product weight before adding the outer shipping box.
+   * Combined packed product weight before adding
+   * the outer shipping box.
    */
   totalShippingWeightGrams: number;
 }

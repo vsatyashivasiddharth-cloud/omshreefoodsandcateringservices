@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   Minus,
@@ -16,13 +20,16 @@ import Card from "@/components/ui/Card";
 import IconButton from "@/components/ui/IconButton";
 import { useCart } from "@/context/CartContext";
 import { formatCurrency } from "@/lib/shop";
-import type { ProductWithCategory } from "@/types/product";
+import type {
+  ProductVariant,
+  ProductWithCategory,
+} from "@/types/product";
 
 interface ProductActionsProps {
   product: ProductWithCategory;
 }
 
-function normalizeNonNegativeInteger(
+function normalizeInteger(
   value: unknown,
 ) {
   const number = Number(value);
@@ -31,39 +38,136 @@ function normalizeNonNegativeInteger(
     return 0;
   }
 
-  return Math.max(0, Math.floor(number));
+  return Math.max(
+    0,
+    Math.floor(number),
+  );
+}
+
+function getActiveVariants(
+  product: ProductWithCategory,
+) {
+  return (
+    product.variants ?? []
+  )
+    .filter(
+      (variant) =>
+        variant.isActive,
+    )
+    .sort(
+      (first, second) =>
+        first.sortOrder -
+          second.sortOrder ||
+        first.weightGrams -
+          second.weightGrams,
+    );
+}
+
+function getInitialVariant(
+  variants: ProductVariant[],
+) {
+  return (
+    variants.find(
+      (variant) =>
+        variant.isDefault,
+    ) ??
+    variants[0] ??
+    null
+  );
 }
 
 export default function ProductActions({
   product,
 }: ProductActionsProps) {
   const router = useRouter();
-  const { addToCart } = useCart();
+  const { addToCart } =
+    useCart();
+
+  const activeVariants =
+    useMemo(
+      () =>
+        getActiveVariants(
+          product,
+        ),
+      [product],
+    );
+
+  const initialVariant =
+    useMemo(
+      () =>
+        getInitialVariant(
+          activeVariants,
+        ),
+      [activeVariants],
+    );
+
+  const [
+    selectedVariantId,
+    setSelectedVariantId,
+  ] = useState<string | null>(
+    initialVariant?.id ?? null,
+  );
 
   const [quantity, setQuantity] =
     useState(1);
 
-  const rawPrice = Number(product.price);
+  useEffect(() => {
+    setSelectedVariantId(
+      initialVariant?.id ?? null,
+    );
+
+    setQuantity(1);
+  }, [
+    initialVariant?.id,
+  ]);
+
+  const selectedVariant =
+    activeVariants.find(
+      (variant) =>
+        variant.id ===
+        selectedVariantId,
+    ) ??
+    initialVariant;
 
   const price =
-    Number.isFinite(rawPrice) &&
-    rawPrice >= 0
-      ? rawPrice
+    selectedVariant
+      ? Number(
+          selectedVariant.price,
+        )
+      : Number(product.price);
+
+  const normalizedPrice =
+    Number.isFinite(price) &&
+    price >= 0
+      ? price
       : 0;
 
   const stock =
-    normalizeNonNegativeInteger(
-      product.stock,
-    );
+    selectedVariant
+      ? normalizeInteger(
+          selectedVariant.stock,
+        )
+      : normalizeInteger(
+          product.stock,
+        );
 
   const shippingWeightGrams =
-    normalizeNonNegativeInteger(
-      product.shippingWeightGrams,
-    );
+    selectedVariant
+      ? normalizeInteger(
+          selectedVariant
+            .shippingWeightGrams,
+        )
+      : normalizeInteger(
+          product
+            .shippingWeightGrams,
+        );
 
-  const inStock = stock > 0;
+  const inStock =
+    stock > 0;
+
   const isMinimumQuantity =
     quantity <= 1;
+
   const isMaximumQuantity =
     quantity >= stock;
 
@@ -71,30 +175,43 @@ export default function ProductActions({
     product.image ||
     "/images/no-image.jpg";
 
-  const subtotal = price * quantity;
+  const subtotal =
+    normalizedPrice * quantity;
+
+  function handleVariantChange(
+    variantId: string,
+  ) {
+    setSelectedVariantId(
+      variantId,
+    );
+
+    setQuantity(1);
+  }
 
   function decreaseQuantity() {
-    setQuantity((currentQuantity) =>
-      Math.max(
-        1,
-        currentQuantity - 1,
-      ),
+    setQuantity(
+      (currentQuantity) =>
+        Math.max(
+          1,
+          currentQuantity - 1,
+        ),
     );
   }
 
   function increaseQuantity() {
-    setQuantity((currentQuantity) =>
-      Math.min(
-        stock,
-        currentQuantity + 1,
-      ),
+    setQuantity(
+      (currentQuantity) =>
+        Math.min(
+          stock,
+          currentQuantity + 1,
+        ),
     );
   }
 
   function addProductToCart() {
     if (!inStock) {
       toast.error(
-        "This product is currently out of stock.",
+        "This package size is currently out of stock.",
       );
 
       return false;
@@ -105,30 +222,70 @@ export default function ProductActions({
         id: product.id,
         name: product.name,
         slug: product.slug,
+
         description:
           product.description,
-        price,
+
+        price:
+          normalizedPrice,
+
         image,
         stock,
-        featured: product.featured,
+
+        featured:
+          product.featured,
+
         shippingWeightGrams,
+
         categoryId:
           product.categoryId,
+
         category: {
-          id: product.category.id,
-          name: product.category.name,
+          id:
+            product.category.id,
+
+          name:
+            product.category.name,
+
           slug:
             product.category.slug,
+
           image:
             product.category.image,
         },
+
+        variantId:
+          selectedVariant?.id ??
+          null,
+
+        variantLabel:
+          selectedVariant?.label ??
+          null,
+
+        variantSku:
+          selectedVariant?.sku ??
+          null,
+
+        variantWeightGrams:
+          selectedVariant
+            ?.weightGrams ??
+          null,
       },
       quantity,
     );
 
-    toast.success("Added to cart", {
-      description: `${quantity} × ${product.name} added successfully.`,
-    });
+    const variantDescription =
+      selectedVariant?.label
+        ? ` (${selectedVariant.label})`
+        : "";
+
+    toast.success(
+      "Added to cart",
+      {
+        description:
+          `${quantity} × ${product.name}${variantDescription} added successfully.`,
+      },
+    );
 
     return true;
   }
@@ -143,7 +300,112 @@ export default function ProductActions({
   }
 
   return (
-    <div className="mt-10 space-y-8">
+    <div className="mt-8 space-y-8">
+      <div className="flex flex-wrap items-end gap-4">
+        <span className="text-4xl font-extrabold tracking-tight text-[#6D2E00] sm:text-5xl">
+          {formatCurrency(
+            normalizedPrice,
+          )}
+        </span>
+
+        <span className="pb-2 text-sm text-gray-500">
+          Inclusive of applicable
+          taxes
+        </span>
+      </div>
+
+      {activeVariants.length >
+        0 && (
+        <fieldset>
+          <legend className="text-lg font-semibold text-[#6D2E00]">
+            Select Weight
+          </legend>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            {activeVariants.map(
+              (variant) => {
+                const selected =
+                  variant.id ===
+                  selectedVariant
+                    ?.id;
+
+                const available =
+                  normalizeInteger(
+                    variant.stock,
+                  ) > 0;
+
+                return (
+                  <button
+                    key={
+                      variant.id
+                    }
+                    type="button"
+                    onClick={() =>
+                      handleVariantChange(
+                        variant.id,
+                      )
+                    }
+                    aria-pressed={
+                      selected
+                    }
+                    className={
+                      selected
+                        ? "rounded-2xl border-2 border-[#6D2E00] bg-[#FFF4DE] px-5 py-3 font-bold text-[#6D2E00] shadow-sm"
+                        : "rounded-2xl border border-[#E8D9BF] bg-white px-5 py-3 font-semibold text-[#6D2E00] transition hover:border-[#C89B3C]"
+                    }
+                  >
+                    <span className="block">
+                      {
+                        variant.label
+                      }
+                    </span>
+
+                    <span
+                      className={
+                        available
+                          ? "mt-1 block text-xs font-normal text-green-700"
+                          : "mt-1 block text-xs font-normal text-red-600"
+                      }
+                    >
+                      {available
+                        ? formatCurrency(
+                            Number(
+                              variant.price,
+                            ),
+                          )
+                        : "Out of stock"}
+                    </span>
+                  </button>
+                );
+              },
+            )}
+          </div>
+        </fieldset>
+      )}
+
+      <div>
+        <span
+          className={`inline-flex items-center gap-2 rounded-full px-5 py-2 font-semibold ${
+            inStock
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-700"
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className={`h-2.5 w-2.5 rounded-full ${
+              inStock
+                ? "bg-green-500"
+                : "bg-red-500"
+            }`}
+          />
+
+          {inStock
+            ? `${stock} in stock`
+            : "Out of stock"}
+        </span>
+      </div>
+
       <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-4 text-lg font-semibold text-[#6D2E00]">
@@ -162,7 +424,9 @@ export default function ProductActions({
               variant="ghost"
               rounded="xl"
               size="md"
-              onClick={decreaseQuantity}
+              onClick={
+                decreaseQuantity
+              }
               disabled={
                 !inStock ||
                 isMinimumQuantity
@@ -189,7 +453,9 @@ export default function ProductActions({
               variant="ghost"
               rounded="xl"
               size="md"
-              onClick={increaseQuantity}
+              onClick={
+                increaseQuantity
+              }
               disabled={
                 !inStock ||
                 isMaximumQuantity
@@ -200,15 +466,12 @@ export default function ProductActions({
           </div>
 
           <p className="mt-3 text-sm text-gray-500">
-            Available stock{" "}
-            <span
-              className={
-                inStock
-                  ? "font-semibold text-[#6D2E00]"
-                  : "font-semibold text-red-600"
-              }
-            >
-              {stock}
+            Packed weight per unit:{" "}
+            <span className="font-semibold text-[#6D2E00]">
+              {
+                shippingWeightGrams
+              }{" "}
+              g
             </span>
           </p>
         </div>
@@ -220,7 +483,9 @@ export default function ProductActions({
             </p>
 
             <p className="mt-1 text-2xl font-bold text-[#C89B3C]">
-              {formatCurrency(subtotal)}
+              {formatCurrency(
+                subtotal,
+              )}
             </p>
           </div>
         )}
@@ -229,15 +494,17 @@ export default function ProductActions({
       {isMaximumQuantity &&
         inStock && (
           <p className="text-sm font-medium text-amber-600">
-            Maximum available quantity
-            reached.
+            Maximum available
+            quantity reached.
           </p>
         )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Button
           type="button"
-          onClick={addProductToCart}
+          onClick={
+            addProductToCart
+          }
           disabled={!inStock}
           leftIcon={
             <ShoppingCart
@@ -280,8 +547,8 @@ export default function ProductActions({
               </p>
 
               <p className="text-sm leading-6 text-gray-500">
-                Freshly packed and dispatched
-                quickly.
+                Freshly packed and
+                dispatched quickly.
               </p>
             </div>
           </div>
@@ -301,8 +568,8 @@ export default function ProductActions({
               </p>
 
               <p className="text-sm leading-6 text-gray-500">
-                Safe and reliable ordering
-                experience.
+                Safe and reliable
+                ordering experience.
               </p>
             </div>
           </div>

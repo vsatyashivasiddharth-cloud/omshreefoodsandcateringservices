@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   Minus,
   Plus,
+  Scale,
   ShoppingBag,
   Trash2,
 } from "lucide-react";
@@ -15,7 +16,9 @@ import Card from "@/components/ui/Card";
 import IconButton from "@/components/ui/IconButton";
 import { useCart } from "@/context/CartContext";
 import { formatCurrency } from "@/lib/shop";
-import type { CartItem as CartItemType } from "@/types/cart";
+import type {
+  CartItem as CartItemType,
+} from "@/types/cart";
 
 interface CartItemProps {
   item: CartItemType;
@@ -30,31 +33,49 @@ export default function CartItem({
     removeFromCart,
   } = useCart();
 
-  const unitPrice = Number.isFinite(
-    Number(item.price),
-  )
-    ? Math.max(0, Number(item.price))
-    : 0;
+  const unitPrice =
+    Number.isFinite(
+      Number(item.price),
+    )
+      ? Math.max(
+          0,
+          Number(item.price),
+        )
+      : 0;
 
   const stock = Math.max(
     0,
-    Math.floor(Number(item.stock) || 0),
+    Math.floor(
+      Number(item.stock) || 0,
+    ),
   );
 
   const quantity = Math.max(
     1,
     Math.min(
-      Math.floor(Number(item.quantity) || 1),
+      Math.floor(
+        Number(item.quantity) ||
+          1,
+      ),
       Math.max(1, stock),
     ),
   );
 
-  const subtotal = unitPrice * quantity;
-  const isMin = quantity <= 1;
-  const isMax = quantity >= stock;
-  const productHref = `/shop/${item.slug}`;
+  const subtotal =
+    unitPrice * quantity;
+
+  const isMin =
+    quantity <= 1;
+
+  const isMax =
+    quantity >= stock;
+
+  const productHref =
+    `/shop/${item.slug}`;
+
   const image =
-    item.image || "/images/no-image.jpg";
+    item.image ||
+    "/images/no-image.jpg";
 
   return (
     <Card
@@ -79,13 +100,35 @@ export default function CartItem({
 
         <div className="flex min-w-0 flex-col justify-between">
           <div>
-            <Badge
-              variant="neutral"
-              size="sm"
-              className="uppercase tracking-wider"
-            >
-              {item.category.name}
-            </Badge>
+            <div className="flex flex-wrap gap-2">
+              <Badge
+                variant="neutral"
+                size="sm"
+                className="uppercase tracking-wider"
+              >
+                {
+                  item.category
+                    .name
+                }
+              </Badge>
+
+              {item.variantLabel && (
+                <Badge
+                  variant="secondary"
+                  size="sm"
+                  className="gap-1"
+                >
+                  <Scale
+                    size={13}
+                    aria-hidden="true"
+                  />
+
+                  {
+                    item.variantLabel
+                  }
+                </Badge>
+              )}
+            </div>
 
             <Link
               href={productHref}
@@ -98,7 +141,9 @@ export default function CartItem({
 
             {item.description && (
               <p className="mt-3 line-clamp-2 leading-7 text-gray-600">
-                {item.description}
+                {
+                  item.description
+                }
               </p>
             )}
 
@@ -110,7 +155,10 @@ export default function CartItem({
                 />
 
                 <span>
-                  {formatCurrency(unitPrice)} per item
+                  {formatCurrency(
+                    unitPrice,
+                  )}{" "}
+                  per item
                 </span>
               </div>
 
@@ -120,6 +168,19 @@ export default function CartItem({
                   {stock}
                 </strong>
               </span>
+
+              {item.variantWeightGrams !==
+                null && (
+                <span>
+                  Net weight:
+                  <strong className="ml-1 text-[#6D2E00]">
+                    {
+                      item.variantWeightGrams
+                    }{" "}
+                    g
+                  </strong>
+                </span>
+              )}
             </div>
           </div>
 
@@ -138,7 +199,9 @@ export default function CartItem({
                 rounded="xl"
                 disabled={isMin}
                 onClick={() =>
-                  decreaseQuantity(item.id)
+                  decreaseQuantity(
+                    item.lineId,
+                  )
                 }
                 aria-label={`Decrease quantity of ${item.name}`}
                 className="rounded-none border-0 shadow-none hover:translate-y-0"
@@ -165,7 +228,9 @@ export default function CartItem({
                 rounded="xl"
                 disabled={isMax}
                 onClick={() =>
-                  increaseQuantity(item.id)
+                  increaseQuantity(
+                    item.lineId,
+                  )
                 }
                 aria-label={`Increase quantity of ${item.name}`}
                 className="rounded-none border-0 shadow-none hover:translate-y-0"
@@ -183,7 +248,9 @@ export default function CartItem({
                 />
               }
               onClick={() =>
-                removeFromCart(item.id)
+                removeFromCart(
+                  item.lineId,
+                )
               }
               className="border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
             >
@@ -191,11 +258,13 @@ export default function CartItem({
             </Button>
           </div>
 
-          {isMax && stock > 0 && (
-            <p className="mt-4 text-sm font-medium text-amber-600">
-              Maximum available quantity reached.
-            </p>
-          )}
+          {isMax &&
+            stock > 0 && (
+              <p className="mt-4 text-sm font-medium text-amber-600">
+                Maximum available
+                quantity reached.
+              </p>
+            )}
         </div>
 
         <Card
@@ -209,7 +278,9 @@ export default function CartItem({
             </p>
 
             <p className="mt-2 text-2xl font-bold text-[#6D2E00]">
-              {formatCurrency(unitPrice)}
+              {formatCurrency(
+                unitPrice,
+              )}
             </p>
           </div>
 
@@ -224,7 +295,9 @@ export default function CartItem({
             </p>
 
             <p className="mt-2 text-4xl font-bold text-[#C89B3C]">
-              {formatCurrency(subtotal)}
+              {formatCurrency(
+                subtotal,
+              )}
             </p>
           </div>
         </Card>
