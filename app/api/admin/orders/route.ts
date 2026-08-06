@@ -2,63 +2,218 @@ import { NextResponse } from "next/server";
 
 import prisma from "@/lib/prisma";
 
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+  };
+}
+
 export async function GET() {
   try {
-    const orders = await prisma.order.findMany({
-      select: {
-        id: true,
-        customerName: true,
-        phone: true,
-        email: true,
-        totalAmount: true,
-        status: true,
-        paymentStatus: true,
-        createdAt: true,
-        updatedAt: true,
-        items: {
-          select: {
-            id: true,
-            productId: true,
-            quantity: true,
-            price: true,
-            createdAt: true,
-            product: {
-              select: {
-                id: true,
-                name: true,
-                slug: true,
-                image: true,
+    const orders =
+      await prisma.order.findMany({
+        select: {
+          id: true,
+
+          customerName: true,
+          phone: true,
+          email: true,
+
+          totalAmount: true,
+
+          status: true,
+          paymentStatus: true,
+
+          createdAt: true,
+          updatedAt: true,
+
+          items: {
+            select: {
+              id: true,
+
+              productId: true,
+              variantId: true,
+
+              quantity: true,
+              price: true,
+
+              productName: true,
+              productSlug: true,
+              productImage: true,
+
+              variantLabel: true,
+              variantSku: true,
+              variantWeightGrams: true,
+              variantShippingWeightGrams:
+                true,
+
+              createdAt: true,
+
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  image: true,
+                },
+              },
+
+              variant: {
+                select: {
+                  id: true,
+                  label: true,
+                  sku: true,
+                  weightGrams: true,
+                  shippingWeightGrams:
+                    true,
+                },
               },
             },
-          },
-          orderBy: {
-            createdAt: "asc",
+
+            orderBy: {
+              createdAt: "asc",
+            },
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
     return NextResponse.json(
       orders.map((order) => ({
-        ...order,
-        totalAmount: Number(order.totalAmount),
-        createdAt: order.createdAt.toISOString(),
-        updatedAt: order.updatedAt.toISOString(),
-        items: order.items.map((item) => ({
-          ...item,
-          price: Number(item.price),
-          createdAt: item.createdAt.toISOString(),
-        })),
+        id: order.id,
+
+        customerName:
+          order.customerName,
+
+        phone: order.phone,
+        email: order.email,
+
+        totalAmount:
+          Number(order.totalAmount),
+
+        status: order.status,
+
+        paymentStatus:
+          order.paymentStatus,
+
+        createdAt:
+          order.createdAt.toISOString(),
+
+        updatedAt:
+          order.updatedAt.toISOString(),
+
+        items: order.items.map(
+          (item) => {
+            const productName =
+              item.productName?.trim() ||
+              item.product.name;
+
+            const productSlug =
+              item.productSlug?.trim() ||
+              item.product.slug;
+
+            const productImage =
+              item.productImage ??
+              item.product.image;
+
+            const variantLabel =
+              item.variantLabel?.trim() ||
+              item.variant?.label ||
+              null;
+
+            const variantSku =
+              item.variantSku?.trim() ||
+              item.variant?.sku ||
+              null;
+
+            const variantWeightGrams =
+              item.variantWeightGrams ??
+              item.variant?.weightGrams ??
+              null;
+
+            const variantShippingWeightGrams =
+              item
+                .variantShippingWeightGrams ??
+              item.variant
+                ?.shippingWeightGrams ??
+              null;
+
+            return {
+              id: item.id,
+
+              productId:
+                item.productId,
+
+              variantId:
+                item.variantId,
+
+              quantity:
+                item.quantity,
+
+              price:
+                Number(item.price),
+
+              productName,
+              productSlug,
+              productImage,
+
+              variantLabel,
+              variantSku,
+              variantWeightGrams,
+
+              variantShippingWeightGrams,
+
+              createdAt:
+                item.createdAt.toISOString(),
+
+              /*
+               * Keep this nested shape for backward
+               * compatibility with the current admin UI.
+               */
+              product: {
+                id:
+                  item.product.id,
+
+                name:
+                  productName,
+
+                slug:
+                  productSlug,
+
+                image:
+                  productImage,
+              },
+
+              variant:
+                item.variantId
+                  ? {
+                      id:
+                        item.variantId,
+
+                      label:
+                        variantLabel,
+
+                      sku:
+                        variantSku,
+
+                      weightGrams:
+                        variantWeightGrams,
+
+                      shippingWeightGrams:
+                        variantShippingWeightGrams,
+                    }
+                  : null,
+            };
+          },
+        ),
       })),
       {
         status: 200,
-        headers: {
-          "Cache-Control":
-            "private, no-store, max-age=0",
-        },
+        headers: noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -69,10 +224,12 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error: "Failed to load orders.",
+        error:
+          "Failed to load orders.",
       },
       {
         status: 500,
+        headers: noStoreHeaders(),
       },
     );
   }

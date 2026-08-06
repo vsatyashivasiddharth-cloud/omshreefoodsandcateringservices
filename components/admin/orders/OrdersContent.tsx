@@ -42,11 +42,32 @@ interface Product {
   name: string;
 }
 
+interface OrderVariant {
+  id: string;
+  label: string | null;
+  sku: string | null;
+  weightGrams: number | null;
+  shippingWeightGrams: number | null;
+}
+
 interface OrderItem {
   id: string;
+  productId?: string;
+  variantId?: string | null;
   quantity: number;
   price: number;
+
+  productName?: string | null;
+  productSlug?: string | null;
+  productImage?: string | null;
+
+  variantLabel?: string | null;
+  variantSku?: string | null;
+  variantWeightGrams?: number | null;
+  variantShippingWeightGrams?: number | null;
+
   product: Product;
+  variant?: OrderVariant | null;
 }
 
 interface Order {
@@ -141,6 +162,27 @@ function isProduct(
   );
 }
 
+function isOrderVariant(
+  value: unknown,
+): value is OrderVariant {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    (typeof value.label === "string" ||
+      value.label === null) &&
+    (typeof value.sku === "string" ||
+      value.sku === null) &&
+    (typeof value.weightGrams === "number" ||
+      value.weightGrams === null) &&
+    (typeof value.shippingWeightGrams ===
+      "number" ||
+      value.shippingWeightGrams === null)
+  );
+}
+
 function isOrderItem(
   value: unknown,
 ): value is OrderItem {
@@ -153,11 +195,43 @@ function isOrderItem(
 
   return (
     typeof value.id === "string" &&
+    (typeof value.productId === "string" ||
+      value.productId === undefined) &&
+    (typeof value.variantId === "string" ||
+      value.variantId === null ||
+      value.variantId === undefined) &&
     Number.isInteger(quantity) &&
     quantity > 0 &&
     Number.isFinite(price) &&
     price >= 0 &&
-    isProduct(value.product)
+    (typeof value.productName === "string" ||
+      value.productName === null ||
+      value.productName === undefined) &&
+    (typeof value.productSlug === "string" ||
+      value.productSlug === null ||
+      value.productSlug === undefined) &&
+    (typeof value.productImage === "string" ||
+      value.productImage === null ||
+      value.productImage === undefined) &&
+    (typeof value.variantLabel === "string" ||
+      value.variantLabel === null ||
+      value.variantLabel === undefined) &&
+    (typeof value.variantSku === "string" ||
+      value.variantSku === null ||
+      value.variantSku === undefined) &&
+    (typeof value.variantWeightGrams ===
+      "number" ||
+      value.variantWeightGrams === null ||
+      value.variantWeightGrams === undefined) &&
+    (typeof value.variantShippingWeightGrams ===
+      "number" ||
+      value.variantShippingWeightGrams === null ||
+      value.variantShippingWeightGrams ===
+        undefined) &&
+    isProduct(value.product) &&
+    (value.variant === null ||
+      value.variant === undefined ||
+      isOrderVariant(value.variant))
   );
 }
 
@@ -879,18 +953,28 @@ export default function OrdersContent() {
                               >
                                 <div className="min-w-0">
                                   <p className="truncate font-semibold text-[#6D2E00]">
-                                    {
-                                      item
-                                        .product
-                                        .name
-                                    }
+                                    {item.productName ||
+                                      item.product.name}
                                   </p>
+
+                                  {item.variantLabel && (
+                                    <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
+                                      {item.variantLabel}
+                                      {item.variantSku
+                                        ? ` • SKU: ${item.variantSku}`
+                                        : ""}
+                                    </p>
+                                  )}
 
                                   <p className="mt-1 text-sm text-gray-500">
                                     Quantity:{" "}
-                                    {
-                                      item.quantity
-                                    }
+                                    {item.quantity}
+                                    {item.variantWeightGrams !==
+                                      null &&
+                                    item.variantWeightGrams !==
+                                      undefined
+                                      ? ` • ${item.variantWeightGrams} g`
+                                      : ""}
                                   </p>
                                 </div>
 

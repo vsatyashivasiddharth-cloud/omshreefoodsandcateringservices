@@ -101,9 +101,16 @@ export async function GET(
           pincode: true,
 
           subtotalAmount: true,
-          shippingEstimatedAmount: true,
-          shippingChargedAmount: true,
-          shippingDiscountAmount: true,
+
+          shippingEstimatedAmount:
+            true,
+
+          shippingChargedAmount:
+            true,
+
+          shippingDiscountAmount:
+            true,
+
           totalAmount: true,
 
           status: true,
@@ -130,7 +137,10 @@ export async function GET(
           shippingQuotedAt: true,
           pickupScheduledAt: true,
           shippedAt: true,
-          estimatedDeliveryAt: true,
+
+          estimatedDeliveryAt:
+            true,
+
           deliveredAt: true,
 
           createdAt: true,
@@ -151,9 +161,26 @@ export async function GET(
 
             select: {
               id: true,
+
               productId: true,
+              variantId: true,
+
               quantity: true,
               price: true,
+
+              productName: true,
+              productSlug: true,
+              productImage: true,
+
+              variantLabel: true,
+              variantSku: true,
+
+              variantWeightGrams:
+                true,
+
+              variantShippingWeightGrams:
+                true,
+
               createdAt: true,
 
               product: {
@@ -163,6 +190,19 @@ export async function GET(
                   slug: true,
                   image: true,
                   price: true,
+                },
+              },
+
+              variant: {
+                select: {
+                  id: true,
+                  label: true,
+                  sku: true,
+
+                  weightGrams: true,
+
+                  shippingWeightGrams:
+                    true,
                 },
               },
             },
@@ -199,17 +239,20 @@ export async function GET(
 
         shippingEstimatedAmount:
           serializeDecimal(
-            order.shippingEstimatedAmount,
+            order
+              .shippingEstimatedAmount,
           ) ?? 0,
 
         shippingChargedAmount:
           serializeDecimal(
-            order.shippingChargedAmount,
+            order
+              .shippingChargedAmount,
           ) ?? 0,
 
         shippingDiscountAmount:
           serializeDecimal(
-            order.shippingDiscountAmount,
+            order
+              .shippingDiscountAmount,
           ) ?? 0,
 
         totalAmount:
@@ -258,7 +301,8 @@ export async function GET(
             order.packageHeightCm,
           ),
 
-        package: order.package,
+        package:
+          order.package,
 
         delhiveryWaybill:
           order.delhiveryWaybill,
@@ -304,41 +348,117 @@ export async function GET(
           order.updatedAt.toISOString(),
 
         items: order.items.map(
-          (item) => ({
-            id: item.id,
+          (item) => {
+            const productName =
+              item.productName?.trim() ||
+              item.product.name;
 
-            productId:
-              item.productId,
+            const productSlug =
+              item.productSlug?.trim() ||
+              item.product.slug;
 
-            quantity:
-              item.quantity,
+            const productImage =
+              item.productImage ??
+              item.product.image;
 
-            price:
-              serializeDecimal(
-                item.price,
-              ) ?? 0,
+            const variantLabel =
+              item.variantLabel?.trim() ||
+              item.variant?.label ||
+              null;
 
-            createdAt:
-              item.createdAt.toISOString(),
+            const variantSku =
+              item.variantSku?.trim() ||
+              item.variant?.sku ||
+              null;
 
-            product: {
-              id: item.product.id,
+            const variantWeightGrams =
+              item.variantWeightGrams ??
+              item.variant?.weightGrams ??
+              null;
 
-              name:
-                item.product.name,
+            const variantShippingWeightGrams =
+              item
+                .variantShippingWeightGrams ??
+              item.variant
+                ?.shippingWeightGrams ??
+              null;
 
-              slug:
-                item.product.slug,
+            return {
+              id: item.id,
 
-              image:
-                item.product.image,
+              productId:
+                item.productId,
+
+              variantId:
+                item.variantId,
+
+              quantity:
+                item.quantity,
 
               price:
                 serializeDecimal(
-                  item.product.price,
+                  item.price,
                 ) ?? 0,
-            },
-          }),
+
+              productName,
+              productSlug,
+              productImage,
+
+              variantLabel,
+              variantSku,
+
+              variantWeightGrams,
+
+              variantShippingWeightGrams,
+
+              createdAt:
+                item.createdAt.toISOString(),
+
+              product: {
+                id:
+                  item.product.id,
+
+                name:
+                  productName,
+
+                slug:
+                  productSlug,
+
+                image:
+                  productImage,
+
+                /*
+                 * Current live product price is
+                 * supplied only for compatibility.
+                 * Order displays must use item.price.
+                 */
+                price:
+                  serializeDecimal(
+                    item.product.price,
+                  ) ?? 0,
+              },
+
+              variant:
+                item.variantId
+                  ? {
+                      id:
+                        item.variantId,
+
+                      label:
+                        variantLabel,
+
+                      sku:
+                        variantSku,
+
+                      weightGrams:
+                        variantWeightGrams,
+
+                      shippingWeightGrams:
+                        variantShippingWeightGrams,
+                    }
+                  : null,
+            };
+          },
         ),
       },
       {

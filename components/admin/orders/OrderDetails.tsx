@@ -51,13 +51,34 @@ interface OrderProduct {
   price?: number;
 }
 
+interface OrderVariant {
+  id: string;
+  label: string | null;
+  sku: string | null;
+  weightGrams: number | null;
+  shippingWeightGrams: number | null;
+}
+
 interface OrderItem {
   id: string;
   productId: string;
+  variantId?: string | null;
+
   quantity: number;
   price: number;
   createdAt?: string;
+
+  productName?: string | null;
+  productSlug?: string | null;
+  productImage?: string | null;
+
+  variantLabel?: string | null;
+  variantSku?: string | null;
+  variantWeightGrams?: number | null;
+  variantShippingWeightGrams?: number | null;
+
   product: OrderProduct;
+  variant?: OrderVariant | null;
 }
 
 interface Order {
@@ -254,6 +275,27 @@ function isOrderProduct(
   );
 }
 
+function isOrderVariant(
+  value: unknown,
+): value is OrderVariant {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    (typeof value.label === "string" ||
+      value.label === null) &&
+    (typeof value.sku === "string" ||
+      value.sku === null) &&
+    (typeof value.weightGrams === "number" ||
+      value.weightGrams === null) &&
+    (typeof value.shippingWeightGrams ===
+      "number" ||
+      value.shippingWeightGrams === null)
+  );
+}
+
 function isOrderItem(
   value: unknown,
 ): value is OrderItem {
@@ -267,12 +309,31 @@ function isOrderItem(
   return (
     typeof value.id === "string" &&
     typeof value.productId === "string" &&
+    (typeof value.variantId === "string" ||
+      value.variantId === null ||
+      value.variantId === undefined) &&
     Number.isInteger(quantity) &&
     quantity > 0 &&
     Number.isFinite(price) &&
     price >= 0 &&
     isNullableString(value.createdAt) &&
-    isOrderProduct(value.product)
+    isNullableString(value.productName) &&
+    isNullableString(value.productSlug) &&
+    isNullableString(value.productImage) &&
+    isNullableString(value.variantLabel) &&
+    isNullableString(value.variantSku) &&
+    (value.variantWeightGrams === null ||
+      value.variantWeightGrams === undefined ||
+      Number.isFinite(Number(value.variantWeightGrams))) &&
+    (value.variantShippingWeightGrams === null ||
+      value.variantShippingWeightGrams === undefined ||
+      Number.isFinite(
+        Number(value.variantShippingWeightGrams),
+      )) &&
+    isOrderProduct(value.product) &&
+    (value.variant === null ||
+      value.variant === undefined ||
+      isOrderVariant(value.variant))
   );
 }
 
@@ -1577,8 +1638,33 @@ export default function OrderDetails({
                         key={item.id}
                         className="border-t border-[#F3DFC2] transition-colors hover:bg-[#FFFDF8]"
                       >
-                        <td className="px-6 py-5 font-semibold text-[#6D2E00]">
-                          {item.product.name}
+                        <td className="px-6 py-5">
+                          <p className="font-semibold text-[#6D2E00]">
+                            {item.productName ||
+                              item.product.name}
+                          </p>
+
+                          {item.variantLabel && (
+                            <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
+                              {item.variantLabel}
+                              {item.variantSku
+                                ? ` • SKU: ${item.variantSku}`
+                                : ""}
+                            </p>
+                          )}
+
+                          {item.variantWeightGrams !==
+                            null &&
+                            item.variantWeightGrams !==
+                              undefined && (
+                              <p className="mt-1 text-xs text-gray-500">
+                                Net weight:{" "}
+                                {
+                                  item.variantWeightGrams
+                                }{" "}
+                                g
+                              </p>
+                            )}
                         </td>
 
                         <td className="px-6 py-5 text-center text-gray-600">
@@ -1612,8 +1698,28 @@ export default function OrderDetails({
                     className="shadow-none"
                   >
                     <h3 className="font-bold text-[#6D2E00]">
-                      {item.product.name}
+                      {item.productName ||
+                        item.product.name}
                     </h3>
+
+                    {item.variantLabel && (
+                      <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
+                        {item.variantLabel}
+                        {item.variantSku
+                          ? ` • SKU: ${item.variantSku}`
+                          : ""}
+                      </p>
+                    )}
+
+                    {item.variantWeightGrams !==
+                      null &&
+                      item.variantWeightGrams !==
+                        undefined && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Net weight:{" "}
+                          {item.variantWeightGrams} g
+                        </p>
+                      )}
 
                     <div className="mt-4 flex items-end justify-between gap-4">
                       <div className="text-sm leading-7 text-gray-500">
