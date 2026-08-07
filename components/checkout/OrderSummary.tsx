@@ -1,11 +1,16 @@
 "use client";
 
-import type { ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
   BadgeCheck,
+  ImageOff,
   LoaderCircle,
   Package,
   ShieldCheck,
@@ -200,18 +205,10 @@ export default function OrderSummary({
                 className="shadow-none"
               >
                 <div className="flex items-start gap-4">
-                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#FFF4DE]">
-                    <Image
-                      src={
-                        item.image ||
-                        "/images/no-image.jpg"
-                      }
-                      alt={item.name}
-                      fill
-                      sizes="64px"
-                      className="object-cover"
-                    />
-                  </div>
+                  <CheckoutItemImage
+                    src={item.image}
+                    alt={item.name}
+                  />
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
@@ -268,21 +265,23 @@ export default function OrderSummary({
                       </span>
 
                       {item.variantWeightGrams !==
-                        null && (
-                        <>
-                          <span aria-hidden="true">
-                            •
-                          </span>
+                        null &&
+                        item.variantWeightGrams !==
+                          undefined && (
+                          <>
+                            <span aria-hidden="true">
+                              •
+                            </span>
 
-                          <span>
-                            Net weight:{" "}
-                            {
-                              item.variantWeightGrams
-                            }{" "}
-                            g
-                          </span>
-                        </>
-                      )}
+                            <span>
+                              Net weight:{" "}
+                              {
+                                item.variantWeightGrams
+                              }{" "}
+                              g
+                            </span>
+                          </>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -528,6 +527,64 @@ export default function OrderSummary({
         </Card>
       </Card>
     </aside>
+  );
+}
+
+interface CheckoutItemImageProps {
+  src: string | null | undefined;
+  alt: string;
+}
+
+function CheckoutItemImage({
+  src,
+  alt,
+}: CheckoutItemImageProps) {
+  const normalizedSrc =
+    src?.trim() ?? "";
+
+  const [
+    imageFailed,
+    setImageFailed,
+  ] = useState(
+    !normalizedSrc,
+  );
+
+  useEffect(() => {
+    setImageFailed(
+      !normalizedSrc,
+    );
+  }, [normalizedSrc]);
+
+  const showPlaceholder =
+    !normalizedSrc ||
+    imageFailed;
+
+  return (
+    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#FFF8EA] via-[#FFF4DE] to-[#FFE8BF]">
+      {!showPlaceholder ? (
+        <Image
+          src={normalizedSrc}
+          alt={alt}
+          fill
+          sizes="64px"
+          className="object-cover"
+          onError={() => {
+            setImageFailed(true);
+          }}
+        />
+      ) : (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          aria-label={`${alt} image unavailable`}
+        >
+          <ImageOff
+            size={22}
+            className="text-[#C89B3C]"
+            aria-hidden="true"
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
