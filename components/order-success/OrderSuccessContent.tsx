@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
+  ImageOff,
   MapPin,
   Package,
   PackageCheck,
@@ -489,6 +490,64 @@ function getShipmentMessage(
   }
 }
 
+interface OrderItemImageProps {
+  src: string | null | undefined;
+  alt: string;
+}
+
+function OrderItemImage({
+  src,
+  alt,
+}: OrderItemImageProps) {
+  const normalizedSrc =
+    src?.trim() ?? "";
+
+  const [
+    imageFailed,
+    setImageFailed,
+  ] = useState(!normalizedSrc);
+
+  useEffect(() => {
+    setImageFailed(
+      !normalizedSrc,
+    );
+  }, [normalizedSrc]);
+
+  const showPlaceholder =
+    !normalizedSrc ||
+    imageFailed;
+
+  if (showPlaceholder) {
+    return (
+      <div
+        className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#FFF8EA] via-[#FFF4DE] to-[#FFE8BF]"
+        aria-label={`${alt} image unavailable`}
+      >
+        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#C89B3C]/20 bg-white/75 shadow-sm">
+          <ImageOff
+            size={20}
+            className="text-[#C89B3C]"
+            aria-hidden="true"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Image
+      src={normalizedSrc}
+      alt={alt}
+      fill
+      sizes="80px"
+      className="object-cover"
+      onError={() => {
+        setImageFailed(true);
+      }}
+    />
+  );
+}
+
 export default function OrderSuccessContent() {
   const searchParams =
     useSearchParams();
@@ -923,19 +982,15 @@ export default function OrderSuccessContent() {
                           aria-label={`View ${item.product.name}`}
                           className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-[#FFF4DE] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
                         >
-                          <Image
+                          <OrderItemImage
                             src={
                               item.product
-                                .image ||
-                              "/images/no-image.jpg"
+                                .image
                             }
                             alt={
                               item.product
                                 .name
                             }
-                            fill
-                            sizes="80px"
-                            className="object-cover"
                           />
                         </Link>
 
