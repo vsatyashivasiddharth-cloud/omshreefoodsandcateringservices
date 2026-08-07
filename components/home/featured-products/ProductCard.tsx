@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -10,6 +11,7 @@ import {
   ArrowRight,
   Check,
   Eye,
+  ImageOff,
   ShoppingCart,
   X,
 } from "lucide-react";
@@ -19,9 +21,12 @@ import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import { useCart } from "@/context/CartContext";
 import type { Product } from "@/types/cart";
-import type { ProductVariant } from "@/types/product";
+import type {
+  ProductVariant,
+} from "@/types/product";
 
-interface FeaturedProduct extends Product {
+interface FeaturedProduct
+  extends Product {
   variants?: ProductVariant[];
 }
 
@@ -46,7 +51,8 @@ function formatCurrency(
 function normalizeInteger(
   value: unknown,
 ) {
-  const number = Number(value);
+  const number =
+    Number(value);
 
   if (!Number.isFinite(number)) {
     return 0;
@@ -61,7 +67,8 @@ function normalizeInteger(
 function normalizePrice(
   value: unknown,
 ) {
-  const number = Number(value);
+  const number =
+    Number(value);
 
   if (
     !Number.isFinite(number) ||
@@ -78,7 +85,9 @@ function getActiveVariants(
     | ProductVariant[]
     | undefined,
 ) {
-  return (variants ?? [])
+  return (
+    variants ?? []
+  )
     .filter(
       (variant) =>
         variant.isActive,
@@ -109,17 +118,21 @@ function getPriceLabel(
   variants: ProductVariant[],
   fallbackPrice: number,
 ) {
-  const prices = variants
-    .map((variant) =>
-      normalizePrice(
-        variant.price,
-      ),
-    )
-    .filter(
-      (price) =>
-        Number.isFinite(price) &&
-        price >= 0,
-    );
+  const prices =
+    variants
+      .map(
+        (variant) =>
+          normalizePrice(
+            variant.price,
+          ),
+      )
+      .filter(
+        (price) =>
+          Number.isFinite(
+            price,
+          ) &&
+          price >= 0,
+      );
 
   if (prices.length === 0) {
     return formatCurrency(
@@ -149,8 +162,9 @@ function getPriceLabel(
 export default function ProductCard({
   product,
 }: ProductCardProps) {
-  const { addToCart } =
-    useCart();
+  const {
+    addToCart,
+  } = useCart();
 
   const [
     pickerOpen,
@@ -159,6 +173,23 @@ export default function ProductCard({
 
   const productHref =
     `/shop/${product.slug}`;
+
+  const rawImage =
+    product.image?.trim() ?? "";
+
+  const [
+    imageFailed,
+    setImageFailed,
+  ] = useState(!rawImage);
+
+  useEffect(() => {
+    setImageFailed(
+      !rawImage,
+    );
+  }, [rawImage]);
+
+  const showImagePlaceholder =
+    !rawImage || imageFailed;
 
   const activeVariants =
     useMemo(
@@ -282,18 +313,27 @@ export default function ProductCard({
 
     addToCart(
       {
-        id: product.id,
-        name: product.name,
-        slug: product.slug,
+        id:
+          product.id,
+
+        name:
+          product.name,
+
+        slug:
+          product.slug,
 
         description:
           product.description,
 
         price,
 
+        /*
+         * Keep missing images empty.
+         * CartItem handles its own
+         * image placeholder.
+         */
         image:
-          product.image ||
-          "/images/no-image.jpg",
+          rawImage,
 
         stock,
 
@@ -372,26 +412,54 @@ export default function ProductCard({
       hover
       className="group flex h-full flex-col overflow-hidden bg-white"
     >
+      {/* Product image */}
+
       <div className="relative h-60 overflow-hidden bg-[#FFF8EE] sm:h-64">
         <Link
           href={productHref}
+          aria-label={`View ${product.name}`}
           className="absolute inset-0 focus:outline-none focus:ring-4 focus:ring-inset focus:ring-[#C89B3C]/25"
         >
-          <Image
-            src={
-              product.image ||
-              "/images/no-image.jpg"
-            }
-            alt={product.name}
-            fill
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-            className="object-cover transition-transform duration-700 group-hover:scale-110"
-          />
+          {!showImagePlaceholder ? (
+            <>
+              <Image
+                src={rawImage}
+                alt={product.name}
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                className="object-cover transition-transform duration-700 group-hover:scale-110"
+                onError={() => {
+                  setImageFailed(
+                    true,
+                  );
+                }}
+              />
 
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent"
-          />
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent"
+              />
+            </>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#FFF8EA] via-[#FFF4DE] to-[#FFE8BF] px-6 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[#C89B3C]/20 bg-white/75 shadow-sm backdrop-blur-sm">
+                <ImageOff
+                  size={29}
+                  className="text-[#C89B3C]"
+                  aria-hidden="true"
+                />
+              </div>
+
+              <p className="mt-4 font-bold text-[#6D2E00]">
+                Image unavailable
+              </p>
+
+              <p className="mt-1 max-w-[190px] text-sm leading-5 text-[#6D2E00]/60">
+                A product image has
+                not been added yet.
+              </p>
+            </div>
+          )}
 
           <Badge
             variant="secondary"
@@ -411,6 +479,8 @@ export default function ProductCard({
             </div>
           )}
         </Link>
+
+        {/* Variant picker */}
 
         {pickerOpen && (
           <div className="absolute inset-0 z-20 flex flex-col bg-white/95 p-3 backdrop-blur-md">
@@ -531,6 +601,8 @@ export default function ProductCard({
         )}
       </div>
 
+      {/* Product details */}
+
       <div className="flex flex-1 flex-col p-5">
         <Link
           href={productHref}
@@ -621,6 +693,7 @@ export default function ProductCard({
 
           <ArrowRight
             size={15}
+            className="transition-transform duration-300 group-hover:translate-x-1"
             aria-hidden="true"
           />
         </Link>

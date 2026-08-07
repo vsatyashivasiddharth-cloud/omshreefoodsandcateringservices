@@ -13,7 +13,8 @@ import prisma from "@/lib/prisma";
 
 import ProductCard from "./ProductCard";
 
-export const dynamic = "force-dynamic";
+export const dynamic =
+  "force-dynamic";
 
 export default async function FeaturedProducts() {
   const featuredProducts =
@@ -21,6 +22,7 @@ export default async function FeaturedProducts() {
       where: {
         featured: true,
       },
+
       include: {
         category: {
           select: {
@@ -31,17 +33,19 @@ export default async function FeaturedProducts() {
           },
         },
       },
+
       orderBy: {
         createdAt: "desc",
       },
+
       take: 8,
     });
 
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-[#FFFDF8] via-[#FFF8F0] to-[#FFF4DE] py-20 sm:py-24">
+    <section className="relative overflow-hidden bg-gradient-to-b from-[#FFFDF8] via-white to-[#FFF8EE] py-20 sm:py-24">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -left-32 top-0 h-80 w-80 rounded-full bg-[#FFE7B8]/40 blur-3xl"
+        className="pointer-events-none absolute -left-32 top-0 h-80 w-80 rounded-full bg-[#FFF4DE]/70 blur-3xl"
       />
 
       <div
@@ -70,7 +74,8 @@ export default async function FeaturedProducts() {
           className="mx-auto max-w-3xl"
         />
 
-        {featuredProducts.length === 0 ? (
+        {featuredProducts.length ===
+        0 ? (
           <Card
             variant="glass"
             padding="lg"
@@ -84,13 +89,16 @@ export default async function FeaturedProducts() {
             </div>
 
             <h2 className="mt-5 text-2xl font-bold text-[#6D2E00] sm:text-3xl">
-              Featured Products Coming Soon
+              Featured Products Coming
+              Soon
             </h2>
 
             <p className="mx-auto mt-4 max-w-xl leading-7 text-gray-600">
-              No featured products are available at the
-              moment. Browse the full shop to explore our
-              homemade collection.
+              No featured products are
+              available at the moment.
+              Browse the full shop to
+              explore our homemade
+              collection.
             </p>
 
             <Link
@@ -108,43 +116,87 @@ export default async function FeaturedProducts() {
         ) : (
           <>
             <div className="mt-14 grid gap-6 sm:mt-16 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8 xl:grid-cols-4">
-              {featuredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={{
-                    id: product.id,
-                    name: product.name,
-                    slug: product.slug,
-                    description:
-                      product.description,
-                    price: Number(product.price),
-                    image:
-                      product.image ||
-                      "/images/no-image.jpg",
-                    stock: Math.max(
-                      0,
-                      Math.floor(product.stock),
-                    ),
-                    featured: product.featured,
-                    shippingWeightGrams: Math.max(
-                      0,
-                      Math.floor(
-                       product.shippingWeightGrams,
-                      ),
-                    ),
-                    categoryId:
-                      product.categoryId,
-                    category: {
-                      id: product.category.id,
-                      name: product.category.name,
+              {featuredProducts.map(
+                (product) => (
+                  <ProductCard
+                    key={
+                      product.id
+                    }
+                    product={{
+                      id:
+                        product.id,
+
+                      name:
+                        product.name,
+
                       slug:
-                        product.category.slug,
+                        product.slug,
+
+                      description:
+                        product.description,
+
+                      price:
+                        Number(
+                          product.price,
+                        ),
+
+                      /*
+                       * Keep missing images empty.
+                       * ProductCard handles the
+                       * placeholder itself.
+                       */
                       image:
-                        product.category.image,
-                    },
-                  }}
-                />
-              ))}
+                        product.image?.trim() ??
+                        "",
+
+                      stock:
+                        Math.max(
+                          0,
+                          Math.floor(
+                            product.stock,
+                          ),
+                        ),
+
+                      featured:
+                        product.featured,
+
+                      shippingWeightGrams:
+                        Math.max(
+                          0,
+                          Math.floor(
+                            product
+                              .shippingWeightGrams,
+                          ),
+                        ),
+
+                      categoryId:
+                        product.categoryId,
+
+                      category: {
+                        id:
+                          product
+                            .category
+                            .id,
+
+                        name:
+                          product
+                            .category
+                            .name,
+
+                        slug:
+                          product
+                            .category
+                            .slug,
+
+                        image:
+                          product
+                            .category
+                            .image,
+                      },
+                    }}
+                  />
+                ),
+              )}
             </div>
 
             <div className="mt-14 flex justify-center sm:mt-16">
