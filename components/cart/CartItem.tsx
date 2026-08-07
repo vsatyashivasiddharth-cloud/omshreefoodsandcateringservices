@@ -1,8 +1,13 @@
 "use client";
 
+import {
+  useEffect,
+  useState,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
+  ImageOff,
   Minus,
   Plus,
   Scale,
@@ -33,6 +38,21 @@ export default function CartItem({
     removeFromCart,
   } = useCart();
 
+  const rawImage =
+    item.image?.trim() ?? "";
+
+  const [
+    imageFailed,
+    setImageFailed,
+  ] = useState(!rawImage);
+
+  useEffect(() => {
+    setImageFailed(!rawImage);
+  }, [rawImage]);
+
+  const showImagePlaceholder =
+    !rawImage || imageFailed;
+
   const unitPrice =
     Number.isFinite(
       Number(item.price),
@@ -54,10 +74,12 @@ export default function CartItem({
     1,
     Math.min(
       Math.floor(
-        Number(item.quantity) ||
-          1,
+        Number(item.quantity) || 1,
       ),
-      Math.max(1, stock),
+      Math.max(
+        1,
+        stock,
+      ),
     ),
   );
 
@@ -73,30 +95,48 @@ export default function CartItem({
   const productHref =
     `/shop/${item.slug}`;
 
-  const image =
-    item.image ||
-    "/images/no-image.jpg";
-
   return (
     <Card
-      padding="none"
-      hover
-      className="group overflow-hidden"
+      padding="md"
+      className="overflow-hidden bg-white"
     >
-      <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[150px_minmax(0,1fr)_190px] lg:gap-8">
+      <div className="grid gap-6 lg:grid-cols-[160px_minmax(0,1fr)_190px] lg:items-stretch">
+        {/* Product image */}
+
         <Link
           href={productHref}
           aria-label={`View ${item.name}`}
-          className="relative h-44 w-full overflow-hidden rounded-3xl bg-[#FFF8EE] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 sm:h-40 sm:w-40"
+          className="relative h-44 w-full overflow-hidden rounded-3xl bg-gradient-to-br from-[#FFF8EA] via-[#FFF4DE] to-[#FFE8BF] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 sm:h-40 sm:w-40"
         >
-          <Image
-            src={image}
-            alt={item.name}
-            fill
-            sizes="(max-width: 640px) 100vw, 160px"
-            className="object-cover transition-transform duration-500 group-hover:scale-110"
-          />
+          {!showImagePlaceholder ? (
+            <Image
+              src={rawImage}
+              alt={item.name}
+              fill
+              sizes="160px"
+              className="object-cover transition-transform duration-500 hover:scale-105"
+              onError={() => {
+                setImageFailed(true);
+              }}
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#C89B3C]/20 bg-white/75 shadow-sm">
+                <ImageOff
+                  size={25}
+                  className="text-[#C89B3C]"
+                  aria-hidden="true"
+                />
+              </div>
+
+              <p className="mt-3 text-sm font-bold text-[#6D2E00]">
+                Image unavailable
+              </p>
+            </div>
+          )}
         </Link>
+
+        {/* Product information */}
 
         <div className="flex min-w-0 flex-col justify-between">
           <div>
@@ -170,19 +210,23 @@ export default function CartItem({
               </span>
 
               {item.variantWeightGrams !==
-                null && (
-                <span>
-                  Net weight:
-                  <strong className="ml-1 text-[#6D2E00]">
-                    {
-                      item.variantWeightGrams
-                    }{" "}
-                    g
-                  </strong>
-                </span>
-              )}
+                null &&
+                item.variantWeightGrams !==
+                  undefined && (
+                  <span>
+                    Net weight:
+                    <strong className="ml-1 text-[#6D2E00]">
+                      {
+                        item.variantWeightGrams
+                      }{" "}
+                      g
+                    </strong>
+                  </span>
+                )}
             </div>
           </div>
+
+          {/* Quantity controls */}
 
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <div className="inline-flex items-center overflow-hidden rounded-2xl border border-[#F3DFC2] bg-white">
@@ -226,7 +270,10 @@ export default function CartItem({
                 variant="ghost"
                 size="sm"
                 rounded="xl"
-                disabled={isMax}
+                disabled={
+                  isMax ||
+                  stock < 1
+                }
                 onClick={() =>
                   increaseQuantity(
                     item.lineId,
@@ -265,7 +312,16 @@ export default function CartItem({
                 quantity reached.
               </p>
             )}
+
+          {stock < 1 && (
+            <p className="mt-4 text-sm font-medium text-red-600">
+              This package size is
+              currently out of stock.
+            </p>
+          )}
         </div>
+
+        {/* Price summary */}
 
         <Card
           variant="filled"
