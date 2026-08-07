@@ -3,59 +3,112 @@ import {
   PaymentStatus,
   Prisma,
 } from "@prisma/client";
-import { NextResponse } from "next/server";
+import {
+  NextResponse,
+} from "next/server";
 
 import prisma from "@/lib/prisma";
 
 const REVENUE_MONTHS = 6;
+const LOW_STOCK_THRESHOLD = 5;
 
-function getMonthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
-    2,
-    "0",
-  )}`;
+function getMonthKey(
+  date: Date,
+) {
+  return `${date.getFullYear()}-${String(
+    date.getMonth() + 1,
+  ).padStart(2, "0")}`;
 }
 
-function getMonthLabel(date: Date) {
-  return date.toLocaleDateString("en-IN", {
-    month: "short",
-    year: "2-digit",
-  });
+function getMonthLabel(
+  date: Date,
+) {
+  return date.toLocaleDateString(
+    "en-IN",
+    {
+      month: "short",
+      year: "2-digit",
+    },
+  );
+}
+
+function normalizeNonNegativeInteger(
+  value: unknown,
+) {
+  const number =
+    Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.floor(number),
+  );
+}
+
+function normalizeNonNegativeNumber(
+  value: unknown,
+) {
+  const number =
+    Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    number,
+  );
 }
 
 export async function GET() {
   try {
-    const now = new Date();
+    const now =
+      new Date();
 
-    const revenueStartDate = new Date(
-      now.getFullYear(),
-      now.getMonth() - (REVENUE_MONTHS - 1),
-      1,
-    );
+    const revenueStartDate =
+      new Date(
+        now.getFullYear(),
+        now.getMonth() -
+          (REVENUE_MONTHS - 1),
+        1,
+      );
 
     /*
      * Revenue includes:
      * - successfully paid orders, or
      * - delivered orders
      *
-     * Cancelled and refunded orders are excluded.
+     * Cancelled and refunded orders
+     * are excluded.
      */
-    const revenueOrderFilter: Prisma.OrderWhereInput = {
-      status: {
-        not: OrderStatus.CANCELLED,
-      },
-      paymentStatus: {
-        not: PaymentStatus.REFUNDED,
-      },
-      OR: [
-        {
-          paymentStatus: PaymentStatus.SUCCESS,
+    const revenueOrderFilter:
+      Prisma.OrderWhereInput =
+      {
+        status: {
+          not:
+            OrderStatus.CANCELLED,
         },
-        {
-          status: OrderStatus.DELIVERED,
+
+        paymentStatus: {
+          not:
+            PaymentStatus.REFUNDED,
         },
-      ],
-    };
+
+        OR: [
+          {
+            paymentStatus:
+              PaymentStatus.SUCCESS,
+          },
+          {
+            status:
+              OrderStatus.DELIVERED,
+          },
+        ],
+      };
 
     const [
       totalOrders,
@@ -66,147 +119,452 @@ export async function GET() {
       revenueResult,
       revenueOrders,
       recentOrders,
-      lowStockProducts,
-    ] = await Promise.all([
-      prisma.order.count(),
+      lowStockProductRecords,
+    ] =
+      await Promise.all([
+        prisma.order.count(),
 
-      prisma.product.count(),
+        prisma.product.count(),
 
-      prisma.category.count(),
+        prisma.category.count(),
 
-      prisma.order.count({
-        where: {
-          status: OrderStatus.PENDING,
-        },
-      }),
-
-      prisma.order.count({
-        where: {
-          status: OrderStatus.DELIVERED,
-        },
-      }),
-
-      prisma.order.aggregate({
-        where: revenueOrderFilter,
-        _sum: {
-          totalAmount: true,
-        },
-      }),
-
-      prisma.order.findMany({
-        where: {
-          ...revenueOrderFilter,
-          createdAt: {
-            gte: revenueStartDate,
+        prisma.order.count({
+          where: {
+            status:
+              OrderStatus.PENDING,
           },
-        },
-        select: {
-          totalAmount: true,
-          createdAt: true,
-        },
-        orderBy: {
-          createdAt: "asc",
-        },
-      }),
+        }),
 
-      prisma.order.findMany({
-        orderBy: {
-          createdAt: "desc",
-        },
-        take: 5,
-        select: {
-          id: true,
-          customerName: true,
-          totalAmount: true,
-          status: true,
-          createdAt: true,
-        },
-      }),
-
-      prisma.product.findMany({
-        where: {
-          stock: {
-            lte: 5,
+        prisma.order.count({
+          where: {
+            status:
+              OrderStatus.DELIVERED,
           },
-        },
-        orderBy: {
-          stock: "asc",
-        },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          stock: true,
-          image: true,
-          price: true,
-        },
-      }),
-    ]);
+        }),
 
-    const revenueByMonth = new Map<string, number>();
+        prisma.order.aggregate({
+          where:
+            revenueOrderFilter,
 
-    for (const order of revenueOrders) {
-      const monthKey = getMonthKey(order.createdAt);
-      const currentRevenue = revenueByMonth.get(monthKey) ?? 0;
+          _sum: {
+            totalAmount: true,
+          },
+        }),
+
+        prisma.order.findMany({
+          where: {
+            ...revenueOrderFilter,
+
+            createdAt: {
+              gte:
+                revenueStartDate,
+            },
+          },
+
+          select: {
+            totalAmount: true,
+            createdAt: true,
+          },
+
+          orderBy: {
+            createdAt: "asc",
+          },
+        }),
+
+        prisma.order.findMany({
+          orderBy: {
+            createdAt: "desc",
+          },
+
+          take: 5,
+
+          select: {
+            id: true,
+            customerName: true,
+            totalAmount: true,
+            status: true,
+            createdAt: true,
+          },
+        }),
+
+        /*
+         * A product is considered
+         * low stock when ANY ACTIVE
+         * variant has 5 or fewer
+         * units remaining.
+         *
+         * Legacy products without
+         * active variants fall back
+         * to product.stock.
+         */
+        prisma.product.findMany({
+          where: {
+            OR: [
+              {
+                variants: {
+                  some: {
+                    isActive: true,
+
+                    stock: {
+                      lte:
+                        LOW_STOCK_THRESHOLD,
+                    },
+                  },
+                },
+              },
+
+              {
+                AND: [
+                  {
+                    variants: {
+                      none: {
+                        isActive:
+                          true,
+                      },
+                    },
+                  },
+                  {
+                    stock: {
+                      lte:
+                        LOW_STOCK_THRESHOLD,
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            stock: true,
+            image: true,
+            price: true,
+
+            variants: {
+              where: {
+                isActive: true,
+              },
+
+              orderBy: [
+                {
+                  stock: "asc",
+                },
+                {
+                  sortOrder:
+                    "asc",
+                },
+                {
+                  weightGrams:
+                    "asc",
+                },
+              ],
+
+              select: {
+                id: true,
+                label: true,
+                price: true,
+                stock: true,
+                weightGrams:
+                  true,
+                shippingWeightGrams:
+                  true,
+                isDefault: true,
+                sortOrder: true,
+              },
+            },
+          },
+        }),
+      ]);
+
+    /*
+     * Revenue chart
+     */
+    const revenueByMonth =
+      new Map<
+        string,
+        number
+      >();
+
+    for (
+      const order of
+      revenueOrders
+    ) {
+      const monthKey =
+        getMonthKey(
+          order.createdAt,
+        );
+
+      const currentRevenue =
+        revenueByMonth.get(
+          monthKey,
+        ) ?? 0;
 
       revenueByMonth.set(
         monthKey,
-        currentRevenue + Number(order.totalAmount),
+        currentRevenue +
+          Number(
+            order.totalAmount,
+          ),
       );
     }
 
-    const revenueChart = Array.from(
-      {
-        length: REVENUE_MONTHS,
-      },
-      (_, index) => {
-        const monthDate = new Date(
-          now.getFullYear(),
-          now.getMonth() - (REVENUE_MONTHS - 1) + index,
-          1,
+    const revenueChart =
+      Array.from(
+        {
+          length:
+            REVENUE_MONTHS,
+        },
+
+        (_, index) => {
+          const monthDate =
+            new Date(
+              now.getFullYear(),
+              now.getMonth() -
+                (REVENUE_MONTHS -
+                  1) +
+                index,
+              1,
+            );
+
+          const monthKey =
+            getMonthKey(
+              monthDate,
+            );
+
+          return {
+            label:
+              getMonthLabel(
+                monthDate,
+              ),
+
+            revenue:
+              revenueByMonth.get(
+                monthKey,
+              ) ?? 0,
+          };
+        },
+      );
+
+    /*
+     * Normalize recent orders
+     */
+    const normalizedRecentOrders =
+      recentOrders.map(
+        (order) => ({
+          ...order,
+
+          totalAmount:
+            Number(
+              order.totalAmount,
+            ),
+        }),
+      );
+
+    /*
+     * Normalize low-stock products.
+     *
+     * Keep the existing dashboard
+     * response fields:
+     * id, name, slug, stock,
+     * image and price.
+     *
+     * For products with variants,
+     * stock/price represent the
+     * active variant with the
+     * LOWEST stock.
+     *
+     * Extra variant fields are also
+     * returned so DashboardContent
+     * can show them later without
+     * another API change.
+     */
+    const normalizedLowStockProducts =
+      lowStockProductRecords
+        .map((product) => {
+          const activeVariants =
+            product.variants;
+
+          if (
+            activeVariants.length ===
+            0
+          ) {
+            return {
+              id:
+                product.id,
+
+              name:
+                product.name,
+
+              slug:
+                product.slug,
+
+              image:
+                product.image,
+
+              stock:
+                normalizeNonNegativeInteger(
+                  product.stock,
+                ),
+
+              price:
+                normalizeNonNegativeNumber(
+                  product.price,
+                ),
+
+              variantId:
+                null,
+
+              variantLabel:
+                null,
+
+              variantWeightGrams:
+                null,
+
+              shippingWeightGrams:
+                null,
+
+              activeVariantCount:
+                0,
+
+              lowStockVariantCount:
+                normalizeNonNegativeInteger(
+                  product.stock,
+                ) <=
+                LOW_STOCK_THRESHOLD
+                  ? 1
+                  : 0,
+            };
+          }
+
+          const lowStockVariants =
+            activeVariants.filter(
+              (variant) =>
+                normalizeNonNegativeInteger(
+                  variant.stock,
+                ) <=
+                LOW_STOCK_THRESHOLD,
+            );
+
+          /*
+           * Query ordering puts the
+           * lowest-stock active
+           * variant first.
+           */
+          const mostUrgentVariant =
+            lowStockVariants[0] ??
+            activeVariants[0];
+
+          return {
+            id:
+              product.id,
+
+            name:
+              product.name,
+
+            slug:
+              product.slug,
+
+            image:
+              product.image,
+
+            stock:
+              normalizeNonNegativeInteger(
+                mostUrgentVariant
+                  .stock,
+              ),
+
+            price:
+              normalizeNonNegativeNumber(
+                mostUrgentVariant
+                  .price,
+              ),
+
+            variantId:
+              mostUrgentVariant
+                .id,
+
+            variantLabel:
+              mostUrgentVariant
+                .label,
+
+            variantWeightGrams:
+              normalizeNonNegativeInteger(
+                mostUrgentVariant
+                  .weightGrams,
+              ),
+
+            shippingWeightGrams:
+              normalizeNonNegativeInteger(
+                mostUrgentVariant
+                  .shippingWeightGrams,
+              ),
+
+            activeVariantCount:
+              activeVariants.length,
+
+            lowStockVariantCount:
+              lowStockVariants.length,
+          };
+        })
+        .sort(
+          (first, second) =>
+            first.stock -
+            second.stock,
         );
-
-        const monthKey = getMonthKey(monthDate);
-
-        return {
-          label: getMonthLabel(monthDate),
-          revenue: revenueByMonth.get(monthKey) ?? 0,
-        };
-      },
-    );
-
-    const normalizedRecentOrders = recentOrders.map((order) => ({
-      ...order,
-      totalAmount: Number(order.totalAmount),
-    }));
-
-    const normalizedLowStockProducts = lowStockProducts.map(
-      (product) => ({
-        ...product,
-        price: Number(product.price),
-      }),
-    );
-
-    return NextResponse.json({
-      totalOrders,
-      totalProducts,
-      totalCategories,
-      pendingOrders,
-      deliveredOrders,
-      revenue: Number(revenueResult._sum.totalAmount ?? 0),
-      revenueChart,
-      recentOrders: normalizedRecentOrders,
-      lowStockProducts: normalizedLowStockProducts,
-    });
-  } catch (error) {
-    console.error("Dashboard API error:", error);
 
     return NextResponse.json(
       {
-        error: "Failed to load dashboard",
+        totalOrders,
+        totalProducts,
+        totalCategories,
+        pendingOrders,
+        deliveredOrders,
+
+        revenue:
+          Number(
+            revenueResult
+              ._sum
+              .totalAmount ??
+              0,
+          ),
+
+        revenueChart,
+
+        recentOrders:
+          normalizedRecentOrders,
+
+        lowStockProducts:
+          normalizedLowStockProducts,
+      },
+      {
+        status: 200,
+
+        headers: {
+          "Cache-Control":
+            "private, no-store, max-age=0",
+        },
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Dashboard API error:",
+      error,
+    );
+
+    return NextResponse.json(
+      {
+        error:
+          "Failed to load dashboard",
       },
       {
         status: 500,
+
+        headers: {
+          "Cache-Control":
+            "private, no-store, max-age=0",
+        },
       },
     );
   }
