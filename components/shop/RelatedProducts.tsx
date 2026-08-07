@@ -11,7 +11,9 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import type { ProductWithCategory } from "@/types/product";
+import type {
+  ProductWithCategory,
+} from "@/types/product";
 
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -41,12 +43,14 @@ interface RawRelatedProduct {
   featured: boolean;
   shippingWeightGrams: unknown;
   categoryId: string;
+
   category: {
     id: string;
     name: string;
     slug: string;
     image?: string | null;
   };
+
   createdAt?: string;
   updatedAt?: string;
 }
@@ -68,7 +72,8 @@ function isRawRelatedProduct(
     return false;
   }
 
-  const category = value.category;
+  const category =
+    value.category;
 
   if (!isRecord(category)) {
     return false;
@@ -78,32 +83,55 @@ function isRawRelatedProduct(
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     typeof value.slug === "string" &&
-    typeof value.description === "string" &&
-    typeof value.featured === "boolean" &&
-    typeof value.categoryId === "string" &&
-    typeof category.id === "string" &&
-    typeof category.name === "string" &&
-    typeof category.slug === "string"
+    typeof value.description ===
+      "string" &&
+    (
+      typeof value.image ===
+        "string" ||
+      value.image === null
+    ) &&
+    typeof value.featured ===
+      "boolean" &&
+    typeof value.categoryId ===
+      "string" &&
+    typeof category.id ===
+      "string" &&
+    typeof category.name ===
+      "string" &&
+    typeof category.slug ===
+      "string" &&
+    (
+      typeof category.image ===
+        "string" ||
+      category.image === null ||
+      category.image === undefined
+    )
   );
 }
 
 function normalizeNonNegativeNumber(
   value: unknown,
 ) {
-  const number = Number(value);
+  const number =
+    Number(value);
 
   if (!Number.isFinite(number)) {
     return 0;
   }
 
-  return Math.max(0, number);
+  return Math.max(
+    0,
+    number,
+  );
 }
 
 function normalizeNonNegativeInteger(
   value: unknown,
 ) {
   return Math.floor(
-    normalizeNonNegativeNumber(value),
+    normalizeNonNegativeNumber(
+      value,
+    ),
   );
 }
 
@@ -111,138 +139,208 @@ function normalizeProduct(
   product: RawRelatedProduct,
 ): ProductWithCategory {
   return {
-    id: product.id,
-    name: product.name,
-    slug: product.slug,
-    description: product.description,
-    price: normalizeNonNegativeNumber(
-      product.price,
-    ),
+    id:
+      product.id,
+
+    name:
+      product.name,
+
+    slug:
+      product.slug,
+
+    description:
+      product.description,
+
+    price:
+      normalizeNonNegativeNumber(
+        product.price,
+      ),
+
+    /*
+     * Keep a missing image empty.
+     * ProductCard handles both empty
+     * and failed image URLs with the
+     * Image unavailable placeholder.
+     */
     image:
-      product.image ||
-      "/images/no-image.jpg",
-    stock: normalizeNonNegativeInteger(
-      product.stock,
-    ),
-    featured: product.featured,
+      product.image?.trim() ?? "",
+
+    stock:
+      normalizeNonNegativeInteger(
+        product.stock,
+      ),
+
+    featured:
+      product.featured,
+
     shippingWeightGrams:
       normalizeNonNegativeInteger(
         product.shippingWeightGrams,
       ),
-    categoryId: product.categoryId,
+
+    categoryId:
+      product.categoryId,
+
     category: {
-      id: product.category.id,
-      name: product.category.name,
-      slug: product.category.slug,
-      image: product.category.image,
+      id:
+        product.category.id,
+
+      name:
+        product.category.name,
+
+      slug:
+        product.category.slug,
+
+      image:
+        product.category.image,
     },
-    createdAt: product.createdAt,
-    updatedAt: product.updatedAt,
+
+    createdAt:
+      product.createdAt,
+
+    updatedAt:
+      product.updatedAt,
   };
 }
 
 export default function RelatedProducts({
   productId,
 }: RelatedProductsProps) {
-  const [products, setProducts] = useState<
+  const [
+    products,
+    setProducts,
+  ] = useState<
     ProductWithCategory[]
   >([]);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null,
+  );
 
-  const loadProducts = useCallback(
-    async (signal?: AbortSignal) => {
-      const normalizedProductId =
-        productId.trim();
+  const loadProducts =
+    useCallback(
+      async (
+        signal?: AbortSignal,
+      ) => {
+        const normalizedProductId =
+          productId.trim();
 
-      if (!normalizedProductId) {
-        setProducts([]);
-        setError(null);
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(
-          `/api/products/${encodeURIComponent(
-            normalizedProductId,
-          )}/related`,
-          {
-            method: "GET",
-            cache: "no-store",
-            signal,
-          },
-        );
-
-        const data: unknown = await response
-          .json()
-          .catch(() => null);
-
-        if (!response.ok) {
-          const apiError =
-            isRecord(data)
-              ? (data as ApiError)
-              : null;
-
-          throw new Error(
-            apiError?.error ||
-              apiError?.message ||
-              "Failed to fetch related products.",
-          );
-        }
-
-        if (!Array.isArray(data)) {
-          throw new Error(
-            "The related products response was invalid.",
-          );
-        }
-
-        setProducts(
-          data
-            .filter(isRawRelatedProduct)
-            .map(normalizeProduct),
-        );
-      } catch (loadError) {
         if (
-          loadError instanceof DOMException &&
-          loadError.name === "AbortError"
+          !normalizedProductId
         ) {
+          setProducts([]);
+          setError(null);
+          setLoading(false);
+
           return;
         }
 
-        console.error(
-          "Failed to load related products:",
-          loadError,
-        );
+        setLoading(true);
+        setError(null);
 
-        setProducts([]);
+        try {
+          const response =
+            await fetch(
+              `/api/products/${encodeURIComponent(
+                normalizedProductId,
+              )}/related`,
+              {
+                method: "GET",
+                cache: "no-store",
+                signal,
+              },
+            );
 
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Failed to load related products.",
-        );
-      } finally {
-        if (!signal?.aborted) {
-          setLoading(false);
+          const data: unknown =
+            await response
+              .json()
+              .catch(
+                () => null,
+              );
+
+          if (!response.ok) {
+            const apiError =
+              isRecord(data)
+                ? (
+                    data as ApiError
+                  )
+                : null;
+
+            throw new Error(
+              apiError?.error ||
+                apiError?.message ||
+                "Failed to fetch related products.",
+            );
+          }
+
+          if (
+            !Array.isArray(data)
+          ) {
+            throw new Error(
+              "The related products response was invalid.",
+            );
+          }
+
+          setProducts(
+            data
+              .filter(
+                isRawRelatedProduct,
+              )
+              .map(
+                normalizeProduct,
+              ),
+          );
+        } catch (
+          loadError
+        ) {
+          if (
+            loadError instanceof
+              DOMException &&
+            loadError.name ===
+              "AbortError"
+          ) {
+            return;
+          }
+
+          console.error(
+            "Failed to load related products:",
+            loadError,
+          );
+
+          setProducts([]);
+
+          setError(
+            loadError instanceof
+              Error
+              ? loadError.message
+              : "Failed to load related products.",
+          );
+        } finally {
+          if (
+            !signal?.aborted
+          ) {
+            setLoading(false);
+          }
         }
-      }
-    },
-    [productId],
-  );
+      },
+      [productId],
+    );
 
   useEffect(() => {
     const controller =
       new AbortController();
 
-    void loadProducts(controller.signal);
+    void loadProducts(
+      controller.signal,
+    );
 
     return () => {
       controller.abort();
@@ -251,8 +349,8 @@ export default function RelatedProducts({
 
   if (loading) {
     return (
-      <section className="mt-24">
-        <div className="mb-12 text-center">
+      <section className="relative mt-24 overflow-hidden rounded-[36px] border border-[#F3DFC2] bg-white/90 p-8 shadow-xl backdrop-blur-sm sm:p-10">
+        <div className="relative text-center">
           <Badge
             variant="secondary"
             className="inline-flex items-center gap-2 px-5 py-2"
@@ -288,18 +386,20 @@ export default function RelatedProducts({
     return (
       <section className="mt-24">
         <Card
-          variant="outlined"
           padding="lg"
-          className="mx-auto max-w-xl text-center"
+          className="mx-auto max-w-2xl text-center"
         >
-          <AlertCircle
-            size={42}
-            className="mx-auto text-[#C89B3C]"
-            aria-hidden="true"
-          />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
+            <AlertCircle
+              size={30}
+              className="text-red-500"
+              aria-hidden="true"
+            />
+          </div>
 
           <h2 className="mt-4 text-2xl font-bold text-[#6D2E00]">
-            Recommendations Unavailable
+            Recommendations
+            Unavailable
           </h2>
 
           <p className="mt-2 text-gray-600">
@@ -327,15 +427,17 @@ export default function RelatedProducts({
     );
   }
 
-  if (products.length === 0) {
+  if (
+    products.length === 0
+  ) {
     return null;
   }
 
   return (
-    <section className="relative mt-28">
+    <section className="relative mt-24 overflow-hidden rounded-[36px] border border-[#F3DFC2] bg-white/90 p-8 shadow-xl backdrop-blur-sm sm:p-10">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute left-0 top-10 h-56 w-56 rounded-full bg-[#FFF4DE]/60 blur-3xl"
+        className="pointer-events-none absolute -left-24 top-0 h-56 w-56 rounded-full bg-[#FFF4DE]/70 blur-3xl"
       />
 
       <div
@@ -366,12 +468,18 @@ export default function RelatedProducts({
       </div>
 
       <div className="relative grid gap-8 md:grid-cols-2 xl:grid-cols-4">
-        {products.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-          />
-        ))}
+        {products.map(
+          (product) => (
+            <ProductCard
+              key={
+                product.id
+              }
+              product={
+                product
+              }
+            />
+          ),
+        )}
       </div>
     </section>
   );
