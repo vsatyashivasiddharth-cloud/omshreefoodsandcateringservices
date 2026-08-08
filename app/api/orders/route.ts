@@ -112,6 +112,23 @@ function isValidEmail(
   );
 }
 
+function isValidDeliveryAddress(
+  value: string,
+) {
+  const normalized =
+    value
+      .trim()
+      .replace(/\s+/g, " ");
+
+  return (
+    normalized.length >= 12 &&
+    normalized.length <= 450 &&
+    /\p{L}{3,}/u.test(
+      normalized,
+    )
+  );
+}
+
 function parsePaymentMode(
   value: unknown,
 ): "Prepaid" | null {
@@ -395,11 +412,12 @@ export async function POST(
     }
 
     if (
-      address.length < 5 ||
-      address.length > 450
+      !isValidDeliveryAddress(
+        address,
+      )
     ) {
       return errorResponse(
-        "Please enter a valid delivery address.",
+        "Please enter a complete delivery address including house/flat number, street/road and area/locality.",
         400,
       );
     }

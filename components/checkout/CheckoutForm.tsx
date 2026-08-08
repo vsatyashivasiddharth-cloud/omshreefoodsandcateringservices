@@ -108,7 +108,6 @@ interface RazorpayFailureResponse {
     source?: string;
     step?: string;
     reason?: string;
-
     metadata?: {
       order_id?: string;
       payment_id?: string;
@@ -156,7 +155,8 @@ interface RazorpayInstance {
   open: () => void;
 
   on: (
-    event: "payment.failed",
+    event:
+      | "payment.failed",
     handler: (
       response: RazorpayFailureResponse,
     ) => void,
@@ -541,10 +541,29 @@ export default function CheckoutForm({
       return "Please enter a valid email address.";
     }
 
+    const deliveryAddress =
+      form.address
+        .trim()
+        .replace(/\s+/g, " ");
+
     if (
-      form.address.trim().length < 5
+      deliveryAddress.length < 12
     ) {
-      return "Please enter your complete delivery address.";
+      return "Please enter a complete delivery address including house/flat number, street/road and area/locality.";
+    }
+
+    if (
+      !/\p{L}{3,}/u.test(
+        deliveryAddress,
+      )
+    ) {
+      return "Please include your street, road or area/locality in the delivery address.";
+    }
+
+    if (
+      form.landmark.trim().length > 150
+    ) {
+      return "Landmark must not exceed 150 characters.";
     }
 
     if (!form.city.trim()) {
@@ -572,8 +591,7 @@ export default function CheckoutForm({
         );
 
         return (
-          !item.productId ||
-          !item.lineId ||
+          !item.id ||
           !Number.isInteger(
             quantity,
           ) ||
@@ -656,11 +674,11 @@ export default function CheckoutForm({
 
           items: cart.map(
             (item) => ({
-              productId:
-                item.productId,
+              productId: item.id,
 
               variantId:
-                item.variantId,
+                item.variantId ??
+                null,
 
               quantity:
                 item.quantity,
@@ -1138,7 +1156,7 @@ export default function CheckoutForm({
           <div className="md:col-span-2">
             <FormField
               id="address"
-              label="House Number / Street"
+              label="House / Flat No., Street & Area"
               required
             >
               <textarea
@@ -1150,10 +1168,10 @@ export default function CheckoutForm({
                   handleChange
                 }
                 required
-                minLength={5}
-                maxLength={300}
+                minLength={12}
+                maxLength={450}
                 autoComplete="street-address"
-                placeholder="Enter house number, street and area"
+                placeholder="Example: Flat 203, Sai Residency, MG Road, Banjara Hills"
                 disabled={busy}
                 className={`${inputClassName} resize-y`}
               />
