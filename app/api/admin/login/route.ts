@@ -47,7 +47,8 @@ export async function POST(
         },
         {
           status: 400,
-          headers: noStoreHeaders(),
+          headers:
+            noStoreHeaders(),
         },
       );
     }
@@ -76,7 +77,8 @@ export async function POST(
         },
         {
           status: 400,
-          headers: noStoreHeaders(),
+          headers:
+            noStoreHeaders(),
         },
       );
     }
@@ -94,7 +96,8 @@ export async function POST(
         },
         {
           status: 401,
-          headers: noStoreHeaders(),
+          headers:
+            noStoreHeaders(),
         },
       );
     }
@@ -110,7 +113,8 @@ export async function POST(
         },
         {
           status: 401,
-          headers: noStoreHeaders(),
+          headers:
+            noStoreHeaders(),
         },
       );
     }
@@ -127,6 +131,12 @@ export async function POST(
         },
       });
 
+    /*
+     * Always return the same error for an
+     * unknown email or incorrect password.
+     * This avoids revealing whether an
+     * administrator account exists.
+     */
     if (!admin) {
       return NextResponse.json(
         {
@@ -135,7 +145,8 @@ export async function POST(
         },
         {
           status: 401,
-          headers: noStoreHeaders(),
+          headers:
+            noStoreHeaders(),
         },
       );
     }
@@ -154,7 +165,8 @@ export async function POST(
         },
         {
           status: 401,
-          headers: noStoreHeaders(),
+          headers:
+            noStoreHeaders(),
         },
       );
     }
@@ -179,18 +191,32 @@ export async function POST(
         },
       );
 
+    /*
+     * IMPORTANT:
+     *
+     * There is intentionally no maxAge or
+     * expires value here.
+     *
+     * This makes admin_token a browser
+     * session cookie rather than a cookie
+     * deliberately persisted for 7 days.
+     *
+     * The JWT itself still has its own
+     * server-verified expiration.
+     */
     response.cookies.set(
       ADMIN_COOKIE_NAME,
       token,
       {
         httpOnly: true,
+
         secure:
           process.env.NODE_ENV ===
           "production",
+
         sameSite: "lax",
+
         path: "/",
-        maxAge:
-          60 * 60 * 24 * 7,
       },
     );
 
@@ -211,7 +237,8 @@ export async function POST(
         },
         {
           status: 400,
-          headers: noStoreHeaders(),
+          headers:
+            noStoreHeaders(),
         },
       );
     }
@@ -223,7 +250,8 @@ export async function POST(
       },
       {
         status: 500,
-        headers: noStoreHeaders(),
+        headers:
+          noStoreHeaders(),
       },
     );
   }

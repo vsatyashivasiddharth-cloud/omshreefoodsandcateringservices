@@ -1,14 +1,27 @@
 import "server-only";
 
-import type { NextRequest } from "next/server";
-import { SignJWT, jwtVerify } from "jose";
+import type {
+  NextRequest,
+} from "next/server";
+import {
+  SignJWT,
+  jwtVerify,
+} from "jose";
 
 import prisma from "@/lib/prisma";
 
 export const ADMIN_COOKIE_NAME =
   "admin_token";
 
-const TOKEN_EXPIRATION = "7d";
+/*
+ * Maximum lifetime of an authenticated
+ * administrator JWT.
+ *
+ * The browser cookie itself is now a
+ * session cookie, while this provides an
+ * additional server-side expiration.
+ */
+const TOKEN_EXPIRATION = "12h";
 
 interface AuthTokenPayload {
   id: string;
@@ -78,22 +91,30 @@ export async function createToken(
     email: string;
   },
 ) {
-  const tokenPayload: AuthTokenPayload = {
-    id: payload.id,
-    email: payload.email,
-    type: "ADMIN",
-  };
+  const normalizedEmail =
+    payload.email
+      .trim()
+      .toLowerCase();
+
+  if (
+    !payload.id.trim() ||
+    !normalizedEmail
+  ) {
+    throw new Error(
+      "Invalid administrator token payload.",
+    );
+  }
 
   return new SignJWT({
-    id: tokenPayload.id,
-    email: tokenPayload.email,
-    type: tokenPayload.type,
+    id: payload.id,
+    email: normalizedEmail,
+    type: "ADMIN",
   })
     .setProtectedHeader({
       alg: "HS256",
       typ: "JWT",
     })
-    .setSubject(tokenPayload.id)
+    .setSubject(payload.id)
     .setIssuedAt()
     .setExpirationTime(
       TOKEN_EXPIRATION,
@@ -104,24 +125,37 @@ export async function createToken(
 export async function verifyToken(
   token: string,
 ): Promise<AuthTokenPayload | null> {
+  if (!token.trim()) {
+    return null;
+  }
+
   try {
     const { payload } =
       await jwtVerify(
         token,
         getAuthSecret(),
         {
-          algorithms: ["HS256"],
+          algorithms: [
+            "HS256",
+          ],
         },
       );
 
-    if (!isAuthTokenPayload(payload)) {
+    if (
+      !isAuthTokenPayload(
+        payload,
+      )
+    ) {
       return null;
     }
 
     return {
       id: payload.id,
-      email: payload.email,
-      type: payload.type,
+      email:
+        payload.email
+          .trim()
+          .toLowerCase(),
+      type: "ADMIN",
     };
   } catch {
     return null;
@@ -163,6 +197,7 @@ export async function requireAdmin(
         where: {
           id: payload.id,
         },
+
         select: {
           id: true,
           name: true,
@@ -180,8 +215,12 @@ export async function requireAdmin(
     }
 
     if (
-      admin.email.toLowerCase() !==
-      payload.email.toLowerCase()
+      admin.email
+        .trim()
+        .toLowerCase() !==
+      payload.email
+        .trim()
+        .toLowerCase()
     ) {
       return {
         authenticated: false,
@@ -193,7 +232,12 @@ export async function requireAdmin(
 
     return {
       authenticated: true,
-      admin,
+
+      admin: {
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+      },
     };
   } catch (error) {
     console.error(
