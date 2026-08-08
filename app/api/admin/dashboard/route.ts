@@ -221,15 +221,23 @@ function getAttentionReason(
       order.shipmentStatus ===
         ShipmentStatus.NOT_CREATED)
   ) {
+    /*
+     * Give freshly paid orders a one-hour
+     * fulfilment grace period. They should
+     * not be treated as an operational
+     * problem immediately after checkout.
+     */
+    if (ageMinutes < 60) {
+      return null;
+    }
+
     return {
       severity:
-        ageMinutes >= 60
-          ? ("warning" as const)
-          : ("info" as const),
+        "warning" as const,
       reason:
-        "Paid order is waiting for shipment creation.",
+        "Paid order has been waiting for shipment creation for over one hour.",
       action:
-        "Create the Delhivery shipment when the order is ready for fulfilment.",
+        "Create the Delhivery shipment or review why fulfilment has not started.",
       ageMinutes,
     };
   }
