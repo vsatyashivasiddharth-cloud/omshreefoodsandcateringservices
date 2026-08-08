@@ -7,11 +7,13 @@ import {
   NextRequest,
   NextResponse,
 } from "next/server";
+
 import {
   Prisma,
 } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
+
 import {
   PaidOrderProcessingError,
   processPaidOrder,
@@ -54,21 +56,29 @@ function noStoreHeaders() {
 }
 
 function jsonResponse(
-  body: Record<string, unknown>,
+  body: Record<
+    string,
+    unknown
+  >,
   status = 200,
 ) {
   return NextResponse.json(
     body,
     {
       status,
-      headers: noStoreHeaders(),
+
+      headers:
+        noStoreHeaders(),
     },
   );
 }
 
 function isRecord(
   value: unknown,
-): value is Record<string, unknown> {
+): value is Record<
+  string,
+  unknown
+> {
   return (
     value !== null &&
     typeof value === "object" &&
@@ -87,9 +97,12 @@ function getString(
 function getNumber(
   value: unknown,
 ) {
-  const number = Number(value);
+  const number =
+    Number(value);
 
-  return Number.isFinite(number)
+  return Number.isFinite(
+    number,
+  )
     ? number
     : null;
 }
@@ -160,7 +173,8 @@ function parseWebhookPayload(
       return null;
     }
 
-    return parsed as RazorpayWebhookPayload;
+    return parsed as
+      RazorpayWebhookPayload;
   } catch {
     return null;
   }
@@ -183,13 +197,18 @@ export async function POST(
 ) {
   const eventId =
     request.headers
-      .get("x-razorpay-event-id")
+      .get(
+        "x-razorpay-event-id",
+      )
       ?.trim() ?? "";
 
   try {
     /*
-     * Razorpay requires signature validation against
-     * the original, unparsed request body.
+     * Razorpay webhook authentication MUST
+     * use the original raw request body.
+     *
+     * Do not call request.json() before
+     * signature validation.
      */
     const rawBody =
       await request.text();
@@ -204,7 +223,9 @@ export async function POST(
     if (!receivedSignature) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "Missing webhook signature.",
         },
@@ -222,13 +243,16 @@ export async function POST(
         "Rejected Razorpay webhook with invalid signature:",
         {
           eventId:
-            eventId || null,
+            eventId ||
+            null,
         },
       );
 
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "Invalid webhook signature.",
         },
@@ -237,12 +261,16 @@ export async function POST(
     }
 
     const webhook =
-      parseWebhookPayload(rawBody);
+      parseWebhookPayload(
+        rawBody,
+      );
 
     if (!webhook) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "Invalid webhook payload.",
         },
@@ -251,21 +279,33 @@ export async function POST(
     }
 
     const event =
-      getString(webhook.event);
+      getString(
+        webhook.event,
+      );
 
     /*
-     * This endpoint currently processes only
-     * captured Razorpay orders.
+     * Only order.paid changes local payment
+     * and inventory state.
      *
-     * Return 200 for other valid events so Razorpay
-     * does not retry events we intentionally ignore.
+     * Valid webhook events that we do not
+     * consume intentionally return 200 so
+     * Razorpay does not retry them.
      */
-    if (event !== "order.paid") {
+    if (
+      event !==
+      "order.paid"
+    ) {
       return jsonResponse({
-        received: true,
-        processed: false,
+        received:
+          true,
+
+        processed:
+          false,
+
         event:
-          event || null,
+          event ||
+          null,
+
         message:
           "Webhook event ignored.",
       });
@@ -282,14 +322,18 @@ export async function POST(
         ?.entity;
 
     if (
-      !isRecord(paymentEntity) ||
+      !isRecord(
+        paymentEntity,
+      ) ||
       !isRecord(
         razorpayOrderEntity,
       )
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "The order.paid payload is incomplete.",
         },
@@ -356,7 +400,9 @@ export async function POST(
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "Payment identifiers are missing from the webhook.",
         },
@@ -370,7 +416,9 @@ export async function POST(
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "The payment order reference does not match.",
         },
@@ -380,11 +428,14 @@ export async function POST(
 
     if (
       !paymentCaptured ||
-      orderStatus !== "paid"
+      orderStatus !==
+        "paid"
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "The webhook does not represent a captured payment.",
         },
@@ -393,12 +444,16 @@ export async function POST(
     }
 
     if (
-      paymentCurrency !== "INR" ||
-      orderCurrency !== "INR"
+      paymentCurrency !==
+        "INR" ||
+      orderCurrency !==
+        "INR"
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "The webhook payment currency is invalid.",
         },
@@ -407,14 +462,18 @@ export async function POST(
     }
 
     if (
-      paymentAmount === null ||
-      orderAmountPaid === null ||
+      paymentAmount ===
+        null ||
+      orderAmountPaid ===
+        null ||
       paymentAmount !==
         orderAmountPaid
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "The webhook payment amount is invalid.",
         },
@@ -423,13 +482,16 @@ export async function POST(
     }
 
     /*
-     * Prefer the internal order ID stored in Razorpay
-     * notes. Fall back to looking up the database
-     * order by the saved Razorpay Order ID.
+     * Prefer the website order ID stored in
+     * Razorpay order notes.
+     *
+     * Fall back to the saved Razorpay Order ID
+     * if notes are absent.
      */
     let websiteOrderId =
       extractWebsiteOrderId(
-        razorpayOrderEntity.notes,
+        razorpayOrderEntity
+          .notes,
       );
 
     if (!websiteOrderId) {
@@ -445,7 +507,8 @@ export async function POST(
         });
 
       websiteOrderId =
-        databaseOrder?.id ?? "";
+        databaseOrder?.id ??
+        "";
     }
 
     if (!websiteOrderId) {
@@ -453,21 +516,28 @@ export async function POST(
         "Razorpay webhook could not find its website order:",
         {
           eventId:
-            eventId || null,
+            eventId ||
+            null,
+
           razorpayOrderId,
+
           razorpayPaymentId,
         },
       );
 
       /*
-       * Return a retryable response because the
-       * database order may not have been committed
-       * yet when Razorpay delivered the event.
+       * The database transaction that creates
+       * the order may not have committed yet.
+       * Return a retryable server response.
        */
       return jsonResponse(
         {
-          received: true,
-          processed: false,
+          received:
+            true,
+
+          processed:
+            false,
+
           error:
             "Website order not found.",
         },
@@ -478,7 +548,8 @@ export async function POST(
     const databaseOrder =
       await prisma.order.findUnique({
         where: {
-          id: websiteOrderId,
+          id:
+            websiteOrderId,
         },
 
         select: {
@@ -491,8 +562,12 @@ export async function POST(
     if (!databaseOrder) {
       return jsonResponse(
         {
-          received: true,
-          processed: false,
+          received:
+            true,
+
+          processed:
+            false,
+
           error:
             "Website order not found.",
         },
@@ -507,7 +582,9 @@ export async function POST(
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "The webhook does not belong to this website order.",
         },
@@ -516,12 +593,17 @@ export async function POST(
     }
 
     /*
-     * Razorpay amounts are expressed in paise.
+     * Razorpay reports payment amounts in
+     * paise.
+     *
+     * Compare against the total stored in
+     * our own database.
      */
     const expectedAmount =
       Math.round(
         Number(
-          databaseOrder.totalAmount,
+          databaseOrder
+            .totalAmount,
         ) * 100,
       );
 
@@ -535,7 +617,9 @@ export async function POST(
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "The webhook amount does not match the order total.",
         },
@@ -543,78 +627,157 @@ export async function POST(
       );
     }
 
+    /*
+     * All payment-state and inventory changes
+     * happen in the shared serializable,
+     * advisory-locked transaction.
+     */
     const result =
       await processPaidOrder({
         websiteOrderId:
           databaseOrder.id,
 
         razorpayOrderId,
+
         razorpayPaymentId,
 
         /*
-         * This is the webhook signature, not the
-         * Checkout payment signature. Do not store
-         * it in Order.razorpaySignature.
+         * This is the webhook HMAC signature,
+         * not Razorpay Checkout's payment
+         * signature.
+         *
+         * Do not persist it in
+         * Order.razorpaySignature.
          */
-        razorpaySignature: null,
+        razorpaySignature:
+          null,
       });
 
-    if (result.stockUnavailable) {
-      console.error(
-        "Captured Razorpay payment could not be fulfilled because stock became unavailable:",
-        {
-          eventId:
-            eventId || null,
+    /*
+     * A captured payment can require refund
+     * because:
+     *
+     * 1. stock disappeared before finalization,
+     * or
+     *
+     * 2. the order had already been cancelled.
+     *
+     * processPaidOrder() records the captured
+     * payment but does not deduct inventory.
+     *
+     * Return HTTP 200 so Razorpay does not
+     * keep retrying an event that has already
+     * been safely recorded.
+     */
+    if (
+      result.requiresRefund
+    ) {
+      if (
+        result.refundReason ===
+        "STOCK_UNAVAILABLE"
+      ) {
+        console.error(
+          "Captured Razorpay payment could not be fulfilled because stock became unavailable:",
+          {
+            eventId:
+              eventId ||
+              null,
 
-          websiteOrderId:
-            result.order.id,
+            websiteOrderId:
+              result.order.id,
 
-          razorpayOrderId,
-          razorpayPaymentId,
+            razorpayOrderId,
 
-          unavailableProduct:
-            result.unavailableProduct,
-        },
-      );
+            razorpayPaymentId,
 
-      /*
-       * The helper has recorded the captured payment
-       * and cancelled the order. Return 200 so the
-       * same webhook is not repeatedly retried.
-       */
+            unavailableProduct:
+              result
+                .unavailableProduct,
+          },
+        );
+      } else {
+        console.error(
+          "Captured Razorpay payment belongs to an order that was already cancelled:",
+          {
+            eventId:
+              eventId ||
+              null,
+
+            websiteOrderId:
+              result.order.id,
+
+            razorpayOrderId,
+
+            razorpayPaymentId,
+          },
+        );
+      }
+
       return jsonResponse({
-        received: true,
-        processed: true,
-        alreadyProcessed:
-          result.alreadyProcessed,
+        received:
+          true,
 
-        requiresRefund: true,
+        processed:
+          true,
+
+        alreadyProcessed:
+          result
+            .alreadyProcessed,
+
+        requiresRefund:
+          true,
+
+        refundReason:
+          result.refundReason,
+
+        unavailableProduct:
+          result
+            .unavailableProduct,
 
         order: {
-          id: result.order.id,
+          id:
+            result.order.id,
+
           status:
             result.order.status,
+
           paymentStatus:
             result.order
               .paymentStatus,
         },
 
         message:
-          "Payment recorded, but the order requires refund processing.",
+          result.refundReason ===
+          "STOCK_UNAVAILABLE"
+            ? "Payment recorded, but stock became unavailable and the order requires refund processing."
+            : "Payment recorded, but the order was already cancelled and requires refund processing.",
       });
     }
 
     return jsonResponse({
-      received: true,
-      processed: true,
+      received:
+        true,
+
+      processed:
+        true,
 
       alreadyProcessed:
-        result.alreadyProcessed,
+        result
+          .alreadyProcessed,
+
+      requiresRefund:
+        false,
+
+      refundReason:
+        null,
 
       order: {
-        id: result.order.id,
+        id:
+          result.order.id,
+
         status:
           result.order.status,
+
         paymentStatus:
           result.order
             .paymentStatus,
@@ -630,7 +793,9 @@ export async function POST(
       "Razorpay webhook processing failed:",
       {
         eventId:
-          eventId || null,
+          eventId ||
+          null,
+
         error,
       },
     );
@@ -639,12 +804,18 @@ export async function POST(
       error instanceof
       PaidOrderProcessingError
     ) {
-      switch (error.code) {
+      switch (
+        error.code
+      ) {
         case "ORDER_NOT_FOUND":
           return jsonResponse(
             {
-              received: true,
-              processed: false,
+              received:
+                true,
+
+              processed:
+                false,
+
               error:
                 "Website order not found.",
             },
@@ -654,7 +825,9 @@ export async function POST(
         case "INVALID_PAYMENT_METHOD":
           return jsonResponse(
             {
-              received: false,
+              received:
+                false,
+
               error:
                 "The order is not configured for prepaid payment.",
             },
@@ -664,7 +837,9 @@ export async function POST(
         case "RAZORPAY_ORDER_MISMATCH":
           return jsonResponse(
             {
-              received: false,
+              received:
+                false,
+
               error:
                 "The Razorpay order does not match the website order.",
             },
@@ -673,13 +848,24 @@ export async function POST(
 
         case "ORDER_REFUNDED":
           /*
-           * The payment was already handled and
-           * refunded. A repeated webhook does not
-           * require another retry.
+           * The payment was already handled
+           * and refunded.
+           *
+           * Do not ask Razorpay to retry.
            */
           return jsonResponse({
-            received: true,
-            processed: false,
+            received:
+              true,
+
+            processed:
+              false,
+
+            requiresRefund:
+              false,
+
+            refundReason:
+              null,
+
             message:
               "The order has already been refunded.",
           });
@@ -687,7 +873,9 @@ export async function POST(
         case "DIFFERENT_PAYMENT_RECORDED":
           return jsonResponse(
             {
-              received: false,
+              received:
+                false,
+
               error:
                 "A different payment is already recorded for this order.",
             },
@@ -698,13 +886,19 @@ export async function POST(
 
     if (
       error instanceof
-        Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2034"
+        Prisma
+          .PrismaClientKnownRequestError &&
+      error.code ===
+        "P2034"
     ) {
       return jsonResponse(
         {
-          received: true,
-          processed: false,
+          received:
+            true,
+
+          processed:
+            false,
+
           error:
             "A database transaction conflict occurred.",
         },
@@ -719,7 +913,9 @@ export async function POST(
     ) {
       return jsonResponse(
         {
-          received: false,
+          received:
+            false,
+
           error:
             "Webhook configuration is incomplete.",
         },
@@ -729,8 +925,12 @@ export async function POST(
 
     return jsonResponse(
       {
-        received: true,
-        processed: false,
+        received:
+          true,
+
+        processed:
+          false,
+
         error:
           "Unable to process the webhook.",
       },

@@ -55,8 +55,23 @@ type InventoryCheckResult =
   | InventoryUnavailableResult
   | InventoryAvailableResult;
 
+export type PaidOrderRefundReason =
+  | "ORDER_CANCELLED"
+  | "STOCK_UNAVAILABLE"
+  | null;
+
 export interface ProcessPaidOrderResult {
   alreadyProcessed: boolean;
+
+  requiresRefund: boolean;
+  refundReason:
+    PaidOrderRefundReason;
+
+  /*
+   * Kept for compatibility with any existing
+   * callers while refund handling moves to
+   * requiresRefund/refundReason.
+   */
   stockUnavailable: boolean;
   unavailableProduct: string | null;
 
@@ -218,7 +233,8 @@ async function lockAndCheckInventory(
           FOR UPDATE OF variant
         `;
 
-      const variant = rows[0];
+      const variant =
+        rows[0];
 
       if (
         !variant ||
@@ -259,7 +275,8 @@ async function lockAndCheckInventory(
         FOR UPDATE
       `;
 
-    const product = rows[0];
+    const product =
+      rows[0];
 
     if (
       !product ||
@@ -314,11 +331,6 @@ async function decrementInventory(
           },
         );
 
-      /*
-       * The rows were already locked and checked.
-       * A zero count therefore indicates an
-       * unexpected state change or deleted row.
-       */
       if (result.count !== 1) {
         throw new Error(
           "VARIANT_STOCK_DECREMENT_FAILED",
@@ -326,12 +338,9 @@ async function decrementInventory(
       }
 
       /*
-       * Product.price, Product.stock and
-       * Product.shippingWeightGrams mirror the
-       * default variant during the transition.
-       *
-       * Do not decrement Product.stock here.
-       * Doing so would double-count a variant sale.
+       * Product.stock mirrors the default
+       * variant during the transition.
+       * Do not decrement it for variant sales.
        */
       continue;
     }
@@ -376,11 +385,7 @@ export async function processPaidOrder({
     async (transaction) => {
       /*
        * Browser verification and webhook delivery
-       * can happen at almost the same time.
-       *
-       * The transaction-level advisory lock ensures
-       * that only one request processes this website
-       * order at a time.
+       * may arrive simultaneously.
        */
       await transaction.$executeRaw`
         SELECT pg_advisory_xact_lock(
@@ -429,17 +434,14 @@ export async function processPaidOrder({
                 },
               },
 
-              /*
-               * This order is deterministic before
-               * inventory requirements are aggregated
-               * and sorted by inventory-row key.
-               */
               orderBy: [
                 {
-                  productId: "asc",
+                  productId:
+                    "asc",
                 },
                 {
-                  variantId: "asc",
+                  variantId:
+                    "asc",
                 },
               ],
             },
@@ -471,14 +473,12 @@ export async function processPaidOrder({
       }
 
       /*
-       * Exact-payment idempotency guard.
+       * Exact-payment idempotency.
        *
-       * Razorpay can retry webhook delivery and
-       * the browser verification endpoint can also
-       * be called more than once.
-       *
-       * This payment must never deduct inventory
-       * more than one time.
+       * If the payment was already recorded and
+       * the order is cancelled, it still requires
+       * refund handling rather than being reported
+       * as an ordinary completed payment.
        */
       if (
         order.paymentStatus ===
@@ -486,18 +486,29 @@ export async function processPaidOrder({
         order.razorpayPaymentId ===
           razorpayPaymentId
       ) {
+        const cancelled =
+          order.status ===
+          OrderStatus.CANCELLED;
+
         return {
           alreadyProcessed: true,
 
-          stockUnavailable:
-            order.status ===
-            OrderStatus.CANCELLED,
+          requiresRefund:
+            cancelled,
 
-          unavailableProduct: null,
+          refundReason:
+            cancelled
+              ? "ORDER_CANCELLED"
+              : null,
+
+          stockUnavailable:
+            false,
+
+          unavailableProduct:
+            null,
 
           order: {
-            id:
-              order.id,
+            id: order.id,
 
             totalAmount:
               order.totalAmount,
@@ -545,17 +556,88 @@ export async function processPaidOrder({
         );
       }
 
+      /*
+       * CRITICAL RACE CONDITION:
+       *
+       * The administrator may have cancelled the
+       * order after Razorpay Checkout started but
+       * before Razorpay captured the payment.
+       *
+       * The money has already been captured by the
+       * time this helper is called, so record the
+       * payment reference but NEVER deduct inventory.
+       */
+      if (
+        order.status ===
+        OrderStatus.CANCELLED
+      ) {
+        const cancelledOrder =
+          await transaction.order.update({
+            where: {
+              id: order.id,
+            },
+
+            data: {
+              paymentStatus:
+                PaymentStatus.SUCCESS,
+
+              /*
+               * Explicitly preserve CANCELLED.
+               */
+              status:
+                OrderStatus.CANCELLED,
+
+              razorpayPaymentId,
+
+              ...(razorpaySignature
+                ? {
+                    razorpaySignature,
+                  }
+                : {}),
+            },
+
+            select: {
+              id: true,
+              totalAmount: true,
+              status: true,
+              paymentStatus: true,
+              paymentMethod: true,
+              razorpayOrderId: true,
+              razorpayPaymentId: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+
+        return {
+          alreadyProcessed:
+            false,
+
+          requiresRefund:
+            true,
+
+          refundReason:
+            "ORDER_CANCELLED",
+
+          stockUnavailable:
+            false,
+
+          unavailableProduct:
+            null,
+
+          order:
+            cancelledOrder,
+        };
+      }
+
       const inventoryRequirements =
         aggregateInventoryRequirements(
           order.items,
         );
 
       /*
-       * Lock and validate every required inventory
-       * row before modifying any stock.
-       *
-       * Variant order lines lock ProductVariant.
-       * Legacy order lines lock Product.
+       * Lock and validate all required inventory
+       * before modifying any stock.
        */
       const inventoryCheck =
         await lockAndCheckInventory(
@@ -567,14 +649,12 @@ export async function processPaidOrder({
         inventoryCheck.unavailable
       ) {
         /*
-         * Razorpay has already captured the money.
+         * Payment is already captured, but stock
+         * disappeared before finalization.
          *
-         * Record the successful payment and cancel
-         * the order so it can be refunded manually
-         * or by a future automated refund process.
-         *
-         * No inventory has been changed at this
-         * point, so every stock row remains intact.
+         * Record payment, cancel the order and leave
+         * inventory untouched. Refund processing is
+         * required.
          */
         const cancelledOrder =
           await transaction.order.update({
@@ -612,8 +692,17 @@ export async function processPaidOrder({
           });
 
         return {
-          alreadyProcessed: false,
-          stockUnavailable: true,
+          alreadyProcessed:
+            false,
+
+          requiresRefund:
+            true,
+
+          refundReason:
+            "STOCK_UNAVAILABLE",
+
+          stockUnavailable:
+            true,
 
           unavailableProduct:
             inventoryCheck.name,
@@ -624,8 +713,8 @@ export async function processPaidOrder({
       }
 
       /*
-       * Every inventory row is now locked and has
-       * enough stock. Deduct all requirements.
+       * Every inventory row is locked and has
+       * sufficient stock.
        */
       await decrementInventory(
         transaction,
@@ -671,9 +760,20 @@ export async function processPaidOrder({
         });
 
       return {
-        alreadyProcessed: false,
-        stockUnavailable: false,
-        unavailableProduct: null,
+        alreadyProcessed:
+          false,
+
+        requiresRefund:
+          false,
+
+        refundReason:
+          null,
+
+        stockUnavailable:
+          false,
+
+        unavailableProduct:
+          null,
 
         order:
           updatedOrder,

@@ -7,16 +7,20 @@ import {
   NextRequest,
   NextResponse,
 } from "next/server";
+
 import {
+  OrderStatus,
   PaymentStatus,
   Prisma,
 } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
+
 import {
   PaidOrderProcessingError,
   processPaidOrder,
 } from "@/lib/process-paid-order";
+
 import {
   getRazorpayClient,
   rupeesToPaise,
@@ -40,7 +44,10 @@ interface RazorpayPaymentDetails {
 
 function isRecord(
   value: unknown,
-): value is Record<string, unknown> {
+): value is Record<
+  string,
+  unknown
+> {
   return (
     value !== null &&
     typeof value === "object" &&
@@ -93,7 +100,8 @@ function errorResponse(
     },
     {
       status,
-      headers: noStoreHeaders(),
+      headers:
+        noStoreHeaders(),
     },
   );
 }
@@ -153,15 +161,19 @@ function getPaymentString(
 function getPaymentNumber(
   value: unknown,
 ) {
-  const number = Number(value);
+  const number =
+    Number(value);
 
-  return Number.isFinite(number)
+  return Number.isFinite(
+    number,
+  )
     ? number
     : null;
 }
 
 function isCapturedPayment(
-  payment: RazorpayPaymentDetails,
+  payment:
+    RazorpayPaymentDetails,
 ) {
   const status =
     getPaymentString(
@@ -224,8 +236,10 @@ export async function POST(
     }
 
     if (
-      websiteOrderId.length > 100 ||
-      razorpayOrderId.length > 100 ||
+      websiteOrderId.length >
+        100 ||
+      razorpayOrderId.length >
+        100 ||
       razorpayPaymentId.length >
         100 ||
       razorpaySignature.length >
@@ -238,19 +252,24 @@ export async function POST(
     }
 
     /*
-     * Load the expected values from the database.
-     * Never trust the amount or internal order
-     * relationship supplied by the browser.
+     * Load trusted order values from the
+     * database.
+     *
+     * Never trust amount or order
+     * relationships supplied by the browser.
      */
     const order =
       await prisma.order.findUnique({
         where: {
-          id: websiteOrderId,
+          id:
+            websiteOrderId,
         },
 
         select: {
           id: true,
+
           totalAmount: true,
+
           status: true,
           paymentStatus: true,
           paymentMethod: true,
@@ -280,7 +299,9 @@ export async function POST(
       );
     }
 
-    if (!order.razorpayOrderId) {
+    if (
+      !order.razorpayOrderId
+    ) {
       return errorResponse(
         "A payment order has not been created for this order.",
         409,
@@ -298,9 +319,16 @@ export async function POST(
     }
 
     /*
-     * Return early when this exact payment was
-     * already processed. The shared helper also
-     * repeats this check inside its database lock.
+     * Exact-payment fast path.
+     *
+     * processPaidOrder() repeats the same
+     * protection while holding the database
+     * advisory lock.
+     *
+     * A paid order that is CANCELLED must not
+     * be reported as a normal completed order.
+     * It represents a captured payment that
+     * requires refund handling.
      */
     if (
       order.paymentStatus ===
@@ -308,22 +336,85 @@ export async function POST(
       order.razorpayPaymentId ===
         razorpayPaymentId
     ) {
+      const requiresRefund =
+        order.status ===
+        OrderStatus.CANCELLED;
+
+      if (requiresRefund) {
+        return errorResponse(
+          "This payment was captured, but the order is cancelled and requires refund processing. Please contact support.",
+          409,
+          {
+            paymentCaptured:
+              true,
+
+            requiresRefund:
+              true,
+
+            refundReason:
+              "ORDER_CANCELLED",
+
+            order: {
+              id:
+                order.id,
+
+              totalAmount:
+                Number(
+                  order.totalAmount,
+                ),
+
+              status:
+                order.status,
+
+              paymentStatus:
+                order.paymentStatus,
+
+              paymentMethod:
+                order.paymentMethod,
+
+              paymentReference:
+                order
+                  .razorpayPaymentId,
+
+              createdAt:
+                order.createdAt
+                  .toISOString(),
+
+              updatedAt:
+                order.updatedAt
+                  .toISOString(),
+            },
+          },
+        );
+      }
+
       return NextResponse.json(
         {
           success: true,
-          alreadyVerified: true,
+
+          alreadyVerified:
+            true,
+
+          requiresRefund:
+            false,
+
+          refundReason:
+            null,
 
           message:
             "Payment was already verified.",
 
           order: {
-            id: order.id,
+            id:
+              order.id,
 
-            totalAmount: Number(
-              order.totalAmount,
-            ),
+            totalAmount:
+              Number(
+                order.totalAmount,
+              ),
 
-            status: order.status,
+            status:
+              order.status,
 
             paymentStatus:
               order.paymentStatus,
@@ -332,7 +423,8 @@ export async function POST(
               order.paymentMethod,
 
             paymentReference:
-              order.razorpayPaymentId,
+              order
+                .razorpayPaymentId,
 
             createdAt:
               order.createdAt
@@ -345,7 +437,9 @@ export async function POST(
         },
         {
           status: 200,
-          headers: noStoreHeaders(),
+
+          headers:
+            noStoreHeaders(),
         },
       );
     }
@@ -372,8 +466,9 @@ export async function POST(
     }
 
     /*
-     * Verify the Checkout response using the
-     * Razorpay Order ID stored in the database.
+     * Verify the Razorpay Checkout HMAC
+     * signature using the Razorpay Order ID
+     * stored in our own database.
      */
     const signatureIsValid =
       verifyPaymentSignature({
@@ -393,9 +488,12 @@ export async function POST(
     }
 
     /*
-     * Fetch the payment from Razorpay and confirm
-     * its captured state, amount, currency, order ID,
-     * and payment ID before changing inventory.
+     * Fetch the payment directly from
+     * Razorpay.
+     *
+     * Verify payment ID, Razorpay Order ID,
+     * amount, currency and captured state
+     * before inventory can be modified.
      */
     const razorpay =
       getRazorpayClient();
@@ -447,7 +545,9 @@ export async function POST(
 
     const expectedAmountInPaise =
       rupeesToPaise(
-        Number(order.totalAmount),
+        Number(
+          order.totalAmount,
+        ),
       );
 
     if (
@@ -461,7 +561,8 @@ export async function POST(
     }
 
     if (
-      fetchedCurrency !== "INR"
+      fetchedCurrency !==
+      "INR"
     ) {
       return errorResponse(
         "The payment currency is invalid.",
@@ -481,8 +582,9 @@ export async function POST(
     }
 
     /*
-     * Inventory deduction and order payment updates
-     * are handled by one shared, locked, idempotent
+     * Inventory deduction and payment-state
+     * mutation happen in one shared,
+     * serializable, locked and idempotent
      * transaction.
      */
     const result =
@@ -498,16 +600,49 @@ export async function POST(
         razorpaySignature,
       });
 
-    if (result.stockUnavailable) {
+    /*
+     * A captured payment can require refund
+     * for two supported reasons:
+     *
+     * 1. The order was already cancelled
+     *    before payment finalization.
+     *
+     * 2. Inventory became unavailable after
+     *    Checkout started.
+     *
+     * Neither case should deduct inventory.
+     */
+    if (
+      result.requiresRefund
+    ) {
+      const message =
+        result.refundReason ===
+        "STOCK_UNAVAILABLE"
+          ? `${
+              result.unavailableProduct ??
+              "A product"
+            } became unavailable after payment. Your payment was recorded and the order was cancelled for refund processing. Please contact support.`
+          : "Your payment was captured after this order had already been cancelled. No inventory was deducted. The payment requires refund processing. Please contact support.";
+
       return errorResponse(
-        `${result.unavailableProduct ?? "A product"} became unavailable after payment. Your payment was recorded and the order was cancelled for refund processing. Please contact support.`,
+        message,
         409,
         {
-          paymentCaptured: true,
-          requiresRefund: true,
+          paymentCaptured:
+            true,
+
+          requiresRefund:
+            true,
+
+          refundReason:
+            result.refundReason,
+
+          unavailableProduct:
+            result.unavailableProduct,
 
           order: {
-            id: result.order.id,
+            id:
+              result.order.id,
 
             status:
               result.order.status,
@@ -531,17 +666,25 @@ export async function POST(
         alreadyVerified:
           result.alreadyProcessed,
 
+        requiresRefund:
+          false,
+
+        refundReason:
+          null,
+
         message:
           result.alreadyProcessed
             ? "Payment was already verified."
             : "Payment verified successfully.",
 
         order: {
-          id: result.order.id,
+          id:
+            result.order.id,
 
-          totalAmount: Number(
-            result.order.totalAmount,
-          ),
+          totalAmount:
+            Number(
+              result.order.totalAmount,
+            ),
 
           status:
             result.order.status,
@@ -573,7 +716,8 @@ export async function POST(
             ? 200
             : 201,
 
-        headers: noStoreHeaders(),
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -583,7 +727,8 @@ export async function POST(
     );
 
     if (
-      error instanceof SyntaxError
+      error instanceof
+      SyntaxError
     ) {
       return errorResponse(
         "Invalid JSON request body.",
@@ -595,7 +740,9 @@ export async function POST(
       error instanceof
       PaidOrderProcessingError
     ) {
-      switch (error.code) {
+      switch (
+        error.code
+      ) {
         case "ORDER_NOT_FOUND":
           return errorResponse(
             "Order not found.",
@@ -630,8 +777,10 @@ export async function POST(
 
     if (
       error instanceof
-        Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2034"
+        Prisma
+          .PrismaClientKnownRequestError &&
+      error.code ===
+        "P2034"
     ) {
       return errorResponse(
         "Payment verification conflicted with another request. Please try again.",
