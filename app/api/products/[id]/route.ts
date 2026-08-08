@@ -643,6 +643,12 @@ export async function PUT(
       ),
       {
         status: 200,
+        headers: {
+          "Cache-Control":
+            "private, no-store, max-age=0",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
       },
     );
   } catch (error) {
@@ -650,6 +656,16 @@ export async function PUT(
       "Update Product Error:",
       error,
     );
+
+    if (
+      error instanceof
+        SyntaxError
+    ) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
+      );
+    }
 
     if (
       error instanceof
@@ -786,6 +802,12 @@ export async function DELETE(
       },
       {
         status: 200,
+        headers: {
+          "Cache-Control":
+            "private, no-store, max-age=0",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
       },
     );
   } catch (error) {

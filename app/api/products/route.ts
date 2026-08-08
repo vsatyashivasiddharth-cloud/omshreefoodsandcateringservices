@@ -45,6 +45,15 @@ function isRecord(
   );
 }
 
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
+  };
+}
+
 function errorResponse(
   error: string,
   status: number,
@@ -55,10 +64,8 @@ function errorResponse(
     },
     {
       status,
-      headers: {
-        "Cache-Control":
-          "private, no-store, max-age=0",
-      },
+      headers:
+        noStoreHeaders(),
     },
   );
 }
@@ -94,10 +101,8 @@ export async function GET() {
       ),
       {
         status: 200,
-        headers: {
-          "Cache-Control":
-            "no-store",
-        },
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -377,6 +382,8 @@ export async function POST(
       ),
       {
         status: 201,
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -384,6 +391,16 @@ export async function POST(
       "Create Product Error:",
       error,
     );
+
+    if (
+      error instanceof
+        SyntaxError
+    ) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
+      );
+    }
 
     if (
       error instanceof
