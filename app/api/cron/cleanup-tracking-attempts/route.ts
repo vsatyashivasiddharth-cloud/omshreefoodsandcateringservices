@@ -20,7 +20,7 @@ function isAuthorized(
   request: NextRequest,
 ) {
   const cronSecret =
-    process.env.CRON_SECRET;
+    process.env.CRON_SECRET?.trim();
 
   if (!cronSecret) {
     console.error(
@@ -57,16 +57,20 @@ export async function GET(
   }
 
   try {
-    const deleteBefore = new Date(
-      Date.now() -
-        RETENTION_HOURS *
-          60 *
-          60 *
-          1000,
-    );
+    const deleteBefore =
+      new Date(
+        Date.now() -
+          RETENTION_HOURS *
+            60 *
+            60 *
+            1000,
+      );
 
-    const result =
-      await prisma
+    const [
+      trackingResult,
+      quoteResult,
+    ] = await prisma.$transaction([
+      prisma
         .trackingLookupAttempt
         .deleteMany({
           where: {
@@ -74,16 +78,37 @@ export async function GET(
               lt: deleteBefore,
             },
           },
-        });
+        }),
+
+      prisma
+        .shippingQuoteAttempt
+        .deleteMany({
+          where: {
+            createdAt: {
+              lt: deleteBefore,
+            },
+          },
+        }),
+    ]);
 
     return NextResponse.json(
       {
         success: true,
-        deleted: result.count,
+
+        deleted: {
+          trackingLookupAttempts:
+            trackingResult.count,
+
+          shippingQuoteAttempts:
+            quoteResult.count,
+        },
+
         deleteBefore:
           deleteBefore.toISOString(),
+
         retentionHours:
           RETENTION_HOURS,
+
         completedAt:
           new Date().toISOString(),
       },
@@ -94,15 +119,16 @@ export async function GET(
     );
   } catch (error) {
     console.error(
-      "Tracking-attempt cleanup failed:",
+      "Attempt cleanup failed:",
       error,
     );
 
     return NextResponse.json(
       {
         success: false,
+
         error:
-          "Unable to clean tracking attempts.",
+          "Unable to clean expired attempts.",
       },
       {
         status: 500,

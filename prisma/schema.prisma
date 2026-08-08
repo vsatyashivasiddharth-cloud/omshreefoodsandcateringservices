@@ -382,3 +382,19 @@ model TrackingLookupAttempt {
   @@index([ipHash, createdAt])
   @@index([createdAt])
 }
+
+/// Persistent rate-limit records for the public
+/// Delhivery shipping-quote endpoint.
+///
+/// Only an HMAC hash of the requester IP is stored.
+/// Raw IP addresses are never persisted.
+model ShippingQuoteAttempt {
+  id String @id @default(cuid())
+
+  ipHash String
+
+  createdAt DateTime @default(now())
+
+  @@index([ipHash, createdAt])
+  @@index([createdAt])
+}

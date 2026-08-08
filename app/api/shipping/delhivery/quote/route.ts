@@ -10,6 +10,9 @@ import {
 } from "@/lib/delhivery";
 import prisma from "@/lib/prisma";
 import { shopConfig } from "@/lib/shop";
+import {
+  checkShippingQuoteRateLimit,
+} from "@/lib/shipping-quote-rate-limit";
 
 interface QuoteItemInput {
   productId?: unknown;
@@ -46,7 +49,46 @@ function noStoreHeaders() {
   return {
     "Cache-Control":
       "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
   };
+}
+
+function getClientIpAddress(
+  request: NextRequest,
+) {
+  const vercelForwardedFor =
+    request.headers
+      .get(
+        "x-vercel-forwarded-for",
+      )
+      ?.split(",")[0]
+      ?.trim();
+
+  if (vercelForwardedFor) {
+    return vercelForwardedFor;
+  }
+
+  const forwardedFor =
+    request.headers
+      .get("x-forwarded-for")
+      ?.split(",")[0]
+      ?.trim();
+
+  if (forwardedFor) {
+    return forwardedFor;
+  }
+
+  const realIp =
+    request.headers
+      .get("x-real-ip")
+      ?.trim();
+
+  if (realIp) {
+    return realIp;
+  }
+
+  return "unknown-client";
 }
 
 function errorResponse(
@@ -56,6 +98,10 @@ function errorResponse(
     string,
     unknown
   >,
+  additionalHeaders?: Record<
+    string,
+    string
+  >,
 ) {
   return NextResponse.json(
     {
@@ -64,7 +110,10 @@ function errorResponse(
     },
     {
       status,
-      headers: noStoreHeaders(),
+      headers: {
+        ...noStoreHeaders(),
+        ...additionalHeaders,
+      },
     },
   );
 }
@@ -339,6 +388,34 @@ export async function POST(
 
     const items =
       parseItems(body.items);
+
+    /*
+     * Rate-limit well-formed quote requests before
+     * database-heavy work and before contacting
+     * Delhivery.
+     */
+    const ipAddress =
+      getClientIpAddress(
+        request,
+      );
+
+    const rateLimit =
+      await checkShippingQuoteRateLimit(
+        ipAddress,
+      );
+
+    if (!rateLimit.allowed) {
+      return errorResponse(
+        "Too many shipping quote requests. Please wait a few minutes and try again.",
+        429,
+        undefined,
+        {
+          "Retry-After": String(
+            rateLimit.retryAfterSeconds,
+          ),
+        },
+      );
+    }
 
     const productIds =
       Array.from(
