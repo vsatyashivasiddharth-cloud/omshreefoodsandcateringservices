@@ -1,71 +1,307 @@
-import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/prisma";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+import {
+  Prisma,
+} from "@prisma/client";
 import bcrypt from "bcrypt";
 
-export async function POST(req: NextRequest) {
+import prisma from "@/lib/prisma";
+import {
+  normalizeIndianPhone,
+} from "@/lib/phone";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const BCRYPT_ROUNDS = 12;
+
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_BYTES = 72;
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
+  };
+}
+
+function jsonResponse(
+  body: unknown,
+  status: number,
+) {
+  return NextResponse.json(
+    body,
+    {
+      status,
+      headers: noStoreHeaders(),
+    },
+  );
+}
+
+function isRecord(
+  value: unknown,
+): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  );
+}
+
+function getTrimmedString(
+  value: unknown,
+) {
+  return typeof value === "string"
+    ? value.trim()
+    : "";
+}
+
+function isValidEmail(
+  value: string,
+) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value,
+  );
+}
+
+function getUtf8ByteLength(
+  value: string,
+) {
+  return Buffer.byteLength(
+    value,
+    "utf8",
+  );
+}
+
+export async function POST(
+  request: NextRequest,
+) {
   try {
-    const body = await req.json();
+    const rawBody: unknown =
+      await request.json();
 
-    const { name, email, phone, password } = body;
-
-    // Validate required fields
-    if (!name || !email || !password) {
-      return NextResponse.json(
+    if (!isRecord(rawBody)) {
+      return jsonResponse(
         {
-          error: "Name, email and password are required.",
+          error:
+            "Invalid request body.",
         },
-        { status: 400 }
+        400,
       );
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: {
-        email,
-      },
-    });
+    const name =
+      getTrimmedString(
+        rawBody.name,
+      );
+
+    const email =
+      getTrimmedString(
+        rawBody.email,
+      ).toLowerCase();
+
+    const rawPhone =
+      getTrimmedString(
+        rawBody.phone,
+      );
+
+    const password =
+      typeof rawBody.password ===
+      "string"
+        ? rawBody.password
+        : "";
+
+    if (
+      name.length < 2 ||
+      name.length > 100
+    ) {
+      return jsonResponse(
+        {
+          error:
+            "Please enter a valid name between 2 and 100 characters.",
+        },
+        400,
+      );
+    }
+
+    if (
+      email.length < 3 ||
+      email.length > 150 ||
+      !isValidEmail(email)
+    ) {
+      return jsonResponse(
+        {
+          error:
+            "Please enter a valid email address.",
+        },
+        400,
+      );
+    }
+
+    let phone: string | null =
+      null;
+
+    if (rawPhone) {
+      const normalizedPhone =
+        normalizeIndianPhone(
+          rawPhone,
+        );
+
+      if (!normalizedPhone) {
+        return jsonResponse(
+          {
+            error:
+              "Please enter a valid Indian mobile number.",
+          },
+          400,
+        );
+      }
+
+      phone = normalizedPhone;
+    }
+
+    if (
+      password.length <
+      MIN_PASSWORD_LENGTH
+    ) {
+      return jsonResponse(
+        {
+          error:
+            `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+        },
+        400,
+      );
+    }
+
+    /*
+     * bcrypt only safely considers up
+     * to 72 bytes of password input.
+     */
+    if (
+      getUtf8ByteLength(
+        password,
+      ) >
+      MAX_PASSWORD_BYTES
+    ) {
+      return jsonResponse(
+        {
+          error:
+            "Password is too long.",
+        },
+        400,
+      );
+    }
+
+    const existingUser =
+      await prisma.user.findUnique({
+        where: {
+          email,
+        },
+
+        select: {
+          id: true,
+        },
+      });
 
     if (existingUser) {
-      return NextResponse.json(
+      return jsonResponse(
         {
-          error: "Email already registered.",
+          error:
+            "Email already registered.",
         },
-        { status: 409 }
+        409,
       );
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword =
+      await bcrypt.hash(
+        password,
+        BCRYPT_ROUNDS,
+      );
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        phone,
-        password: hashedPassword,
-      },
-    });
+    const user =
+      await prisma.user.create({
+        data: {
+          name,
+          email,
+          phone,
+          password:
+            hashedPassword,
 
-    return NextResponse.json(
-      {
-        message: "Registration successful.",
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
+          /*
+           * Never accept a role from
+           * the registration request.
+           * Prisma's CUSTOMER default
+           * remains in control.
+           */
         },
+
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      });
+
+    return jsonResponse(
+      {
+        success: true,
+
+        message:
+          "Registration successful.",
+
+        user,
       },
-      { status: 201 }
+      201,
     );
   } catch (error) {
-    console.error("Registration Error:", error);
+    if (
+      error instanceof SyntaxError
+    ) {
+      return jsonResponse(
+        {
+          error:
+            "Invalid request body.",
+        },
+        400,
+      );
+    }
 
-    return NextResponse.json(
+    /*
+     * Handles two simultaneous
+     * registrations for the same
+     * unique email safely.
+     */
+    if (
+      error instanceof
+        Prisma
+          .PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return jsonResponse(
+        {
+          error:
+            "Email already registered.",
+        },
+        409,
+      );
+    }
+
+    console.error(
+      "Registration Error:",
+      error,
+    );
+
+    return jsonResponse(
       {
-        error: "Something went wrong.",
+        error:
+          "Unable to complete registration right now.",
       },
-      { status: 500 }
+      500,
     );
   }
 }
