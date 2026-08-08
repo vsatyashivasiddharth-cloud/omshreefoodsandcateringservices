@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -552,15 +553,29 @@ export default function OrderSuccessContent() {
   const searchParams =
     useSearchParams();
 
-  const orderId =
+  const initialOrderId =
     searchParams
       .get("id")
       ?.trim() ?? "";
 
-  const orderAccessToken =
+  const initialOrderAccessToken =
     searchParams
       .get("token")
       ?.trim() ?? "";
+
+  const orderIdRef =
+    useRef(initialOrderId);
+
+  const orderAccessTokenRef =
+    useRef(
+      initialOrderAccessToken,
+    );
+
+  const orderId =
+    orderIdRef.current;
+
+  const orderAccessToken =
+    orderAccessTokenRef.current;
 
   const [order, setOrder] =
     useState<OrderDetails | null>(
@@ -583,6 +598,33 @@ export default function OrderSuccessContent() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (
+      !orderId ||
+      !orderAccessToken
+    ) {
+      return;
+    }
+
+    /*
+     * The order access token is a bearer secret.
+     *
+     * Keep it only in this mounted component after
+     * initial page loading and remove it from the
+     * visible browser URL.
+     *
+     * history.replaceState does not reload the page.
+     */
+    window.history.replaceState(
+      window.history.state,
+      "",
+      "/order-success",
+    );
+  }, [
+    orderAccessToken,
+    orderId,
+  ]);
 
   const loadOrder = useCallback(
     async (
