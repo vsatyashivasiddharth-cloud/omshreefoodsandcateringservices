@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import {
   CheckCircle2,
   Clock3,
-  CreditCard,
   Eye,
   Package,
   RefreshCw,
@@ -38,19 +37,6 @@ type OrderStatus =
   | "DELIVERED"
   | "CANCELLED";
 
-type PaymentStatus =
-  | "PENDING"
-  | "SUCCESS"
-  | "FAILED"
-  | "REFUNDED";
-
-type BadgeVariant =
-  | "warning"
-  | "primary"
-  | "success"
-  | "danger"
-  | "neutral";
-
 interface Product {
   id: string;
   name: string;
@@ -66,7 +52,6 @@ interface OrderVariant {
 
 interface OrderItem {
   id: string;
-
   productId?: string;
   variantId?: string | null;
 
@@ -96,7 +81,6 @@ interface Order {
   totalAmount: number;
 
   status: OrderStatus;
-  paymentStatus: PaymentStatus;
 
   createdAt: string;
 
@@ -114,8 +98,21 @@ interface ApiError {
   message?: string;
 }
 
+/*
+ * These are the statuses an administrator
+ * may choose manually.
+ *
+ * CANCELLED is intentionally excluded.
+ *
+ * Food orders should not have a routine
+ * manual cancellation option after they
+ * have been placed.
+ */
 const statusOptions: Array<{
-  value: OrderStatus;
+  value: Exclude<
+    OrderStatus,
+    "CANCELLED"
+  >;
   label: string;
 }> = [
   {
@@ -142,27 +139,37 @@ const statusOptions: Array<{
     value: "DELIVERED",
     label: "Delivered",
   },
-  {
-    value: "CANCELLED",
-    label: "Cancelled",
-  },
 ];
 
+/*
+ * CANCELLED remains a valid internal order
+ * state.
+ *
+ * The payment/shipping system may need this
+ * state for exceptional situations, such as
+ * a captured payment that cannot be fulfilled.
+ *
+ * Keeping it here means those orders can
+ * still be read and displayed correctly.
+ */
 const validStatuses =
+  new Set<OrderStatus>([
+    "PENDING",
+    "PAID",
+    "PREPARING",
+    "PACKED",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+    "CANCELLED",
+  ]);
+
+const manuallyEditableStatuses =
   new Set<OrderStatus>(
     statusOptions.map(
       (option) =>
         option.value,
     ),
   );
-
-const validPaymentStatuses =
-  new Set<PaymentStatus>([
-    "PENDING",
-    "SUCCESS",
-    "FAILED",
-    "REFUNDED",
-  ]);
 
 function isRecord(
   value: unknown,
@@ -171,9 +178,8 @@ function isRecord(
   unknown
 > {
   return (
-    value !== null &&
-    typeof value ===
-      "object" &&
+    Boolean(value) &&
+    typeof value === "object" &&
     !Array.isArray(value)
   );
 }
@@ -182,22 +188,23 @@ function isOrderStatus(
   value: unknown,
 ): value is OrderStatus {
   return (
-    typeof value ===
-      "string" &&
+    typeof value === "string" &&
     validStatuses.has(
       value as OrderStatus,
     )
   );
 }
 
-function isPaymentStatus(
+function isManuallyEditableStatus(
   value: unknown,
-): value is PaymentStatus {
+): value is Exclude<
+  OrderStatus,
+  "CANCELLED"
+> {
   return (
-    typeof value ===
-      "string" &&
-    validPaymentStatuses.has(
-      value as PaymentStatus,
+    typeof value === "string" &&
+    manuallyEditableStatuses.has(
+      value as OrderStatus,
     )
   );
 }
@@ -237,11 +244,9 @@ function isOrderVariant(
       "number" ||
       value.weightGrams ===
         null) &&
-    (typeof value
-      .shippingWeightGrams ===
+    (typeof value.shippingWeightGrams ===
       "number" ||
-      value
-        .shippingWeightGrams ===
+      value.shippingWeightGrams ===
         null)
   );
 }
@@ -268,69 +273,58 @@ function isOrderItem(
         undefined) &&
     (typeof value.variantId ===
       "string" ||
-      value.variantId ===
-        null ||
+      value.variantId === null ||
       value.variantId ===
         undefined) &&
     Number.isInteger(
       quantity,
     ) &&
     quantity > 0 &&
-    Number.isFinite(price) &&
+    Number.isFinite(
+      price,
+    ) &&
     price >= 0 &&
     (typeof value.productName ===
       "string" ||
-      value.productName ===
-        null ||
+      value.productName === null ||
       value.productName ===
         undefined) &&
     (typeof value.productSlug ===
       "string" ||
-      value.productSlug ===
-        null ||
+      value.productSlug === null ||
       value.productSlug ===
         undefined) &&
     (typeof value.productImage ===
       "string" ||
-      value.productImage ===
-        null ||
+      value.productImage === null ||
       value.productImage ===
         undefined) &&
     (typeof value.variantLabel ===
       "string" ||
-      value.variantLabel ===
-        null ||
+      value.variantLabel === null ||
       value.variantLabel ===
         undefined) &&
     (typeof value.variantSku ===
       "string" ||
-      value.variantSku ===
-        null ||
+      value.variantSku === null ||
       value.variantSku ===
         undefined) &&
-    (typeof value
-      .variantWeightGrams ===
+    (typeof value.variantWeightGrams ===
       "number" ||
-      value
-        .variantWeightGrams ===
+      value.variantWeightGrams ===
         null ||
-      value
-        .variantWeightGrams ===
+      value.variantWeightGrams ===
         undefined) &&
-    (typeof value
-      .variantShippingWeightGrams ===
+    (typeof value.variantShippingWeightGrams ===
       "number" ||
-      value
-        .variantShippingWeightGrams ===
+      value.variantShippingWeightGrams ===
         null ||
-      value
-        .variantShippingWeightGrams ===
+      value.variantShippingWeightGrams ===
         undefined) &&
     isProduct(
       value.product,
     ) &&
-    (value.variant ===
-      null ||
+    (value.variant === null ||
       value.variant ===
         undefined ||
       isOrderVariant(
@@ -365,9 +359,6 @@ function isOrder(
     ) &&
     isOrderStatus(
       value.status,
-    ) &&
-    isPaymentStatus(
-      value.paymentStatus,
     ) &&
     typeof value.createdAt ===
       "string" &&
@@ -422,13 +413,11 @@ function normalizeOrder(
 }
 
 function formatStatus(
-  status: string,
+  status: OrderStatus,
 ) {
   return status
-    .trim()
     .toLowerCase()
     .split("_")
-    .filter(Boolean)
     .map(
       (word) =>
         word
@@ -465,9 +454,14 @@ function formatOrderDate(
   ).format(date);
 }
 
-function getOrderStatusVariant(
+function getStatusVariant(
   status: OrderStatus,
-): BadgeVariant {
+):
+  | "warning"
+  | "primary"
+  | "success"
+  | "danger"
+  | "neutral" {
   switch (status) {
     case "PENDING":
       return "warning";
@@ -486,46 +480,6 @@ function getOrderStatusVariant(
 
     default:
       return "neutral";
-  }
-}
-
-function getPaymentStatusVariant(
-  status: PaymentStatus,
-): BadgeVariant {
-  switch (status) {
-    case "PENDING":
-      return "warning";
-
-    case "SUCCESS":
-      return "success";
-
-    case "FAILED":
-      return "danger";
-
-    case "REFUNDED":
-      return "neutral";
-
-    default:
-      return "neutral";
-  }
-}
-
-function getPaymentLabel(
-  status: PaymentStatus,
-) {
-  switch (status) {
-    case "SUCCESS":
-      return "Payment Successful";
-
-    case "FAILED":
-      return "Payment Failed";
-
-    case "REFUNDED":
-      return "Refunded";
-
-    case "PENDING":
-    default:
-      return "Payment Pending";
   }
 }
 
@@ -569,28 +523,30 @@ export default function OrdersContent() {
   const [
     loading,
     setLoading,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     error,
     setError,
   ] =
-    useState<string | null>(
-      null,
-    );
+    useState<
+      string | null
+    >(null);
 
   const [
     updatingOrderId,
     setUpdatingOrderId,
   ] =
-    useState<string | null>(
-      null,
-    );
+    useState<
+      string | null
+    >(null);
 
   const fetchOrders =
     useCallback(
       async (
-        signal?: AbortSignal,
+        signal?:
+          AbortSignal,
       ) => {
         setLoading(true);
         setError(null);
@@ -602,8 +558,10 @@ export default function OrdersContent() {
               {
                 method:
                   "GET",
+
                 cache:
                   "no-store",
+
                 signal,
               },
             );
@@ -613,12 +571,17 @@ export default function OrdersContent() {
             await response
               .json()
               .catch(
-                () => null,
+                () =>
+                  null,
               );
 
-          if (!response.ok) {
+          if (
+            !response.ok
+          ) {
             const apiError =
-              isRecord(data)
+              isRecord(
+                data,
+              )
                 ? (data as ApiError)
                 : null;
 
@@ -677,7 +640,9 @@ export default function OrdersContent() {
           if (
             !signal?.aborted
           ) {
-            setLoading(false);
+            setLoading(
+              false,
+            );
           }
         }
       },
@@ -701,15 +666,19 @@ export default function OrdersContent() {
     orderId: string,
     status: OrderStatus,
   ) {
+    /*
+     * CANCELLED is an internal/system-only
+     * state and must never be submitted from
+     * this manual admin control.
+     */
     if (
-      !isOrderStatus(
+      !isManuallyEditableStatus(
         status,
       )
     ) {
       toast.error(
-        "Invalid order status.",
+        "This order status cannot be selected manually.",
       );
-
       return;
     }
 
@@ -726,6 +695,21 @@ export default function OrdersContent() {
         status ||
       updatingOrderId
     ) {
+      return;
+    }
+
+    /*
+     * Once an order reaches the internal
+     * CANCELLED state, do not allow this
+     * screen to revive or mutate it.
+     */
+    if (
+      currentOrder.status ===
+      "CANCELLED"
+    ) {
+      toast.error(
+        "System-cancelled orders cannot be changed from this screen.",
+      );
       return;
     }
 
@@ -768,9 +752,11 @@ export default function OrdersContent() {
             },
 
             body:
-              JSON.stringify({
-                status,
-              }),
+              JSON.stringify(
+                {
+                  status,
+                },
+              ),
           },
         );
 
@@ -779,12 +765,17 @@ export default function OrdersContent() {
         await response
           .json()
           .catch(
-            () => null,
+            () =>
+              null,
           );
 
-      if (!response.ok) {
+      if (
+        !response.ok
+      ) {
         const apiError =
-          isRecord(data)
+          isRecord(
+            data,
+          )
             ? (data as ApiError)
             : null;
 
@@ -792,37 +783,6 @@ export default function OrdersContent() {
           apiError?.error ||
             apiError?.message ||
             "Failed to update order status.",
-        );
-      }
-
-      /*
-       * The PATCH endpoint also
-       * returns paymentStatus.
-       * Update it if present, while
-       * keeping payment management
-       * separate from fulfilment.
-       */
-      if (
-        isRecord(data) &&
-        isPaymentStatus(
-          data.paymentStatus,
-        )
-      ) {
-        setOrders(
-          (
-            currentOrders,
-          ) =>
-            currentOrders.map(
-              (order) =>
-                order.id ===
-                orderId
-                  ? {
-                      ...order,
-                      paymentStatus:
-                        data.paymentStatus as PaymentStatus,
-                    }
-                  : order,
-            ),
         );
       }
 
@@ -882,7 +842,7 @@ export default function OrdersContent() {
               "PENDING",
           ).length,
 
-        inProgress:
+        preparing:
           orders.filter(
             (order) =>
               order.status ===
@@ -902,13 +862,11 @@ export default function OrdersContent() {
               "DELIVERED",
           ).length,
 
-        paymentSuccess:
-          orders.filter(
-            (order) =>
-              order.paymentStatus ===
-              "SUCCESS",
-          ).length,
-
+        /*
+         * This is informational only.
+         * It does not provide a cancellation
+         * action.
+         */
         cancelled:
           orders.filter(
             (order) =>
@@ -959,7 +917,9 @@ export default function OrdersContent() {
               variant="primary"
               leftIcon={
                 <RefreshCw
-                  size={18}
+                  size={
+                    18
+                  }
                   aria-hidden="true"
                 />
               }
@@ -1001,10 +961,9 @@ export default function OrdersContent() {
 
             <p className="mt-3 max-w-2xl leading-7 text-gray-600">
               Review orders,
-              payment state,
-              fulfilment progress
-              and purchased package
-              variants.
+              update fulfilment
+              status and inspect
+              purchased products.
             </p>
           </div>
 
@@ -1025,9 +984,7 @@ export default function OrdersContent() {
           </Button>
         </div>
 
-        {/* Statistics */}
-
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
           <Stat
             title="Total"
             value={
@@ -1057,23 +1014,10 @@ export default function OrdersContent() {
           <Stat
             title="In Progress"
             value={
-              stats.inProgress
+              stats.preparing
             }
             icon={
               <Package
-                size={24}
-                aria-hidden="true"
-              />
-            }
-          />
-
-          <Stat
-            title="Paid"
-            value={
-              stats.paymentSuccess
-            }
-            icon={
-              <CreditCard
                 size={24}
                 aria-hidden="true"
               />
@@ -1094,7 +1038,7 @@ export default function OrdersContent() {
           />
 
           <Stat
-            title="Cancelled"
+            title="System Exceptions"
             value={
               stats.cancelled
             }
@@ -1138,6 +1082,10 @@ export default function OrdersContent() {
                   updatingOrderId ===
                   order.id;
 
+                const isSystemCancelled =
+                  order.status ===
+                  "CANCELLED";
+
                 return (
                   <Card
                     key={
@@ -1148,8 +1096,6 @@ export default function OrdersContent() {
                     className="overflow-hidden bg-white/95 backdrop-blur-sm"
                   >
                     <div className="flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:justify-between">
-                      {/* Customer information */}
-
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-4">
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DE] text-[#C89B3C]">
@@ -1200,7 +1146,6 @@ export default function OrdersContent() {
                             <span className="font-semibold text-[#6D2E00]">
                               Total:
                             </span>{" "}
-
                             <span className="text-lg font-bold text-[#C89B3C]">
                               {formatCurrency(
                                 order.totalAmount,
@@ -1212,7 +1157,6 @@ export default function OrdersContent() {
                             <span className="font-semibold text-[#6D2E00]">
                               Date:
                             </span>{" "}
-
                             {formatOrderDate(
                               order.createdAt,
                             )}
@@ -1220,111 +1164,103 @@ export default function OrdersContent() {
                         </div>
                       </div>
 
-                      {/* Status management */}
-
-                      <div className="w-full lg:w-80">
-                        <div className="rounded-2xl border border-[#F3DFC2] bg-[#FFFDF8] p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
-                            Order Status
-                          </p>
-
-                          <div className="mt-2">
-                            <Badge
-                              variant={getOrderStatusVariant(
-                                order.status,
-                              )}
-                              rounded
-                            >
-                              {formatStatus(
-                                order.status,
-                              )}
-                            </Badge>
-                          </div>
-
-                          <div className="my-4 h-px bg-[#F3DFC2]" />
-
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
-                            Payment
-                          </p>
-
-                          <div className="mt-2">
-                            <Badge
-                              variant={getPaymentStatusVariant(
-                                order.paymentStatus,
-                              )}
-                              rounded
-                            >
-                              {getPaymentLabel(
-                                order.paymentStatus,
-                              )}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        <label
-                          htmlFor={`status-${order.id}`}
-                          className="mt-4 block text-sm font-semibold text-[#6D2E00]"
-                        >
-                          Update order
-                          status
-                        </label>
-
-                        <select
-                          id={`status-${order.id}`}
-                          value={
-                            order.status
-                          }
-                          disabled={
-                            isUpdating ||
-                            Boolean(
-                              updatingOrderId &&
-                                !isUpdating,
-                            )
-                          }
-                          onChange={(
-                            event,
-                          ) => {
-                            const nextStatus =
-                              event
-                                .target
-                                .value;
-
-                            if (
-                              isOrderStatus(
-                                nextStatus,
-                              )
-                            ) {
-                              void updateStatus(
-                                order.id,
-                                nextStatus,
-                              );
-                            }
-                          }}
-                          className="mt-2 h-12 w-full rounded-xl border border-[#E7C98C] bg-white px-4 text-[#6D2E00] outline-none transition focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {statusOptions.map(
-                            (
-                              option,
-                            ) => (
-                              <option
-                                key={
-                                  option.value
-                                }
-                                value={
-                                  option.value
-                                }
-                              >
-                                {
-                                  option.label
-                                }
-                              </option>
-                            ),
+                      <div className="flex w-full flex-col gap-4 lg:w-72">
+                        <Badge
+                          variant={getStatusVariant(
+                            order.status,
                           )}
-                        </select>
+                          rounded
+                          className="w-fit"
+                        >
+                          {formatStatus(
+                            order.status,
+                          )}
+                        </Badge>
+
+                        {isSystemCancelled ? (
+                          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                            <p className="text-sm font-semibold text-red-700">
+                              System
+                              exception
+                            </p>
+
+                            <p className="mt-1 text-xs leading-5 text-red-600">
+                              This order
+                              cannot be
+                              changed from
+                              the manual
+                              fulfilment
+                              controls.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <label
+                              htmlFor={`status-${order.id}`}
+                              className="text-sm font-semibold text-[#6D2E00]"
+                            >
+                              Update
+                              status
+                            </label>
+
+                            <select
+                              id={`status-${order.id}`}
+                              value={
+                                order.status
+                              }
+                              disabled={
+                                isUpdating ||
+                                Boolean(
+                                  updatingOrderId &&
+                                    !isUpdating,
+                                )
+                              }
+                              onChange={(
+                                event,
+                              ) => {
+                                const nextStatus =
+                                  event
+                                    .target
+                                    .value;
+
+                                if (
+                                  isManuallyEditableStatus(
+                                    nextStatus,
+                                  )
+                                ) {
+                                  void updateStatus(
+                                    order.id,
+                                    nextStatus,
+                                  );
+                                }
+                              }}
+                              className="h-12 rounded-xl border border-[#E7C98C] bg-white px-4 text-[#6D2E00] outline-none transition focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {statusOptions.map(
+                                (
+                                  option,
+                                ) => (
+                                  <option
+                                    key={
+                                      option.value
+                                    }
+                                    value={
+                                      option.value
+                                    }
+                                  >
+                                    {
+                                      option.label
+                                    }
+                                  </option>
+                                ),
+                              )}
+                            </select>
+                          </>
+                        )}
 
                         <Link
                           href={`/admin/orders/${order.id}`}
-                          className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-5 font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20"
+                          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-5 font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20"
                         >
                           <Eye
                             size={
@@ -1338,18 +1274,19 @@ export default function OrdersContent() {
                       </div>
                     </div>
 
-                    {/* Ordered items */}
-
                     <div className="border-t border-[#F3DFC2] bg-[#FFFDF8] p-6 sm:p-8">
                       <div className="flex items-center gap-3">
                         <CheckCircle2
-                          size={20}
+                          size={
+                            20
+                          }
                           className="text-[#C89B3C]"
                           aria-hidden="true"
                         />
 
                         <h3 className="text-lg font-bold text-[#6D2E00]">
-                          Ordered Items
+                          Ordered
+                          Items
                         </h3>
                       </div>
 
@@ -1359,7 +1296,8 @@ export default function OrdersContent() {
                         0 ? (
                           <p className="rounded-2xl border border-dashed border-[#F3DFC2] bg-white px-5 py-6 text-center text-gray-500">
                             No order
-                            items found.
+                            items
+                            found.
                           </p>
                         ) : (
                           order.items.map(
@@ -1370,48 +1308,28 @@ export default function OrdersContent() {
                                 item.price *
                                 item.quantity;
 
-                              const variantLabel =
-                                item.variantLabel ||
-                                item
-                                  .variant
-                                  ?.label;
-
-                              const variantSku =
-                                item.variantSku ||
-                                item
-                                  .variant
-                                  ?.sku;
-
-                              const variantWeight =
-                                item.variantWeightGrams ??
-                                item
-                                  .variant
-                                  ?.weightGrams ??
-                                null;
-
                               return (
                                 <div
                                   key={
                                     item.id
                                   }
-                                  className="flex flex-col gap-4 rounded-2xl border border-[#F3DFC2] bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                                  className="flex items-center justify-between gap-5 rounded-2xl border border-[#F3DFC2] bg-white px-5 py-4"
                                 >
                                   <div className="min-w-0">
-                                    <p className="font-semibold text-[#6D2E00] sm:truncate">
+                                    <p className="truncate font-semibold text-[#6D2E00]">
                                       {item.productName ||
                                         item
                                           .product
                                           .name}
                                     </p>
 
-                                    {variantLabel && (
+                                    {item.variantLabel && (
                                       <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
                                         {
-                                          variantLabel
+                                          item.variantLabel
                                         }
-
-                                        {variantSku
-                                          ? ` • SKU: ${variantSku}`
+                                        {item.variantSku
+                                          ? ` • SKU: ${item.variantSku}`
                                           : ""}
                                       </p>
                                     )}
@@ -1421,15 +1339,16 @@ export default function OrdersContent() {
                                       {
                                         item.quantity
                                       }
-
-                                      {variantWeight !==
-                                        null
-                                        ? ` • ${variantWeight} g`
+                                      {item.variantWeightGrams !==
+                                        null &&
+                                      item.variantWeightGrams !==
+                                        undefined
+                                        ? ` • ${item.variantWeightGrams} g`
                                         : ""}
                                     </p>
                                   </div>
 
-                                  <div className="shrink-0 sm:text-right">
+                                  <div className="shrink-0 text-right">
                                     <p className="font-bold text-[#6D2E00]">
                                       {formatCurrency(
                                         lineTotal,

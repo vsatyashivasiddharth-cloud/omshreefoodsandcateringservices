@@ -7,6 +7,9 @@ import {
   Prisma,
 } from "@prisma/client";
 
+import {
+  requireAdmin,
+} from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 interface RouteContext {
@@ -19,101 +22,288 @@ interface UpdateOrderStatusBody {
   status?: unknown;
 }
 
-const validStatuses = new Set<OrderStatus>(
-  Object.values(OrderStatus),
-);
+/*
+ * All statuses that may exist in the database.
+ *
+ * CANCELLED remains a valid internal status for
+ * exceptional payment/shipping/system situations.
+ */
+const validOrderStatuses =
+  new Set<OrderStatus>(
+    Object.values(
+      OrderStatus,
+    ),
+  );
+
+/*
+ * Statuses that an administrator may set manually.
+ *
+ * CANCELLED is deliberately excluded.
+ *
+ * Customers do not have a cancellation feature,
+ * and administrators should not routinely cancel
+ * food orders after they have been placed.
+ */
+const manuallyEditableStatuses =
+  new Set<OrderStatus>([
+    OrderStatus.PENDING,
+    OrderStatus.PAID,
+    OrderStatus.PREPARING,
+    OrderStatus.PACKED,
+    OrderStatus.OUT_FOR_DELIVERY,
+    OrderStatus.DELIVERED,
+  ]);
+
+function isRecord(
+  value: unknown,
+): value is Record<
+  string,
+  unknown
+> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  );
+}
 
 function isOrderStatus(
   value: unknown,
 ): value is OrderStatus {
   return (
     typeof value === "string" &&
-    validStatuses.has(value as OrderStatus)
+    validOrderStatuses.has(
+      value as OrderStatus,
+    )
+  );
+}
+
+function isManuallyEditableStatus(
+  value: unknown,
+): value is OrderStatus {
+  return (
+    isOrderStatus(value) &&
+    manuallyEditableStatuses.has(
+      value,
+    )
+  );
+}
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+  };
+}
+
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers:
+        noStoreHeaders(),
+    },
   );
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: RouteContext,
+  {
+    params,
+  }: RouteContext,
 ) {
   try {
-    const { id } = await params;
-    const orderId = id.trim();
+    /*
+     * This is an admin-only mutation endpoint.
+     *
+     * Do not rely only on middleware/proxy
+     * protection. The API authenticates itself.
+     */
+    const authentication =
+      await requireAdmin(
+        request,
+      );
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
+    const {
+      id,
+    } = await params;
+
+    const orderId =
+      id.trim();
 
     if (!orderId) {
-      return NextResponse.json(
-        {
-          error: "Order ID is required.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "Order ID is required.",
+        400,
+      );
+    }
+
+    const rawBody: unknown =
+      await request.json();
+
+    if (!isRecord(rawBody)) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
       );
     }
 
     const body =
-      (await request.json()) as UpdateOrderStatusBody;
+      rawBody as UpdateOrderStatusBody;
 
-    if (!isOrderStatus(body.status)) {
-      return NextResponse.json(
-        {
-          error: "Invalid order status.",
-        },
-        {
-          status: 400,
-        },
+    /*
+     * Give a specific response when someone
+     * tries to bypass the UI and manually send:
+     *
+     * {
+     *   "status": "CANCELLED"
+     * }
+     */
+    if (
+      body.status ===
+      OrderStatus.CANCELLED
+    ) {
+      return errorResponse(
+        "Orders cannot be cancelled manually.",
+        403,
+      );
+    }
+
+    if (
+      !isManuallyEditableStatus(
+        body.status,
+      )
+    ) {
+      return errorResponse(
+        "Invalid order status.",
+        400,
       );
     }
 
     const existingOrder =
       await prisma.order.findUnique({
         where: {
-          id: orderId,
+          id:
+            orderId,
         },
+
         select: {
           id: true,
           status: true,
+          paymentStatus: true,
         },
       });
 
     if (!existingOrder) {
+      return errorResponse(
+        "Order not found.",
+        404,
+      );
+    }
+
+    /*
+     * CANCELLED orders are system-exception
+     * records.
+     *
+     * Do not allow the normal admin fulfilment
+     * endpoint to revive or modify one.
+     */
+    if (
+      existingOrder.status ===
+      OrderStatus.CANCELLED
+    ) {
+      return errorResponse(
+        "System-cancelled orders cannot be changed manually.",
+        409,
+      );
+    }
+
+    /*
+     * Nothing needs to be written when the
+     * requested status is already current.
+     */
+    if (
+      existingOrder.status ===
+      body.status
+    ) {
       return NextResponse.json(
         {
-          error: "Order not found.",
+          id:
+            existingOrder.id,
+
+          status:
+            existingOrder.status,
+
+          paymentStatus:
+            existingOrder.paymentStatus,
+
+          unchanged: true,
         },
         {
-          status: 404,
+          status: 200,
+          headers:
+            noStoreHeaders(),
         },
       );
     }
 
-    const order = await prisma.order.update({
-      where: {
-        id: orderId,
-      },
-      data: {
-        status: body.status,
-      },
-      select: {
-        id: true,
-        status: true,
-        paymentStatus: true,
-        updatedAt: true,
-      },
-    });
+    const order =
+      await prisma.order.update({
+        where: {
+          id:
+            orderId,
+        },
+
+        data: {
+          /*
+           * Only fulfilment status changes here.
+           *
+           * Payment status remains completely
+           * independent and is controlled by the
+           * Razorpay payment flow.
+           */
+          status:
+            body.status,
+        },
+
+        select: {
+          id: true,
+          status: true,
+          paymentStatus: true,
+          updatedAt: true,
+        },
+      });
 
     return NextResponse.json(
       {
         ...order,
+
         updatedAt:
-          order.updatedAt.toISOString(),
+          order.updatedAt
+            .toISOString(),
+
+        unchanged:
+          false,
       },
       {
         status: 200,
-        headers: {
-          "Cache-Control":
-            "private, no-store, max-age=0",
-        },
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -122,39 +312,45 @@ export async function PATCH(
       error,
     );
 
-    if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        {
-          error: "Invalid request body.",
-        },
-        {
-          status: 400,
-        },
+    if (
+      error instanceof
+      SyntaxError
+    ) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
       );
     }
 
     if (
       error instanceof
-        Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2025"
+        Prisma
+          .PrismaClientKnownRequestError
     ) {
-      return NextResponse.json(
-        {
-          error: "Order not found.",
-        },
-        {
-          status: 404,
-        },
-      );
+      if (
+        error.code ===
+        "P2025"
+      ) {
+        return errorResponse(
+          "Order not found.",
+          404,
+        );
+      }
+
+      if (
+        error.code ===
+        "P2023"
+      ) {
+        return errorResponse(
+          "Invalid order ID.",
+          400,
+        );
+      }
     }
 
-    return NextResponse.json(
-      {
-        error: "Failed to update order.",
-      },
-      {
-        status: 500,
-      },
+    return errorResponse(
+      "Failed to update order.",
+      500,
     );
   }
 }
