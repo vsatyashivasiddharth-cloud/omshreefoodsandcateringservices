@@ -439,32 +439,41 @@ export function CartProvider({
     useState(false);
 
   useEffect(() => {
-    try {
-      const storedCart =
-        window.localStorage.getItem(
-          STORAGE_KEY,
-        );
+    const timeoutId =
+      window.setTimeout(() => {
+        try {
+          const storedCart =
+            window.localStorage.getItem(
+              STORAGE_KEY,
+            );
 
-      if (storedCart) {
-        const parsedCart: unknown =
-          JSON.parse(storedCart);
+          if (storedCart) {
+            const parsedCart: unknown =
+              JSON.parse(storedCart);
 
-        setCart(
-          normalizeStoredCart(
-            parsedCart,
-          ),
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Failed to restore cart:",
-        error,
+            setCart(
+              normalizeStoredCart(
+                parsedCart,
+              ),
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Failed to restore cart:",
+            error,
+          );
+
+          setCart([]);
+        } finally {
+          setHydrated(true);
+        }
+      }, 0);
+
+    return () => {
+      window.clearTimeout(
+        timeoutId,
       );
-
-      setCart([]);
-    } finally {
-      setHydrated(true);
-    }
+    };
   }, []);
 
   useEffect(() => {

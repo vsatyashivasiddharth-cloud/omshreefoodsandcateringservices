@@ -3,7 +3,6 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -504,19 +503,13 @@ function OrderItemImage({
     src?.trim() ?? "";
 
   const [
-    imageFailed,
-    setImageFailed,
-  ] = useState(!normalizedSrc);
-
-  useEffect(() => {
-    setImageFailed(
-      !normalizedSrc,
-    );
-  }, [normalizedSrc]);
+    failedSrc,
+    setFailedSrc,
+  ] = useState<string | null>(null);
 
   const showPlaceholder =
     !normalizedSrc ||
-    imageFailed;
+    failedSrc === normalizedSrc;
 
   if (showPlaceholder) {
     return (
@@ -543,7 +536,7 @@ function OrderItemImage({
       sizes="80px"
       className="object-cover"
       onError={() => {
-        setImageFailed(true);
+        setFailedSrc(normalizedSrc);
       }}
     />
   );
@@ -563,19 +556,18 @@ export default function OrderSuccessContent() {
       .get("token")
       ?.trim() ?? "";
 
-  const orderIdRef =
-    useRef(initialOrderId);
-
-  const orderAccessTokenRef =
-    useRef(
+  const [
+    orderAccess,
+  ] = useState(() => ({
+    orderId: initialOrderId,
+    orderAccessToken:
       initialOrderAccessToken,
-    );
+  }));
 
-  const orderId =
-    orderIdRef.current;
-
-  const orderAccessToken =
-    orderAccessTokenRef.current;
+  const {
+    orderId,
+    orderAccessToken,
+  } = orderAccess;
 
   const [order, setOrder] =
     useState<OrderDetails | null>(
@@ -745,12 +737,18 @@ export default function OrderSuccessContent() {
     const controller =
       new AbortController();
 
-    void loadOrder(
-      controller.signal,
-      false,
-    );
+    const timeoutId =
+      window.setTimeout(() => {
+        void loadOrder(
+          controller.signal,
+          false,
+        );
+      }, 0);
 
     return () => {
+      window.clearTimeout(
+        timeoutId,
+      );
       controller.abort();
     };
   }, [loadOrder]);

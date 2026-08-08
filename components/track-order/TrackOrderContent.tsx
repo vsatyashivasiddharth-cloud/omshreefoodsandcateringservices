@@ -426,20 +426,32 @@ export default function TrackOrderContent() {
     useState<string | null>(null);
   const [blockedPhone, setBlockedPhone] = useState("");
   const [blockedUntil, setBlockedUntil] = useState(0);
-  const [currentTime, setCurrentTime] = useState(
-    Date.now(),
-  );
+  const [currentTime, setCurrentTime] = useState(0);
 
   useEffect(() => {
-    const storedRateLimit = readStoredRateLimit();
+    const timeoutId =
+      window.setTimeout(() => {
+        const storedRateLimit =
+          readStoredRateLimit();
 
-    if (!storedRateLimit) {
-      return;
-    }
+        if (!storedRateLimit) {
+          return;
+        }
 
-    setBlockedPhone(storedRateLimit.phone);
-    setBlockedUntil(storedRateLimit.blockedUntil);
-    setCurrentTime(Date.now());
+        setBlockedPhone(
+          storedRateLimit.phone,
+        );
+        setBlockedUntil(
+          storedRateLimit.blockedUntil,
+        );
+        setCurrentTime(Date.now());
+      }, 0);
+
+    return () => {
+      window.clearTimeout(
+        timeoutId,
+      );
+    };
   }, []);
 
   useEffect(() => {

@@ -260,30 +260,11 @@ export default function CheckoutContent() {
     [cart],
   );
 
-  const quoteItemsSignature =
-    useMemo(
-      () => JSON.stringify(quoteItems),
-      [quoteItems],
-    );
-
   useEffect(() => {
-    if (cart.length === 0) {
-      setShippingQuoteState({
-        status: "idle",
-        message:
-          "Add products to your cart to calculate shipping.",
-      });
-
-      return;
-    }
-
-    if (!/^\d{6}$/.test(pincode)) {
-      setShippingQuoteState({
-        status: "idle",
-        message:
-          "Enter a valid 6-digit pincode to calculate shipping.",
-      });
-
+    if (
+      cart.length === 0 ||
+      !/^\d{6}$/.test(pincode)
+    ) {
       return;
     }
 
@@ -432,8 +413,24 @@ export default function CheckoutContent() {
   }, [
     cart.length,
     pincode,
-    quoteItemsSignature,
+    quoteItems,
   ]);
+
+  const displayedShippingQuoteState:
+    ShippingQuoteState =
+    cart.length === 0
+      ? {
+          status: "idle",
+          message:
+            "Add products to your cart to calculate shipping.",
+        }
+      : !/^\d{6}$/.test(pincode)
+        ? {
+            status: "idle",
+            message:
+              "Enter a valid 6-digit pincode to calculate shipping.",
+          }
+        : shippingQuoteState;
 
   return (
     <div className="space-y-10">
@@ -509,7 +506,7 @@ export default function CheckoutContent() {
               setPincode
             }
             shippingQuoteState={
-              shippingQuoteState
+              displayedShippingQuoteState
             }
           />
         </Card>
@@ -520,7 +517,7 @@ export default function CheckoutContent() {
         >
           <OrderSummary
             shippingQuoteState={
-              shippingQuoteState
+              displayedShippingQuoteState
             }
           />
         </aside>
