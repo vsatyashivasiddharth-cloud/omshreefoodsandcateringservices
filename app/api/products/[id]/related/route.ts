@@ -11,23 +11,74 @@ interface RouteContext {
   }>;
 }
 
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
+  };
+}
+
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers: noStoreHeaders(),
+    },
+  );
+}
+
+function normalizeNonNegativeInteger(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.floor(number),
+  );
+}
+
+function normalizePrice(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number < 0
+  ) {
+    return 0;
+  }
+
+  return number;
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: RouteContext,
 ) {
   try {
     const { id } = await params;
-    const productId = id.trim();
+
+    const productId =
+      id.trim();
 
     if (!productId) {
-      return NextResponse.json(
-        {
-          error:
-            "Product ID is required.",
-        },
-        {
-          status: 400,
-        },
+      return errorResponse(
+        "Product ID is required.",
+        400,
       );
     }
 
@@ -36,6 +87,7 @@ export async function GET(
         where: {
           id: productId,
         },
+
         select: {
           id: true,
           categoryId: true,
@@ -43,13 +95,9 @@ export async function GET(
       });
 
     if (!currentProduct) {
-      return NextResponse.json(
-        {
-          error: "Product not found.",
-        },
-        {
-          status: 404,
-        },
+      return errorResponse(
+        "Product not found.",
+        404,
       );
     }
 
@@ -58,10 +106,13 @@ export async function GET(
         where: {
           categoryId:
             currentProduct.categoryId,
+
           id: {
-            not: currentProduct.id,
+            not:
+              currentProduct.id,
           },
         },
+
         select: {
           id: true,
           name: true,
@@ -71,10 +122,12 @@ export async function GET(
           image: true,
           stock: true,
           featured: true,
-          shippingWeightGrams: true,
+          shippingWeightGrams:
+            true,
           categoryId: true,
           createdAt: true,
           updatedAt: true,
+
           category: {
             select: {
               id: true,
@@ -83,7 +136,38 @@ export async function GET(
               image: true,
             },
           },
+
+          variants: {
+            where: {
+              isActive: true,
+            },
+
+            orderBy: [
+              {
+                sortOrder: "asc",
+              },
+              {
+                weightGrams:
+                  "asc",
+              },
+            ],
+
+            select: {
+              id: true,
+              label: true,
+              weightGrams: true,
+              shippingWeightGrams:
+                true,
+              price: true,
+              stock: true,
+              sku: true,
+              isActive: true,
+              isDefault: true,
+              sortOrder: true,
+            },
+          },
         },
+
         orderBy: [
           {
             featured: "desc",
@@ -92,6 +176,7 @@ export async function GET(
             createdAt: "desc",
           },
         ],
+
         take: 4,
       });
 
@@ -99,30 +184,67 @@ export async function GET(
       relatedProducts.map(
         (product) => ({
           ...product,
-          price: Number(
-            product.price,
-          ),
-          shippingWeightGrams:
-            Math.max(
-              0,
-              Math.floor(
-                Number(
-                  product
-                    .shippingWeightGrams,
-                ) || 0,
-              ),
+
+          price:
+            normalizePrice(
+              product.price,
             ),
+
+          stock:
+            normalizeNonNegativeInteger(
+              product.stock,
+            ),
+
+          shippingWeightGrams:
+            normalizeNonNegativeInteger(
+              product
+                .shippingWeightGrams,
+            ),
+
+          variants:
+            product.variants.map(
+              (variant) => ({
+                ...variant,
+
+                price:
+                  normalizePrice(
+                    variant.price,
+                  ),
+
+                stock:
+                  normalizeNonNegativeInteger(
+                    variant.stock,
+                  ),
+
+                weightGrams:
+                  normalizeNonNegativeInteger(
+                    variant
+                      .weightGrams,
+                  ),
+
+                shippingWeightGrams:
+                  normalizeNonNegativeInteger(
+                    variant
+                      .shippingWeightGrams,
+                  ),
+              }),
+            ),
+
           createdAt:
-            product.createdAt.toISOString(),
+            product
+              .createdAt
+              .toISOString(),
+
           updatedAt:
-            product.updatedAt.toISOString(),
+            product
+              .updatedAt
+              .toISOString(),
         }),
       ),
       {
         status: 200,
-        headers: {
-          "Cache-Control": "no-store",
-        },
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -131,14 +253,9 @@ export async function GET(
       error,
     );
 
-    return NextResponse.json(
-      {
-        error:
-          "Failed to fetch related products.",
-      },
-      {
-        status: 500,
-      },
+    return errorResponse(
+      "Failed to fetch related products.",
+      500,
     );
   }
 }

@@ -1,6 +1,34 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse,
+} from "next/server";
 
 import prisma from "@/lib/prisma";
+
+const MAX_FEATURED_PRODUCTS = 12;
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
+  };
+}
+
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers: noStoreHeaders(),
+    },
+  );
+}
 
 function normalizeNonNegativeInteger(
   value: unknown,
@@ -71,10 +99,12 @@ export async function GET() {
 
             orderBy: [
               {
-                sortOrder: "asc",
+                sortOrder:
+                  "asc",
               },
               {
-                weightGrams: "asc",
+                weightGrams:
+                  "asc",
               },
             ],
 
@@ -97,6 +127,9 @@ export async function GET() {
         orderBy: {
           createdAt: "desc",
         },
+
+        take:
+          MAX_FEATURED_PRODUCTS,
       });
 
     return NextResponse.json(
@@ -104,9 +137,10 @@ export async function GET() {
         (product) => ({
           ...product,
 
-          price: normalizePrice(
-            product.price,
-          ),
+          price:
+            normalizePrice(
+              product.price,
+            ),
 
           stock:
             normalizeNonNegativeInteger(
@@ -149,19 +183,20 @@ export async function GET() {
             ),
 
           createdAt:
-            product.createdAt.toISOString(),
+            product
+              .createdAt
+              .toISOString(),
 
           updatedAt:
-            product.updatedAt.toISOString(),
+            product
+              .updatedAt
+              .toISOString(),
         }),
       ),
       {
         status: 200,
-
-        headers: {
-          "Cache-Control":
-            "no-store",
-        },
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -170,14 +205,9 @@ export async function GET() {
       error,
     );
 
-    return NextResponse.json(
-      {
-        error:
-          "Failed to load featured products.",
-      },
-      {
-        status: 500,
-      },
+    return errorResponse(
+      "Failed to load featured products.",
+      500,
     );
   }
 }

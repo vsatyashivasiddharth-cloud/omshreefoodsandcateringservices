@@ -1,45 +1,72 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse,
+} from "next/server";
 
 import prisma from "@/lib/prisma";
 
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
+  };
+}
+
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers: noStoreHeaders(),
+    },
+  );
+}
+
 export async function GET() {
   try {
-    const categories = await prisma.category.findMany({
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        image: true,
-        _count: {
-          select: {
-            products: true,
+    const categories =
+      await prisma.category.findMany({
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          image: true,
+
+          _count: {
+            select: {
+              products: true,
+            },
           },
         },
-      },
-      orderBy: {
-        name: "asc",
-      },
-    });
 
-    return NextResponse.json(categories, {
-      status: 200,
-      headers: {
-        "Cache-Control": "no-store",
+        orderBy: {
+          name: "asc",
+        },
+      });
+
+    return NextResponse.json(
+      categories,
+      {
+        status: 200,
+        headers:
+          noStoreHeaders(),
       },
-    });
+    );
   } catch (error) {
     console.error(
       "Failed to load home categories:",
       error,
     );
 
-    return NextResponse.json(
-      {
-        error: "Failed to fetch categories.",
-      },
-      {
-        status: 500,
-      },
+    return errorResponse(
+      "Failed to fetch categories.",
+      500,
     );
   }
 }
