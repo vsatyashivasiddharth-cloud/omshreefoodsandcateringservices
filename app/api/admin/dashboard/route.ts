@@ -4,9 +4,13 @@ import {
   Prisma,
 } from "@prisma/client";
 import {
+  NextRequest,
   NextResponse,
 } from "next/server";
 
+import {
+  requireAdmin,
+} from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 const REVENUE_MONTHS = 6;
@@ -64,8 +68,55 @@ function normalizeNonNegativeNumber(
   );
 }
 
-export async function GET() {
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+  };
+}
+
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers:
+        noStoreHeaders(),
+    },
+  );
+}
+
+export async function GET(
+  request: NextRequest,
+) {
   try {
+    /*
+     * Protect the dashboard API independently
+     * from the /admin page-level proxy.
+     *
+     * This prevents someone from requesting
+     * /api/admin/dashboard directly without
+     * a valid administrator session.
+     */
+    const authentication =
+      await requireAdmin(
+        request,
+      );
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
     const now =
       new Date();
 
@@ -377,7 +428,7 @@ export async function GET() {
      *
      * Extra variant fields are also
      * returned so DashboardContent
-     * can show them later without
+     * can display them without
      * another API change.
      */
     const normalizedLowStockProducts =
@@ -386,6 +437,10 @@ export async function GET() {
           const activeVariants =
             product.variants;
 
+          /*
+           * Legacy product with no active
+           * ProductVariant records.
+           */
           if (
             activeVariants.length ===
             0
@@ -482,12 +537,10 @@ export async function GET() {
               ),
 
             variantId:
-              mostUrgentVariant
-                .id,
+              mostUrgentVariant.id,
 
             variantLabel:
-              mostUrgentVariant
-                .label,
+              mostUrgentVariant.label,
 
             variantWeightGrams:
               normalizeNonNegativeInteger(
@@ -540,11 +593,8 @@ export async function GET() {
       },
       {
         status: 200,
-
-        headers: {
-          "Cache-Control":
-            "private, no-store, max-age=0",
-        },
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -553,19 +603,9 @@ export async function GET() {
       error,
     );
 
-    return NextResponse.json(
-      {
-        error:
-          "Failed to load dashboard",
-      },
-      {
-        status: 500,
-
-        headers: {
-          "Cache-Control":
-            "private, no-store, max-age=0",
-        },
-      },
+    return errorResponse(
+      "Failed to load dashboard.",
+      500,
     );
   }
 }

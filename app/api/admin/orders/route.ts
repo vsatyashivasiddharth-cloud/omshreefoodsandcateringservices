@@ -1,5 +1,11 @@
-import { NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
+import {
+  requireAdmin,
+} from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 function noStoreHeaders() {
@@ -9,8 +15,45 @@ function noStoreHeaders() {
   };
 }
 
-export async function GET() {
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers:
+        noStoreHeaders(),
+    },
+  );
+}
+
+export async function GET(
+  request: NextRequest,
+) {
   try {
+    /*
+     * IMPORTANT:
+     * Protect this admin API independently
+     * from the /admin page-level proxy.
+     */
+    const authentication =
+      await requireAdmin(
+        request,
+      );
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
     const orders =
       await prisma.order.findMany({
         select: {
@@ -44,7 +87,10 @@ export async function GET() {
 
               variantLabel: true,
               variantSku: true,
-              variantWeightGrams: true,
+
+              variantWeightGrams:
+                true,
+
               variantShippingWeightGrams:
                 true,
 
@@ -65,6 +111,7 @@ export async function GET() {
                   label: true,
                   sku: true,
                   weightGrams: true,
+
                   shippingWeightGrams:
                     true,
                 },
@@ -83,137 +130,153 @@ export async function GET() {
       });
 
     return NextResponse.json(
-      orders.map((order) => ({
-        id: order.id,
+      orders.map(
+        (order) => ({
+          id: order.id,
 
-        customerName:
-          order.customerName,
+          customerName:
+            order.customerName,
 
-        phone: order.phone,
-        email: order.email,
+          phone:
+            order.phone,
 
-        totalAmount:
-          Number(order.totalAmount),
+          email:
+            order.email,
 
-        status: order.status,
+          totalAmount:
+            Number(
+              order.totalAmount,
+            ),
 
-        paymentStatus:
-          order.paymentStatus,
+          status:
+            order.status,
 
-        createdAt:
-          order.createdAt.toISOString(),
+          paymentStatus:
+            order.paymentStatus,
 
-        updatedAt:
-          order.updatedAt.toISOString(),
+          createdAt:
+            order.createdAt.toISOString(),
 
-        items: order.items.map(
-          (item) => {
-            const productName =
-              item.productName?.trim() ||
-              item.product.name;
+          updatedAt:
+            order.updatedAt.toISOString(),
 
-            const productSlug =
-              item.productSlug?.trim() ||
-              item.product.slug;
+          items:
+            order.items.map(
+              (item) => {
+                const productName =
+                  item.productName?.trim() ||
+                  item.product.name;
 
-            const productImage =
-              item.productImage ??
-              item.product.image;
+                const productSlug =
+                  item.productSlug?.trim() ||
+                  item.product.slug;
 
-            const variantLabel =
-              item.variantLabel?.trim() ||
-              item.variant?.label ||
-              null;
+                const productImage =
+                  item.productImage ??
+                  item.product.image;
 
-            const variantSku =
-              item.variantSku?.trim() ||
-              item.variant?.sku ||
-              null;
+                const variantLabel =
+                  item.variantLabel?.trim() ||
+                  item.variant?.label ||
+                  null;
 
-            const variantWeightGrams =
-              item.variantWeightGrams ??
-              item.variant?.weightGrams ??
-              null;
+                const variantSku =
+                  item.variantSku?.trim() ||
+                  item.variant?.sku ||
+                  null;
 
-            const variantShippingWeightGrams =
-              item
-                .variantShippingWeightGrams ??
-              item.variant
-                ?.shippingWeightGrams ??
-              null;
+                const variantWeightGrams =
+                  item.variantWeightGrams ??
+                  item.variant
+                    ?.weightGrams ??
+                  null;
 
-            return {
-              id: item.id,
+                const variantShippingWeightGrams =
+                  item
+                    .variantShippingWeightGrams ??
+                  item.variant
+                    ?.shippingWeightGrams ??
+                  null;
 
-              productId:
-                item.productId,
+                return {
+                  id:
+                    item.id,
 
-              variantId:
-                item.variantId,
+                  productId:
+                    item.productId,
 
-              quantity:
-                item.quantity,
+                  variantId:
+                    item.variantId,
 
-              price:
-                Number(item.price),
+                  quantity:
+                    item.quantity,
 
-              productName,
-              productSlug,
-              productImage,
+                  price:
+                    Number(
+                      item.price,
+                    ),
 
-              variantLabel,
-              variantSku,
-              variantWeightGrams,
-
-              variantShippingWeightGrams,
-
-              createdAt:
-                item.createdAt.toISOString(),
-
-              /*
-               * Keep this nested shape for backward
-               * compatibility with the current admin UI.
-               */
-              product: {
-                id:
-                  item.product.id,
-
-                name:
                   productName,
-
-                slug:
                   productSlug,
-
-                image:
                   productImage,
+
+                  variantLabel,
+                  variantSku,
+
+                  variantWeightGrams,
+
+                  variantShippingWeightGrams,
+
+                  createdAt:
+                    item.createdAt.toISOString(),
+
+                  /*
+                   * Keep this nested shape for
+                   * compatibility with the
+                   * current admin UI.
+                   */
+                  product: {
+                    id:
+                      item.product.id,
+
+                    name:
+                      productName,
+
+                    slug:
+                      productSlug,
+
+                    image:
+                      productImage,
+                  },
+
+                  variant:
+                    item.variantId
+                      ? {
+                          id:
+                            item.variantId,
+
+                          label:
+                            variantLabel,
+
+                          sku:
+                            variantSku,
+
+                          weightGrams:
+                            variantWeightGrams,
+
+                          shippingWeightGrams:
+                            variantShippingWeightGrams,
+                        }
+                      : null,
+                };
               },
-
-              variant:
-                item.variantId
-                  ? {
-                      id:
-                        item.variantId,
-
-                      label:
-                        variantLabel,
-
-                      sku:
-                        variantSku,
-
-                      weightGrams:
-                        variantWeightGrams,
-
-                      shippingWeightGrams:
-                        variantShippingWeightGrams,
-                    }
-                  : null,
-            };
-          },
-        ),
-      })),
+            ),
+        }),
+      ),
       {
         status: 200,
-        headers: noStoreHeaders(),
+        headers:
+          noStoreHeaders(),
       },
     );
   } catch (error) {
@@ -222,15 +285,9 @@ export async function GET() {
       error,
     );
 
-    return NextResponse.json(
-      {
-        error:
-          "Failed to load orders.",
-      },
-      {
-        status: 500,
-        headers: noStoreHeaders(),
-      },
+    return errorResponse(
+      "Failed to load orders.",
+      500,
     );
   }
 }
