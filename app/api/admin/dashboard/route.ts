@@ -729,7 +729,7 @@ export async function GET(
             second.stock,
         );
 
-    const needsAttention =
+    const allNeedsAttention =
       attentionCandidates
         .flatMap((order) => {
           const attention =
@@ -818,11 +818,18 @@ export async function GET(
               first.ageMinutes
             );
           },
-        )
-        .slice(
-          0,
-          NEEDS_ATTENTION_LIMIT,
         );
+
+    const needsAttention =
+      allNeedsAttention.slice(
+        0,
+        NEEDS_ATTENTION_LIMIT,
+      );
+
+    const needsAttentionOrderIds =
+      allNeedsAttention.map(
+        (order) => order.id,
+      );
 
     return NextResponse.json(
       {
@@ -851,7 +858,9 @@ export async function GET(
         needsAttention,
 
         needsAttentionCount:
-          needsAttention.length,
+          allNeedsAttention.length,
+
+        needsAttentionOrderIds,
       },
       {
         status: 200,

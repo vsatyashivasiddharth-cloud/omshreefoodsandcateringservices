@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   CheckCircle2,
   Clock3,
   Eye,
@@ -54,7 +55,6 @@ interface OrderItem {
   id: string;
   productId?: string;
   variantId?: string | null;
-
   quantity: number;
   price: number;
 
@@ -73,17 +73,12 @@ interface OrderItem {
 
 interface Order {
   id: string;
-
   customerName: string;
   phone: string;
   email?: string | null;
-
   totalAmount: number;
-
   status: OrderStatus;
-
   createdAt: string;
-
   items: OrderItem[];
 }
 
@@ -98,21 +93,8 @@ interface ApiError {
   message?: string;
 }
 
-/*
- * These are the statuses an administrator
- * may choose manually.
- *
- * CANCELLED is intentionally excluded.
- *
- * Food orders should not have a routine
- * manual cancellation option after they
- * have been placed.
- */
 const statusOptions: Array<{
-  value: Exclude<
-    OrderStatus,
-    "CANCELLED"
-  >;
+  value: OrderStatus;
   label: string;
 }> = [
   {
@@ -139,44 +121,19 @@ const statusOptions: Array<{
     value: "DELIVERED",
     label: "Delivered",
   },
+  {
+    value: "CANCELLED",
+    label: "Cancelled",
+  },
 ];
 
-/*
- * CANCELLED remains a valid internal order
- * state.
- *
- * The payment/shipping system may need this
- * state for exceptional situations, such as
- * a captured payment that cannot be fulfilled.
- *
- * Keeping it here means those orders can
- * still be read and displayed correctly.
- */
-const validStatuses =
-  new Set<OrderStatus>([
-    "PENDING",
-    "PAID",
-    "PREPARING",
-    "PACKED",
-    "OUT_FOR_DELIVERY",
-    "DELIVERED",
-    "CANCELLED",
-  ]);
-
-const manuallyEditableStatuses =
-  new Set<OrderStatus>(
-    statusOptions.map(
-      (option) =>
-        option.value,
-    ),
-  );
+const validStatuses = new Set<OrderStatus>(
+  statusOptions.map((option) => option.value),
+);
 
 function isRecord(
   value: unknown,
-): value is Record<
-  string,
-  unknown
-> {
+): value is Record<string, unknown> {
   return (
     Boolean(value) &&
     typeof value === "object" &&
@@ -189,23 +146,7 @@ function isOrderStatus(
 ): value is OrderStatus {
   return (
     typeof value === "string" &&
-    validStatuses.has(
-      value as OrderStatus,
-    )
-  );
-}
-
-function isManuallyEditableStatus(
-  value: unknown,
-): value is Exclude<
-  OrderStatus,
-  "CANCELLED"
-> {
-  return (
-    typeof value === "string" &&
-    manuallyEditableStatuses.has(
-      value as OrderStatus,
-    )
+    validStatuses.has(value as OrderStatus)
   );
 }
 
@@ -217,10 +158,8 @@ function isProduct(
   }
 
   return (
-    typeof value.id ===
-      "string" &&
-    typeof value.name ===
-      "string"
+    typeof value.id === "string" &&
+    typeof value.name === "string"
   );
 }
 
@@ -232,22 +171,16 @@ function isOrderVariant(
   }
 
   return (
-    typeof value.id ===
-      "string" &&
-    (typeof value.label ===
-      "string" ||
+    typeof value.id === "string" &&
+    (typeof value.label === "string" ||
       value.label === null) &&
-    (typeof value.sku ===
-      "string" ||
+    (typeof value.sku === "string" ||
       value.sku === null) &&
-    (typeof value.weightGrams ===
-      "number" ||
-      value.weightGrams ===
-        null) &&
+    (typeof value.weightGrams === "number" ||
+      value.weightGrams === null) &&
     (typeof value.shippingWeightGrams ===
       "number" ||
-      value.shippingWeightGrams ===
-        null)
+      value.shippingWeightGrams === null)
   );
 }
 
@@ -258,78 +191,48 @@ function isOrderItem(
     return false;
   }
 
-  const quantity =
-    Number(value.quantity);
-
-  const price =
-    Number(value.price);
+  const quantity = Number(value.quantity);
+  const price = Number(value.price);
 
   return (
-    typeof value.id ===
-      "string" &&
-    (typeof value.productId ===
-      "string" ||
-      value.productId ===
-        undefined) &&
-    (typeof value.variantId ===
-      "string" ||
+    typeof value.id === "string" &&
+    (typeof value.productId === "string" ||
+      value.productId === undefined) &&
+    (typeof value.variantId === "string" ||
       value.variantId === null ||
-      value.variantId ===
-        undefined) &&
-    Number.isInteger(
-      quantity,
-    ) &&
+      value.variantId === undefined) &&
+    Number.isInteger(quantity) &&
     quantity > 0 &&
-    Number.isFinite(
-      price,
-    ) &&
+    Number.isFinite(price) &&
     price >= 0 &&
-    (typeof value.productName ===
-      "string" ||
+    (typeof value.productName === "string" ||
       value.productName === null ||
-      value.productName ===
-        undefined) &&
-    (typeof value.productSlug ===
-      "string" ||
+      value.productName === undefined) &&
+    (typeof value.productSlug === "string" ||
       value.productSlug === null ||
-      value.productSlug ===
-        undefined) &&
-    (typeof value.productImage ===
-      "string" ||
+      value.productSlug === undefined) &&
+    (typeof value.productImage === "string" ||
       value.productImage === null ||
-      value.productImage ===
-        undefined) &&
-    (typeof value.variantLabel ===
-      "string" ||
+      value.productImage === undefined) &&
+    (typeof value.variantLabel === "string" ||
       value.variantLabel === null ||
-      value.variantLabel ===
-        undefined) &&
-    (typeof value.variantSku ===
-      "string" ||
+      value.variantLabel === undefined) &&
+    (typeof value.variantSku === "string" ||
       value.variantSku === null ||
-      value.variantSku ===
-        undefined) &&
+      value.variantSku === undefined) &&
     (typeof value.variantWeightGrams ===
       "number" ||
-      value.variantWeightGrams ===
-        null ||
-      value.variantWeightGrams ===
-        undefined) &&
+      value.variantWeightGrams === null ||
+      value.variantWeightGrams === undefined) &&
     (typeof value.variantShippingWeightGrams ===
       "number" ||
-      value.variantShippingWeightGrams ===
-        null ||
+      value.variantShippingWeightGrams === null ||
       value.variantShippingWeightGrams ===
         undefined) &&
-    isProduct(
-      value.product,
-    ) &&
+    isProduct(value.product) &&
     (value.variant === null ||
-      value.variant ===
-        undefined ||
-      isOrderVariant(
-        value.variant,
-      ))
+      value.variant === undefined ||
+      isOrderVariant(value.variant))
   );
 }
 
@@ -341,117 +244,67 @@ function isOrder(
   }
 
   return (
-    typeof value.id ===
-      "string" &&
-    typeof value.customerName ===
-      "string" &&
-    typeof value.phone ===
-      "string" &&
-    (typeof value.email ===
-      "string" ||
+    typeof value.id === "string" &&
+    typeof value.customerName === "string" &&
+    typeof value.phone === "string" &&
+    (typeof value.email === "string" ||
       value.email === null ||
-      value.email ===
-        undefined) &&
-    Number.isFinite(
-      Number(
-        value.totalAmount,
-      ),
-    ) &&
-    isOrderStatus(
-      value.status,
-    ) &&
-    typeof value.createdAt ===
-      "string" &&
-    Array.isArray(
-      value.items,
-    ) &&
-    value.items.every(
-      isOrderItem,
-    )
+      value.email === undefined) &&
+    Number.isFinite(Number(value.totalAmount)) &&
+    isOrderStatus(value.status) &&
+    typeof value.createdAt === "string" &&
+    Array.isArray(value.items) &&
+    value.items.every(isOrderItem)
   );
 }
 
-function normalizeOrder(
-  order: Order,
-): Order {
+function normalizeOrder(order: Order): Order {
   return {
     ...order,
-
-    totalAmount:
-      Math.max(
+    totalAmount: Math.max(
+      0,
+      Number(order.totalAmount),
+    ),
+    items: order.items.map((item) => ({
+      ...item,
+      quantity: Math.max(
+        1,
+        Math.floor(Number(item.quantity)),
+      ),
+      price: Math.max(
         0,
-        Number(
-          order.totalAmount,
-        ),
+        Number(item.price),
       ),
-
-    items:
-      order.items.map(
-        (item) => ({
-          ...item,
-
-          quantity:
-            Math.max(
-              1,
-              Math.floor(
-                Number(
-                  item.quantity,
-                ),
-              ),
-            ),
-
-          price:
-            Math.max(
-              0,
-              Number(
-                item.price,
-              ),
-            ),
-        }),
-      ),
+    })),
   };
 }
 
-function formatStatus(
-  status: OrderStatus,
-) {
+function formatStatus(status: OrderStatus) {
   return status
     .toLowerCase()
     .split("_")
     .map(
       (word) =>
-        word
-          .charAt(0)
-          .toUpperCase() +
+        word.charAt(0).toUpperCase() +
         word.slice(1),
     )
     .join(" ");
 }
 
-function formatOrderDate(
-  value: string,
-) {
-  const date =
-    new Date(value);
+function formatOrderDate(value: string) {
+  const date = new Date(value);
 
-  if (
-    Number.isNaN(
-      date.getTime(),
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return "Date unavailable";
   }
 
-  return new Intl.DateTimeFormat(
-    "en-IN",
-    {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    },
-  ).format(date);
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function getStatusVariant(
@@ -514,148 +367,146 @@ function Stat({
 }
 
 export default function OrdersContent() {
-  const [
-    orders,
-    setOrders,
-  ] =
-    useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [
-    loading,
-    setLoading,
-  ] =
-    useState(true);
-
-  const [
-    error,
-    setError,
-  ] =
-    useState<
-      string | null
-    >(null);
+  const [error, setError] =
+    useState<string | null>(null);
 
   const [
     updatingOrderId,
     setUpdatingOrderId,
-  ] =
-    useState<
-      string | null
-    >(null);
+  ] = useState<string | null>(null);
 
-  const fetchOrders =
-    useCallback(
-      async (
-        signal?:
-          AbortSignal,
-      ) => {
-        setLoading(true);
-        setError(null);
+  const [
+    attentionOrderIds,
+    setAttentionOrderIds,
+  ] = useState<string[]>([]);
 
-        try {
-          const response =
-            await fetch(
-              "/api/admin/orders",
-              {
-                method:
-                  "GET",
+  const [
+    showOverdueOnly,
+    setShowOverdueOnly,
+  ] = useState(false);
 
-                cache:
-                  "no-store",
+  const fetchOrders = useCallback(
+    async (signal?: AbortSignal) => {
+      setLoading(true);
+      setError(null);
 
-                signal,
-              },
-            );
+      try {
+        const [
+          ordersResponse,
+          dashboardResponse,
+        ] = await Promise.all([
+          fetch(
+            "/api/admin/orders",
+            {
+              method: "GET",
+              cache: "no-store",
+              signal,
+            },
+          ),
 
-          const data:
-            unknown =
-            await response
-              .json()
-              .catch(
-                () =>
-                  null,
-              );
+          fetch(
+            "/api/admin/dashboard",
+            {
+              method: "GET",
+              cache: "no-store",
+              signal,
+            },
+          ),
+        ]);
 
-          if (
-            !response.ok
-          ) {
-            const apiError =
-              isRecord(
-                data,
-              )
-                ? (data as ApiError)
-                : null;
+        const ordersData: unknown =
+          await ordersResponse
+            .json()
+            .catch(() => null);
 
-            throw new Error(
-              apiError?.error ||
-                apiError?.message ||
-                "Failed to fetch orders.",
-            );
-          }
+        if (!ordersResponse.ok) {
+          const apiError =
+            isRecord(ordersData)
+              ? (ordersData as ApiError)
+              : null;
 
-          if (
-            !Array.isArray(
-              data,
-            )
-          ) {
-            throw new Error(
-              "The orders response was invalid.",
-            );
-          }
-
-          setOrders(
-            data
-              .filter(
-                isOrder,
-              )
-              .map(
-                normalizeOrder,
-              ),
+          throw new Error(
+            apiError?.error ||
+              apiError?.message ||
+              "Failed to fetch orders.",
           );
-        } catch (
-          loadError
-        ) {
-          if (
-            loadError instanceof
-              DOMException &&
-            loadError.name ===
-              "AbortError"
-          ) {
-            return;
-          }
-
-          console.error(
-            "Orders loading error:",
-            loadError,
-          );
-
-          setOrders([]);
-
-          setError(
-            loadError instanceof
-              Error
-              ? loadError.message
-              : "Unable to load customer orders.",
-          );
-        } finally {
-          if (
-            !signal?.aborted
-          ) {
-            setLoading(
-              false,
-            );
-          }
         }
-      },
-      [],
-    );
+
+        if (!Array.isArray(ordersData)) {
+          throw new Error(
+            "The orders response was invalid.",
+          );
+        }
+
+        const dashboardData: unknown =
+          await dashboardResponse
+            .json()
+            .catch(() => null);
+
+        const loadedAttentionIds =
+          dashboardResponse.ok &&
+          isRecord(dashboardData) &&
+          Array.isArray(
+            dashboardData.needsAttentionOrderIds,
+          )
+            ? dashboardData.needsAttentionOrderIds.filter(
+                (
+                  value,
+                ): value is string =>
+                  typeof value ===
+                    "string" &&
+                  value.trim().length >
+                    0,
+              )
+            : [];
+
+        setOrders(
+          ordersData
+            .filter(isOrder)
+            .map(normalizeOrder),
+        );
+
+        setAttentionOrderIds(
+          loadedAttentionIds,
+        );
+      } catch (loadError) {
+        if (
+          loadError instanceof DOMException &&
+          loadError.name === "AbortError"
+        ) {
+          return;
+        }
+
+        console.error(
+          "Orders loading error:",
+          loadError,
+        );
+
+        setOrders([]);
+        setAttentionOrderIds([]);
+
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load customer orders.",
+        );
+      } finally {
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const controller =
       new AbortController();
 
-    void fetchOrders(
-      controller.signal,
-    );
+    void fetchOrders(controller.signal);
 
     return () => {
       controller.abort();
@@ -666,116 +517,63 @@ export default function OrdersContent() {
     orderId: string,
     status: OrderStatus,
   ) {
-    /*
-     * CANCELLED is an internal/system-only
-     * state and must never be submitted from
-     * this manual admin control.
-     */
-    if (
-      !isManuallyEditableStatus(
-        status,
-      )
-    ) {
-      toast.error(
-        "This order status cannot be selected manually.",
-      );
+    if (!isOrderStatus(status)) {
+      toast.error("Invalid order status.");
       return;
     }
 
-    const currentOrder =
-      orders.find(
-        (order) =>
-          order.id ===
-          orderId,
-      );
+    const currentOrder = orders.find(
+      (order) => order.id === orderId,
+    );
 
     if (
       !currentOrder ||
-      currentOrder.status ===
-        status ||
+      currentOrder.status === status ||
       updatingOrderId
     ) {
-      return;
-    }
-
-    /*
-     * Once an order reaches the internal
-     * CANCELLED state, do not allow this
-     * screen to revive or mutate it.
-     */
-    if (
-      currentOrder.status ===
-      "CANCELLED"
-    ) {
-      toast.error(
-        "System-cancelled orders cannot be changed from this screen.",
-      );
       return;
     }
 
     const previousStatus =
       currentOrder.status;
 
-    setUpdatingOrderId(
-      orderId,
-    );
+    setUpdatingOrderId(orderId);
 
-    setOrders(
-      (
-        currentOrders,
-      ) =>
-        currentOrders.map(
-          (order) =>
-            order.id ===
-            orderId
-              ? {
-                  ...order,
-                  status,
-                }
-              : order,
-        ),
+    setOrders((currentOrders) =>
+      currentOrders.map((order) =>
+        order.id === orderId
+          ? {
+              ...order,
+              status,
+            }
+          : order,
+      ),
     );
 
     try {
-      const response =
-        await fetch(
-          `/api/admin/orders/${encodeURIComponent(
-            orderId,
-          )}`,
-          {
-            method:
-              "PATCH",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body:
-              JSON.stringify(
-                {
-                  status,
-                },
-              ),
+      const response = await fetch(
+        `/api/admin/orders/${encodeURIComponent(
+          orderId,
+        )}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type":
+              "application/json",
           },
-        );
+          body: JSON.stringify({
+            status,
+          }),
+        },
+      );
 
-      const data:
-        unknown =
-        await response
-          .json()
-          .catch(
-            () =>
-              null,
-          );
+      const data: unknown = await response
+        .json()
+        .catch(() => null);
 
-      if (
-        !response.ok
-      ) {
+      if (!response.ok) {
         const apiError =
-          isRecord(
-            data,
-          )
+          isRecord(data)
             ? (data as ApiError)
             : null;
 
@@ -791,91 +589,98 @@ export default function OrdersContent() {
           status,
         )}.`,
       );
-    } catch (
-      updateError
-    ) {
+    } catch (updateError) {
       console.error(
         "Order status update error:",
         updateError,
       );
 
-      setOrders(
-        (
-          currentOrders,
-        ) =>
-          currentOrders.map(
-            (order) =>
-              order.id ===
-              orderId
-                ? {
-                    ...order,
-                    status:
-                      previousStatus,
-                  }
-                : order,
-          ),
+      setOrders((currentOrders) =>
+        currentOrders.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                status: previousStatus,
+              }
+            : order,
+        ),
       );
 
       toast.error(
-        updateError instanceof
-          Error
+        updateError instanceof Error
           ? updateError.message
           : "Unable to update order status.",
       );
     } finally {
-      setUpdatingOrderId(
-        null,
-      );
+      setUpdatingOrderId(null);
     }
   }
 
-  const stats =
+  const attentionIdSet =
     useMemo(
-      () => ({
-        total:
-          orders.length,
-
-        pending:
-          orders.filter(
-            (order) =>
-              order.status ===
-              "PENDING",
-          ).length,
-
-        preparing:
-          orders.filter(
-            (order) =>
-              order.status ===
-                "PAID" ||
-              order.status ===
-                "PREPARING" ||
-              order.status ===
-                "PACKED" ||
-              order.status ===
-                "OUT_FOR_DELIVERY",
-          ).length,
-
-        delivered:
-          orders.filter(
-            (order) =>
-              order.status ===
-              "DELIVERED",
-          ).length,
-
-        /*
-         * This is informational only.
-         * It does not provide a cancellation
-         * action.
-         */
-        cancelled:
-          orders.filter(
-            (order) =>
-              order.status ===
-              "CANCELLED",
-          ).length,
-      }),
-      [orders],
+      () =>
+        new Set(
+          attentionOrderIds,
+        ),
+      [attentionOrderIds],
     );
+
+  const overdueOrders =
+    useMemo(
+      () =>
+        orders.filter(
+          (order) =>
+            attentionIdSet.has(
+              order.id,
+            ),
+        ),
+      [
+        orders,
+        attentionIdSet,
+      ],
+    );
+
+  const visibleOrders =
+    showOverdueOnly
+      ? overdueOrders
+      : orders;
+
+  const stats = useMemo(
+    () => ({
+      total: orders.length,
+
+      pending: orders.filter(
+        (order) =>
+          order.status === "PENDING",
+      ).length,
+
+      preparing: orders.filter(
+        (order) =>
+          order.status === "PAID" ||
+          order.status === "PREPARING" ||
+          order.status === "PACKED" ||
+          order.status ===
+            "OUT_FOR_DELIVERY",
+      ).length,
+
+      delivered: orders.filter(
+        (order) =>
+          order.status === "DELIVERED",
+      ).length,
+
+      cancelled: orders.filter(
+        (order) =>
+          order.status === "CANCELLED",
+      ).length,
+
+      overdue:
+        overdueOrders.length,
+    }),
+    [
+      orders,
+      overdueOrders.length,
+    ],
+  );
 
   if (loading) {
     return (
@@ -917,9 +722,7 @@ export default function OrdersContent() {
               variant="primary"
               leftIcon={
                 <RefreshCw
-                  size={
-                    18
-                  }
+                  size={18}
                   aria-hidden="true"
                 />
               }
@@ -960,10 +763,8 @@ export default function OrdersContent() {
             </h1>
 
             <p className="mt-3 max-w-2xl leading-7 text-gray-600">
-              Review orders,
-              update fulfilment
-              status and inspect
-              purchased products.
+              Review orders, update fulfilment
+              status and inspect purchased products.
             </p>
           </div>
 
@@ -984,12 +785,10 @@ export default function OrdersContent() {
           </Button>
         </div>
 
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           <Stat
             title="Total"
-            value={
-              stats.total
-            }
+            value={stats.total}
             icon={
               <ShoppingBag
                 size={24}
@@ -1000,9 +799,7 @@ export default function OrdersContent() {
 
           <Stat
             title="Pending"
-            value={
-              stats.pending
-            }
+            value={stats.pending}
             icon={
               <Clock3
                 size={24}
@@ -1013,9 +810,7 @@ export default function OrdersContent() {
 
           <Stat
             title="In Progress"
-            value={
-              stats.preparing
-            }
+            value={stats.preparing}
             icon={
               <Package
                 size={24}
@@ -1026,9 +821,7 @@ export default function OrdersContent() {
 
           <Stat
             title="Delivered"
-            value={
-              stats.delivered
-            }
+            value={stats.delivered}
             icon={
               <Truck
                 size={24}
@@ -1038,10 +831,8 @@ export default function OrdersContent() {
           />
 
           <Stat
-            title="System Exceptions"
-            value={
-              stats.cancelled
-            }
+            title="Cancelled"
+            value={stats.cancelled}
             icon={
               <XCircle
                 size={24}
@@ -1049,330 +840,361 @@ export default function OrdersContent() {
               />
             }
           />
+
+          <Stat
+            title="Overdue Shipments"
+            value={stats.overdue}
+            icon={
+              <AlertTriangle
+                size={24}
+                aria-hidden="true"
+              />
+            }
+          />
         </div>
 
-        {orders.length ===
-        0 ? (
+        <Card
+          padding="md"
+          className="mt-8 border-[#F3DFC2] bg-white/90"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-bold text-[#6D2E00]">
+                Shipment priority
+              </p>
+
+              <p className="mt-1 text-sm leading-6 text-gray-500">
+                Overdue includes paid orders waiting more
+                than 60 minutes plus immediate shipment
+                failures, RTOs and courier problems.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setShowOverdueOnly(false)
+                }
+                className={`inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 ${
+                  !showOverdueOnly
+                    ? "bg-[#6D2E00] text-white"
+                    : "border border-[#E7C98C] bg-white text-[#6D2E00] hover:bg-[#FFF8EE]"
+                }`}
+              >
+                All Orders ({orders.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setShowOverdueOnly(true)
+                }
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-amber-300/40 ${
+                  showOverdueOnly
+                    ? "bg-amber-500 text-white"
+                    : "border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                }`}
+              >
+                <AlertTriangle
+                  size={16}
+                  aria-hidden="true"
+                />
+
+                Overdue Shipments (
+                {stats.overdue})
+              </button>
+            </div>
+          </div>
+        </Card>
+
+        {visibleOrders.length === 0 ? (
           <Card
             variant="glass"
             padding="lg"
             className="mt-10 bg-white/90 text-center shadow-xl"
           >
-            <ShoppingBag
-              size={52}
-              className="mx-auto text-[#C89B3C]"
-              aria-hidden="true"
-            />
+            {showOverdueOnly ? (
+              <CheckCircle2
+                size={52}
+                className="mx-auto text-green-600"
+                aria-hidden="true"
+              />
+            ) : (
+              <ShoppingBag
+                size={52}
+                className="mx-auto text-[#C89B3C]"
+                aria-hidden="true"
+              />
+            )}
 
             <h2 className="mt-5 text-2xl font-bold text-[#6D2E00]">
-              No Orders Found
+              {showOverdueOnly
+                ? "No Overdue Shipments"
+                : "No Orders Found"}
             </h2>
 
             <p className="mt-2 text-gray-500">
-              Orders will appear
-              here when customers
-              begin placing them.
+              {showOverdueOnly
+                ? "No orders currently require shipment attention."
+                : "Orders will appear here when customers begin placing them."}
             </p>
           </Card>
         ) : (
           <div className="mt-10 space-y-6">
-            {orders.map(
-              (order) => {
-                const isUpdating =
-                  updatingOrderId ===
-                  order.id;
+            {visibleOrders.map((order) => {
+              const isUpdating =
+                updatingOrderId === order.id;
 
-                const isSystemCancelled =
-                  order.status ===
-                  "CANCELLED";
+              const needsAttention =
+                attentionIdSet.has(
+                  order.id,
+                );
 
-                return (
-                  <Card
-                    key={
-                      order.id
-                    }
-                    padding="none"
-                    hover
-                    className="overflow-hidden bg-white/95 backdrop-blur-sm"
-                  >
-                    <div className="flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DE] text-[#C89B3C]">
-                            <User
-                              size={
-                                24
-                              }
-                              aria-hidden="true"
-                            />
-                          </div>
-
-                          <div className="min-w-0">
-                            <h2 className="truncate text-xl font-bold text-[#6D2E00] sm:text-2xl">
-                              {
-                                order.customerName
-                              }
-                            </h2>
-
-                            <p className="mt-1 text-sm text-gray-500">
-                              Order #
-                              {order.id.slice(
-                                0,
-                                8,
-                              )}
-                            </p>
-                          </div>
+              return (
+                <Card
+                  key={order.id}
+                  padding="none"
+                  hover
+                  className={`overflow-hidden backdrop-blur-sm ${
+                    needsAttention
+                      ? "border-amber-300 bg-amber-50/70 ring-1 ring-amber-200"
+                      : "bg-white/95"
+                  }`}
+                >
+                  <div className="flex flex-col gap-8 p-6 sm:p-8 lg:flex-row lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DE] text-[#C89B3C]">
+                          <User
+                            size={24}
+                            aria-hidden="true"
+                          />
                         </div>
 
-                        <div className="mt-6 grid gap-4 text-sm text-gray-700 sm:grid-cols-2">
-                          <div>
-                            <span className="font-semibold text-[#6D2E00]">
-                              Phone:
-                            </span>{" "}
-                            {
-                              order.phone
-                            }
-                          </div>
+                        <div className="min-w-0">
+                          <h2 className="truncate text-xl font-bold text-[#6D2E00] sm:text-2xl">
+                            {order.customerName}
+                          </h2>
 
-                          <div className="min-w-0 break-words">
-                            <span className="font-semibold text-[#6D2E00]">
-                              Email:
-                            </span>{" "}
-                            {order.email ||
-                              "Not provided"}
-                          </div>
-
-                          <div>
-                            <span className="font-semibold text-[#6D2E00]">
-                              Total:
-                            </span>{" "}
-                            <span className="text-lg font-bold text-[#C89B3C]">
-                              {formatCurrency(
-                                order.totalAmount,
-                              )}
-                            </span>
-                          </div>
-
-                          <div>
-                            <span className="font-semibold text-[#6D2E00]">
-                              Date:
-                            </span>{" "}
-                            {formatOrderDate(
-                              order.createdAt,
-                            )}
-                          </div>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Order #
+                            {order.id.slice(0, 8)}
+                          </p>
                         </div>
                       </div>
 
-                      <div className="flex w-full flex-col gap-4 lg:w-72">
+                      <div className="mt-6 grid gap-4 text-sm text-gray-700 sm:grid-cols-2">
+                        <div>
+                          <span className="font-semibold text-[#6D2E00]">
+                            Phone:
+                          </span>{" "}
+                          {order.phone}
+                        </div>
+
+                        <div className="min-w-0 break-words">
+                          <span className="font-semibold text-[#6D2E00]">
+                            Email:
+                          </span>{" "}
+                          {order.email ||
+                            "Not provided"}
+                        </div>
+
+                        <div>
+                          <span className="font-semibold text-[#6D2E00]">
+                            Total:
+                          </span>{" "}
+                          <span className="text-lg font-bold text-[#C89B3C]">
+                            {formatCurrency(
+                              order.totalAmount,
+                            )}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="font-semibold text-[#6D2E00]">
+                            Date:
+                          </span>{" "}
+                          {formatOrderDate(
+                            order.createdAt,
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex w-full flex-col gap-4 lg:w-72">
+                      {needsAttention && (
                         <Badge
-                          variant={getStatusVariant(
-                            order.status,
-                          )}
+                          variant="warning"
                           rounded
-                          className="w-fit"
+                          className="w-fit gap-2"
                         >
-                          {formatStatus(
-                            order.status,
-                          )}
-                        </Badge>
-
-                        {isSystemCancelled ? (
-                          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                            <p className="text-sm font-semibold text-red-700">
-                              System
-                              exception
-                            </p>
-
-                            <p className="mt-1 text-xs leading-5 text-red-600">
-                              This order
-                              cannot be
-                              changed from
-                              the manual
-                              fulfilment
-                              controls.
-                            </p>
-                          </div>
-                        ) : (
-                          <>
-                            <label
-                              htmlFor={`status-${order.id}`}
-                              className="text-sm font-semibold text-[#6D2E00]"
-                            >
-                              Update
-                              status
-                            </label>
-
-                            <select
-                              id={`status-${order.id}`}
-                              value={
-                                order.status
-                              }
-                              disabled={
-                                isUpdating ||
-                                Boolean(
-                                  updatingOrderId &&
-                                    !isUpdating,
-                                )
-                              }
-                              onChange={(
-                                event,
-                              ) => {
-                                const nextStatus =
-                                  event
-                                    .target
-                                    .value;
-
-                                if (
-                                  isManuallyEditableStatus(
-                                    nextStatus,
-                                  )
-                                ) {
-                                  void updateStatus(
-                                    order.id,
-                                    nextStatus,
-                                  );
-                                }
-                              }}
-                              className="h-12 rounded-xl border border-[#E7C98C] bg-white px-4 text-[#6D2E00] outline-none transition focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              {statusOptions.map(
-                                (
-                                  option,
-                                ) => (
-                                  <option
-                                    key={
-                                      option.value
-                                    }
-                                    value={
-                                      option.value
-                                    }
-                                  >
-                                    {
-                                      option.label
-                                    }
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                          </>
-                        )}
-
-                        <Link
-                          href={`/admin/orders/${order.id}`}
-                          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-5 font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20"
-                        >
-                          <Eye
-                            size={
-                              18
-                            }
+                          <AlertTriangle
+                            size={15}
                             aria-hidden="true"
                           />
 
-                          View Details
-                        </Link>
-                      </div>
-                    </div>
+                          Overdue Shipment
+                        </Badge>
+                      )}
 
-                    <div className="border-t border-[#F3DFC2] bg-[#FFFDF8] p-6 sm:p-8">
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2
-                          size={
-                            20
+                      <Badge
+                        variant={getStatusVariant(
+                          order.status,
+                        )}
+                        rounded
+                        className="w-fit"
+                      >
+                        {formatStatus(
+                          order.status,
+                        )}
+                      </Badge>
+
+                      <label
+                        htmlFor={`status-${order.id}`}
+                        className="text-sm font-semibold text-[#6D2E00]"
+                      >
+                        Update status
+                      </label>
+
+                      <select
+                        id={`status-${order.id}`}
+                        value={order.status}
+                        disabled={
+                          isUpdating ||
+                          Boolean(
+                            updatingOrderId &&
+                              !isUpdating,
+                          )
+                        }
+                        onChange={(event) => {
+                          const nextStatus =
+                            event.target.value;
+
+                          if (
+                            isOrderStatus(
+                              nextStatus,
+                            )
+                          ) {
+                            void updateStatus(
+                              order.id,
+                              nextStatus,
+                            );
                           }
-                          className="text-[#C89B3C]"
+                        }}
+                        className="h-12 rounded-xl border border-[#E7C98C] bg-white px-4 text-[#6D2E00] outline-none transition focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {statusOptions.map(
+                          (option) => (
+                            <option
+                              key={
+                                option.value
+                              }
+                              value={
+                                option.value
+                              }
+                            >
+                              {option.label}
+                            </option>
+                          ),
+                        )}
+                      </select>
+
+                      <Link
+                        href={`/admin/orders/${order.id}`}
+                        className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-5 font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20"
+                      >
+                        <Eye
+                          size={18}
                           aria-hidden="true"
                         />
 
-                        <h3 className="text-lg font-bold text-[#6D2E00]">
-                          Ordered
-                          Items
-                        </h3>
-                      </div>
+                        View Details
+                      </Link>
+                    </div>
+                  </div>
 
-                      <div className="mt-5 space-y-3">
-                        {order.items
-                          .length ===
-                        0 ? (
-                          <p className="rounded-2xl border border-dashed border-[#F3DFC2] bg-white px-5 py-6 text-center text-gray-500">
-                            No order
-                            items
-                            found.
-                          </p>
-                        ) : (
-                          order.items.map(
-                            (
-                              item,
-                            ) => {
-                              const lineTotal =
-                                item.price *
-                                item.quantity;
+                  <div className="border-t border-[#F3DFC2] bg-[#FFFDF8] p-6 sm:p-8">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2
+                        size={20}
+                        className="text-[#C89B3C]"
+                        aria-hidden="true"
+                      />
 
-                              return (
-                                <div
-                                  key={
-                                    item.id
-                                  }
-                                  className="flex items-center justify-between gap-5 rounded-2xl border border-[#F3DFC2] bg-white px-5 py-4"
-                                >
-                                  <div className="min-w-0">
-                                    <p className="truncate font-semibold text-[#6D2E00]">
-                                      {item.productName ||
-                                        item
-                                          .product
-                                          .name}
-                                    </p>
+                      <h3 className="text-lg font-bold text-[#6D2E00]">
+                        Ordered Items
+                      </h3>
+                    </div>
 
-                                    {item.variantLabel && (
-                                      <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
-                                        {
-                                          item.variantLabel
-                                        }
-                                        {item.variantSku
-                                          ? ` • SKU: ${item.variantSku}`
-                                          : ""}
-                                      </p>
-                                    )}
+                    <div className="mt-5 space-y-3">
+                      {order.items.length === 0 ? (
+                        <p className="rounded-2xl border border-dashed border-[#F3DFC2] bg-white px-5 py-6 text-center text-gray-500">
+                          No order items found.
+                        </p>
+                      ) : (
+                        order.items.map(
+                          (item) => {
+                            const lineTotal =
+                              item.price *
+                              item.quantity;
 
-                                    <p className="mt-1 text-sm text-gray-500">
-                                      Quantity:{" "}
-                                      {
-                                        item.quantity
-                                      }
-                                      {item.variantWeightGrams !==
-                                        null &&
-                                      item.variantWeightGrams !==
-                                        undefined
-                                        ? ` • ${item.variantWeightGrams} g`
+                            return (
+                              <div
+                                key={item.id}
+                                className="flex items-center justify-between gap-5 rounded-2xl border border-[#F3DFC2] bg-white px-5 py-4"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate font-semibold text-[#6D2E00]">
+                                    {item.productName ||
+                                      item.product.name}
+                                  </p>
+
+                                  {item.variantLabel && (
+                                    <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
+                                      {item.variantLabel}
+                                      {item.variantSku
+                                        ? ` • SKU: ${item.variantSku}`
                                         : ""}
                                     </p>
-                                  </div>
+                                  )}
 
-                                  <div className="shrink-0 text-right">
-                                    <p className="font-bold text-[#6D2E00]">
-                                      {formatCurrency(
-                                        lineTotal,
-                                      )}
-                                    </p>
-
-                                    <p className="mt-1 text-xs text-gray-500">
-                                      {formatCurrency(
-                                        item.price,
-                                      )}{" "}
-                                      each
-                                    </p>
-                                  </div>
+                                  <p className="mt-1 text-sm text-gray-500">
+                                    Quantity:{" "}
+                                    {item.quantity}
+                                    {item.variantWeightGrams !==
+                                      null &&
+                                    item.variantWeightGrams !==
+                                      undefined
+                                      ? ` • ${item.variantWeightGrams} g`
+                                      : ""}
+                                  </p>
                                 </div>
-                              );
-                            },
-                          )
-                        )}
-                      </div>
+
+                                <div className="shrink-0 text-right">
+                                  <p className="font-bold text-[#6D2E00]">
+                                    {formatCurrency(
+                                      lineTotal,
+                                    )}
+                                  </p>
+
+                                  <p className="mt-1 text-xs text-gray-500">
+                                    {formatCurrency(
+                                      item.price,
+                                    )}{" "}
+                                    each
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          },
+                        )
+                      )}
                     </div>
-                  </Card>
-                );
-              },
-            )}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </Container>
