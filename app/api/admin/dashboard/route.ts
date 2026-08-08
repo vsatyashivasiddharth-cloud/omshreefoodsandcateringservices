@@ -2,6 +2,7 @@ import {
   OrderStatus,
   PaymentStatus,
   Prisma,
+  ShipmentStatus,
 } from "@prisma/client";
 import {
   NextRequest,
@@ -15,6 +16,30 @@ import prisma from "@/lib/prisma";
 
 const REVENUE_MONTHS = 6;
 const LOW_STOCK_THRESHOLD = 5;
+const NEEDS_ATTENTION_LIMIT = 8;
+const ATTENTION_SCAN_LIMIT = 75;
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+  };
+}
+
+function errorResponse(
+  error: string,
+  status: number,
+) {
+  return NextResponse.json(
+    {
+      error,
+    },
+    {
+      status,
+      headers: noStoreHeaders(),
+    },
+  );
+}
 
 function getMonthKey(
   date: Date,
@@ -68,45 +93,156 @@ function normalizeNonNegativeNumber(
   );
 }
 
-function noStoreHeaders() {
-  return {
-    "Cache-Control":
-      "private, no-store, max-age=0",
-  };
+function getAgeMinutes(
+  createdAt: Date,
+  now: Date,
+) {
+  return Math.max(
+    0,
+    Math.floor(
+      (now.getTime() -
+        createdAt.getTime()) /
+        60_000,
+    ),
+  );
 }
 
-function errorResponse(
-  error: string,
-  status: number,
+function containsOperationalProblem(
+  value: string | null,
 ) {
-  return NextResponse.json(
-    {
-      error,
-    },
-    {
-      status,
-      headers:
-        noStoreHeaders(),
-    },
+  const normalized =
+    value
+      ?.trim()
+      .toLowerCase() ?? "";
+
+  if (!normalized) {
+    return false;
+  }
+
+  const problemTerms = [
+    "bad address",
+    "incomplete address",
+    "failed",
+    "failure",
+    "not delivered",
+    "undelivered",
+    "cancelled",
+    "canceled",
+    "rto",
+    "return to origin",
+    "damaged",
+    "lost",
+    "hold",
+    "exception",
+  ];
+
+  return problemTerms.some(
+    (term) =>
+      normalized.includes(term),
   );
+}
+
+interface AttentionCandidate {
+  id: string;
+  customerName: string;
+  totalAmount: Prisma.Decimal;
+  status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  shipmentStatus: ShipmentStatus;
+  shippingProvider: string;
+  delhiveryWaybill: string | null;
+  delhiveryStatus: string | null;
+  shippingQuotedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+function getAttentionReason(
+  order: AttentionCandidate,
+  now: Date,
+) {
+  const ageMinutes =
+    getAgeMinutes(
+      order.createdAt,
+      now,
+    );
+
+  if (
+    order.shipmentStatus ===
+      ShipmentStatus.FAILED
+  ) {
+    return {
+      severity:
+        "critical" as const,
+      reason:
+        "Shipment creation or delivery has failed.",
+      action:
+        "Open the order and review the shipment error before retrying.",
+      ageMinutes,
+    };
+  }
+
+  if (
+    order.shipmentStatus ===
+      ShipmentStatus.RTO
+  ) {
+    return {
+      severity:
+        "critical" as const,
+      reason:
+        "The shipment is being returned to origin.",
+      action:
+        "Review the courier status and contact the customer if needed.",
+      ageMinutes,
+    };
+  }
+
+  if (
+    containsOperationalProblem(
+      order.delhiveryStatus,
+    )
+  ) {
+    return {
+      severity:
+        "critical" as const,
+      reason:
+        order.delhiveryStatus?.trim() ||
+        "Delhivery reported a shipment problem.",
+      action:
+        "Open the order and review the latest Delhivery status.",
+      ageMinutes,
+    };
+  }
+
+  if (
+    !order.delhiveryWaybill?.trim() &&
+    (order.shipmentStatus ===
+      ShipmentStatus.QUOTED ||
+      order.shipmentStatus ===
+        ShipmentStatus.NOT_CREATED)
+  ) {
+    return {
+      severity:
+        ageMinutes >= 60
+          ? ("warning" as const)
+          : ("info" as const),
+      reason:
+        "Paid order is waiting for shipment creation.",
+      action:
+        "Create the Delhivery shipment when the order is ready for fulfilment.",
+      ageMinutes,
+    };
+  }
+
+  return null;
 }
 
 export async function GET(
   request: NextRequest,
 ) {
   try {
-    /*
-     * Protect the dashboard API independently
-     * from the /admin page-level proxy.
-     *
-     * This prevents someone from requesting
-     * /api/admin/dashboard directly without
-     * a valid administrator session.
-     */
     const authentication =
-      await requireAdmin(
-        request,
-      );
+      await requireAdmin(request);
 
     if (
       !authentication.authenticated
@@ -129,12 +265,11 @@ export async function GET(
       );
 
     /*
-     * Revenue includes:
-     * - successfully paid orders, or
-     * - delivered orders
+     * Revenue includes successfully paid
+     * orders or delivered orders.
      *
-     * Cancelled and refunded orders
-     * are excluded.
+     * Cancelled and refunded orders are
+     * excluded.
      */
     const revenueOrderFilter:
       Prisma.OrderWhereInput =
@@ -171,6 +306,7 @@ export async function GET(
       revenueOrders,
       recentOrders,
       lowStockProductRecords,
+      attentionCandidates,
     ] =
       await Promise.all([
         prisma.order.count(),
@@ -239,14 +375,12 @@ export async function GET(
         }),
 
         /*
-         * A product is considered
-         * low stock when ANY ACTIVE
-         * variant has 5 or fewer
-         * units remaining.
+         * A product is considered low stock
+         * when any active variant has 5 or
+         * fewer units remaining.
          *
-         * Legacy products without
-         * active variants fall back
-         * to product.stock.
+         * Legacy products without active
+         * variants fall back to product.stock.
          */
         prisma.product.findMany({
           where: {
@@ -327,6 +461,48 @@ export async function GET(
             },
           },
         }),
+
+        /*
+         * Scan recent successful paid orders
+         * that have not been cancelled or
+         * refunded. Filtering into actual
+         * attention items happens below so
+         * Delhivery text statuses can also be
+         * inspected safely.
+         */
+        prisma.order.findMany({
+          where: {
+            paymentStatus:
+              PaymentStatus.SUCCESS,
+
+            status: {
+              not:
+                OrderStatus.CANCELLED,
+            },
+          },
+
+          orderBy: {
+            createdAt: "desc",
+          },
+
+          take:
+            ATTENTION_SCAN_LIMIT,
+
+          select: {
+            id: true,
+            customerName: true,
+            totalAmount: true,
+            status: true,
+            paymentStatus: true,
+            shipmentStatus: true,
+            shippingProvider: true,
+            delhiveryWaybill: true,
+            delhiveryStatus: true,
+            shippingQuotedAt: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        }),
       ]);
 
     /*
@@ -399,7 +575,7 @@ export async function GET(
       );
 
     /*
-     * Normalize recent orders
+     * Normalize recent orders.
      */
     const normalizedRecentOrders =
       recentOrders.map(
@@ -415,21 +591,6 @@ export async function GET(
 
     /*
      * Normalize low-stock products.
-     *
-     * Keep the existing dashboard
-     * response fields:
-     * id, name, slug, stock,
-     * image and price.
-     *
-     * For products with variants,
-     * stock/price represent the
-     * active variant with the
-     * LOWEST stock.
-     *
-     * Extra variant fields are also
-     * returned so DashboardContent
-     * can display them without
-     * another API change.
      */
     const normalizedLowStockProducts =
       lowStockProductRecords
@@ -437,10 +598,6 @@ export async function GET(
           const activeVariants =
             product.variants;
 
-          /*
-           * Legacy product with no active
-           * ProductVariant records.
-           */
           if (
             activeVariants.length ===
             0
@@ -502,11 +659,6 @@ export async function GET(
                 LOW_STOCK_THRESHOLD,
             );
 
-          /*
-           * Query ordering puts the
-           * lowest-stock active
-           * variant first.
-           */
           const mostUrgentVariant =
             lowStockVariants[0] ??
             activeVariants[0];
@@ -537,10 +689,12 @@ export async function GET(
               ),
 
             variantId:
-              mostUrgentVariant.id,
+              mostUrgentVariant
+                .id,
 
             variantLabel:
-              mostUrgentVariant.label,
+              mostUrgentVariant
+                .label,
 
             variantWeightGrams:
               normalizeNonNegativeInteger(
@@ -567,6 +721,101 @@ export async function GET(
             second.stock,
         );
 
+    const needsAttention =
+      attentionCandidates
+        .flatMap((order) => {
+          const attention =
+            getAttentionReason(
+              order,
+              now,
+            );
+
+          if (!attention) {
+            return [];
+          }
+
+          return [
+            {
+              id: order.id,
+
+              customerName:
+                order.customerName,
+
+              totalAmount:
+                normalizeNonNegativeNumber(
+                  order.totalAmount,
+                ),
+
+              orderStatus:
+                order.status,
+
+              shipmentStatus:
+                order.shipmentStatus,
+
+              delhiveryStatus:
+                order.delhiveryStatus,
+
+              delhiveryWaybill:
+                order.delhiveryWaybill,
+
+              shippingQuotedAt:
+                order.shippingQuotedAt
+                  ?.toISOString() ??
+                null,
+
+              createdAt:
+                order.createdAt.toISOString(),
+
+              updatedAt:
+                order.updatedAt.toISOString(),
+
+              severity:
+                attention.severity,
+
+              reason:
+                attention.reason,
+
+              action:
+                attention.action,
+
+              ageMinutes:
+                attention.ageMinutes,
+            },
+          ];
+        })
+        .sort(
+          (first, second) => {
+            const severityRank = {
+              critical: 0,
+              warning: 1,
+              info: 2,
+            } as const;
+
+            const severityDifference =
+              severityRank[
+                first.severity
+              ] -
+              severityRank[
+                second.severity
+              ];
+
+            if (
+              severityDifference !== 0
+            ) {
+              return severityDifference;
+            }
+
+            return (
+              second.ageMinutes -
+              first.ageMinutes
+            );
+          },
+        )
+        .slice(
+          0,
+          NEEDS_ATTENTION_LIMIT,
+        );
+
     return NextResponse.json(
       {
         totalOrders,
@@ -580,7 +829,7 @@ export async function GET(
             revenueResult
               ._sum
               .totalAmount ??
-              0,
+            0,
           ),
 
         revenueChart,
@@ -590,6 +839,11 @@ export async function GET(
 
         lowStockProducts:
           normalizedLowStockProducts,
+
+        needsAttention,
+
+        needsAttentionCount:
+          needsAttention.length,
       },
       {
         status: 200,
@@ -604,7 +858,7 @@ export async function GET(
     );
 
     return errorResponse(
-      "Failed to load dashboard.",
+      "Failed to load dashboard",
       500,
     );
   }
