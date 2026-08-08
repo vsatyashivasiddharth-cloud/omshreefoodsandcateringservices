@@ -6,8 +6,16 @@ import OrderSuccessContent from "@/components/order-success/OrderSuccessContent"
 
 export const metadata: Metadata = {
   title: "Order Confirmed",
+
   description:
     "View your order confirmation, delivery details and purchased items.",
+
+  robots: {
+    index: false,
+    follow: false,
+  },
+
+  referrer: "no-referrer",
 };
 
 export const dynamic = "force-dynamic";
