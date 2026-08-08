@@ -1,8 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import type {
+  FormEvent,
+} from "react";
 import {
+  useState,
+} from "react";
+import {
+  useRouter,
+} from "next/navigation";
+import {
+  AlertCircle,
   Eye,
   EyeOff,
   Lock,
@@ -10,68 +18,172 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+interface LoginResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
+function getSafeDestination() {
+  if (
+    typeof window === "undefined"
+  ) {
+    return "/admin/dashboard";
+  }
+
+  const searchParams =
+    new URLSearchParams(
+      window.location.search,
+    );
+
+  const next =
+    searchParams.get("next");
+
+  if (
+    !next ||
+    !next.startsWith("/admin/") ||
+    next.startsWith("//") ||
+    next.startsWith(
+      "/admin/login",
+    )
+  ) {
+    return "/admin/dashboard";
+  }
+
+  return next;
+}
+
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] =
+  const [email, setEmail] =
     useState("");
 
-  const [loading, setLoading] =
-    useState(false);
+  const [
+    password,
+    setPassword,
+  ] = useState("");
 
-  const [showPassword, setShowPassword] =
-    useState(false);
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
+
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null,
+  );
 
   async function handleLogin(
-    e: React.FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) {
-    e.preventDefault();
+    event.preventDefault();
+
+    if (loading) {
+      return;
+    }
+
+    const normalizedEmail =
+      email.trim().toLowerCase();
+
+    if (
+      !normalizedEmail ||
+      !password
+    ) {
+      setError(
+        "Enter your email and password.",
+      );
+      return;
+    }
 
     setLoading(true);
+    setError(null);
 
     try {
-      const res = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
+      const response =
+        await fetch(
+          "/api/admin/login",
+          {
+            method: "POST",
 
-      const data = await res.json();
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
 
-      if (!res.ok) {
-        alert(data.error);
-        return;
+            body: JSON.stringify({
+              email:
+                normalizedEmail,
+              password,
+            }),
+
+            credentials:
+              "same-origin",
+          },
+        );
+
+      const data: LoginResponse =
+        await response
+          .json()
+          .catch(() => ({
+            error:
+              "Unable to read the server response.",
+          }));
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Unable to sign in.",
+        );
       }
 
-      router.push("/admin/dashboard");
+      /*
+       * The HTTP-only admin cookie has now
+       * been created by /api/admin/login.
+       *
+       * Return to the exact admin route
+       * originally requested.
+       */
+      const destination =
+        getSafeDestination();
+
+      router.replace(destination);
+      router.refresh();
+    } catch (loginError) {
+      console.error(
+        "Admin login error:",
+        loginError,
+      );
+
+      setError(
+        loginError instanceof Error
+          ? loginError.message
+          : "Unable to sign in.",
+      );
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9]">
-
+    <main className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE]">
       <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-6 py-12">
-
         <div className="grid w-full overflow-hidden rounded-[36px] bg-white shadow-2xl lg:grid-cols-2">
-
-          {/* Left Side */}
-
+          {/* Left side */}
           <div className="hidden bg-gradient-to-br from-[#6D2E00] via-[#8B4513] to-[#C89B3C] p-12 text-white lg:flex lg:flex-col lg:justify-between">
-
             <div>
-
               <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/20">
-
-                <ShieldCheck size={34} />
-
+                <ShieldCheck
+                  size={34}
+                  aria-hidden="true"
+                />
               </div>
 
               <h1 className="text-4xl font-bold leading-tight">
@@ -80,35 +192,31 @@ export default function LoginPage() {
                 Admin Panel
               </h1>
 
-              <p className="mt-6 text-lg text-white/90">
-                Manage products, categories, customer
-                orders and your entire store from one
-                secure dashboard.
+              <p className="mt-6 text-lg leading-8 text-white/90">
+                Manage products,
+                categories, customer
+                orders and your entire
+                store from one secure
+                dashboard.
               </p>
-
             </div>
 
             <div className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur">
-
               <h3 className="font-semibold">
                 Secure Administration
               </h3>
 
-              <p className="mt-2 text-sm text-white/80">
-                Only authorized administrators can
+              <p className="mt-2 text-sm leading-6 text-white/80">
+                Only authorized
+                administrators can
                 access this dashboard.
               </p>
-
             </div>
-
           </div>
 
-          {/* Right Side */}
-
+          {/* Right side */}
           <div className="flex items-center justify-center p-8 md:p-12">
-
             <div className="w-full max-w-md">
-
               <span className="inline-flex rounded-full bg-[#FFF4DE] px-4 py-2 text-sm font-semibold text-[#A66A00]">
                 Admin Login
               </span>
@@ -117,72 +225,106 @@ export default function LoginPage() {
                 Welcome Back
               </h2>
 
-              <p className="mt-2 text-gray-600">
-                Sign in to access the admin dashboard.
+              <p className="mt-2 leading-7 text-gray-600">
+                Sign in to access
+                the requested admin
+                page.
               </p>
 
+              {error && (
+                <div
+                  role="alert"
+                  className="mt-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-4 text-red-700"
+                >
+                  <AlertCircle
+                    size={20}
+                    className="mt-0.5 shrink-0"
+                    aria-hidden="true"
+                  />
+
+                  <p className="text-sm leading-6">
+                    {error}
+                  </p>
+                </div>
+              )}
+
               <form
-                onSubmit={handleLogin}
-                className="mt-10 space-y-6"
+                onSubmit={
+                  handleLogin
+                }
+                className="mt-8 space-y-6"
               >
-
                 {/* Email */}
-
                 <div>
-
-                  <label className="mb-2 block font-medium text-gray-700">
+                  <label
+                    htmlFor="admin-email"
+                    className="mb-2 block font-medium text-gray-700"
+                  >
                     Email Address
                   </label>
 
-                  <div className="flex items-center rounded-xl border border-[#E7C98C] bg-white px-4">
-
+                  <div className="flex items-center rounded-xl border border-[#E7C98C] bg-white px-4 transition focus-within:border-[#C89B3C] focus-within:ring-4 focus-within:ring-[#C89B3C]/15">
                     <Mail
                       size={20}
-                      className="text-[#C89B3C]"
+                      className="shrink-0 text-[#C89B3C]"
+                      aria-hidden="true"
                     />
 
                     <input
+                      id="admin-email"
                       type="email"
+                      autoComplete="email"
                       placeholder="Enter your email"
                       className="w-full bg-transparent px-3 py-4 outline-none"
                       value={email}
-                      onChange={(e) =>
-                        setEmail(e.target.value)
+                      disabled={loading}
+                      onChange={(
+                        event,
+                      ) =>
+                        setEmail(
+                          event.target
+                            .value,
+                        )
                       }
                       required
                     />
-
                   </div>
-
                 </div>
 
                 {/* Password */}
-
                 <div>
-
-                  <label className="mb-2 block font-medium text-gray-700">
+                  <label
+                    htmlFor="admin-password"
+                    className="mb-2 block font-medium text-gray-700"
+                  >
                     Password
                   </label>
 
-                  <div className="flex items-center rounded-xl border border-[#E7C98C] bg-white px-4">
-
+                  <div className="flex items-center rounded-xl border border-[#E7C98C] bg-white px-4 transition focus-within:border-[#C89B3C] focus-within:ring-4 focus-within:ring-[#C89B3C]/15">
                     <Lock
                       size={20}
-                      className="text-[#C89B3C]"
+                      className="shrink-0 text-[#C89B3C]"
+                      aria-hidden="true"
                     />
 
                     <input
+                      id="admin-password"
                       type={
                         showPassword
                           ? "text"
                           : "password"
                       }
+                      autoComplete="current-password"
                       placeholder="Enter your password"
                       className="w-full bg-transparent px-3 py-4 outline-none"
                       value={password}
-                      onChange={(e) =>
+                      disabled={loading}
+                      onChange={(
+                        event,
+                      ) =>
                         setPassword(
-                          e.target.value
+                          event.target
+                            .value,
                         )
                       }
                       required
@@ -192,42 +334,60 @@ export default function LoginPage() {
                       type="button"
                       onClick={() =>
                         setShowPassword(
-                          !showPassword
+                          (
+                            current,
+                          ) =>
+                            !current,
                         )
                       }
-                      className="text-gray-500 transition hover:text-[#6D2E00]"
+                      disabled={loading}
+                      aria-label={
+                        showPassword
+                          ? "Hide password"
+                          : "Show password"
+                      }
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 transition hover:bg-[#FFF4DE] hover:text-[#6D2E00] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {showPassword ? (
-                        <EyeOff size={20} />
+                        <EyeOff
+                          size={20}
+                          aria-hidden="true"
+                        />
                       ) : (
-                        <Eye size={20} />
+                        <Eye
+                          size={20}
+                          aria-hidden="true"
+                        />
                       )}
                     </button>
-
                   </div>
-
                 </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full rounded-xl bg-[#6D2E00] py-4 font-semibold text-white transition hover:bg-[#8B4513] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex min-h-13 w-full items-center justify-center rounded-xl bg-[#6D2E00] px-6 py-4 font-semibold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-[#8B4513] hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20 disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-50"
                 >
                   {loading
                     ? "Signing In..."
-                    : "Login to Dashboard"}
+                    : "Login to Admin"}
                 </button>
-
               </form>
 
+              <div className="mt-8 flex items-center justify-center gap-2 text-sm text-gray-500">
+                <ShieldCheck
+                  size={16}
+                  className="text-[#C89B3C]"
+                  aria-hidden="true"
+                />
+
+                Secure administrator
+                access
+              </div>
             </div>
-
           </div>
-
         </div>
-
       </div>
-
     </main>
   );
 }
