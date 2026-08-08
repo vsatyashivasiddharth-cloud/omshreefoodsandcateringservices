@@ -1,16 +1,11 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowLeft,
   BadgeCheck,
-  ImageOff,
   LoaderCircle,
   Package,
   ShieldCheck,
@@ -20,11 +15,7 @@ import {
 
 import Card from "@/components/ui/Card";
 import { useCart } from "@/context/CartContext";
-import {
-  formatCurrency,
-  getFreeShippingProgress,
-  getFreeShippingRemaining,
-} from "@/lib/shop";
+import { formatCurrency } from "@/lib/shop";
 
 import type {
   ShippingQuoteState,
@@ -32,6 +23,56 @@ import type {
 
 interface OrderSummaryProps {
   shippingQuoteState: ShippingQuoteState;
+}
+
+const SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD = 999;
+const SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD = 1499;
+
+function getNextShippingDiscountMessage(
+  subtotal: number,
+) {
+  if (
+    subtotal >=
+    SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD
+  ) {
+    return {
+      title:
+        "₹199 shipping discount unlocked",
+
+      description:
+        "You qualify for up to ₹199 off the Delhivery shipping charge.",
+
+      remaining: 0,
+    };
+  }
+
+  if (
+    subtotal >=
+    SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD
+  ) {
+    return {
+      title:
+        "₹99 shipping discount unlocked",
+
+      description:
+        "You qualify for up to ₹99 off shipping. Add more to unlock the ₹199 shipping discount.",
+
+      remaining:
+        SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD -
+        subtotal,
+    };
+  }
+
+  return {
+    title: "Save on shipping",
+
+    description:
+      "Orders of ₹999 or more receive up to ₹99 off the shipping charge.",
+
+    remaining:
+      SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD -
+      subtotal,
+  };
 }
 
 export default function OrderSummary({
@@ -46,15 +87,13 @@ export default function OrderSummary({
   const quote =
     shippingQuoteState.status ===
     "success"
-      ? shippingQuoteState.data
-          .quote
+      ? shippingQuoteState.data.quote
       : null;
 
   const packageDetails =
     shippingQuoteState.status ===
     "success"
-      ? shippingQuoteState.data
-          .package
+      ? shippingQuoteState.data.package
       : null;
 
   const subtotal =
@@ -69,18 +108,18 @@ export default function OrderSummary({
     quote?.totalAmount ??
     subtotal;
 
-  const remaining =
-    getFreeShippingRemaining(
+  const shippingSavings =
+    getNextShippingDiscountMessage(
       subtotal,
     );
 
-  const progress =
-    getFreeShippingProgress(
-      subtotal,
+  const shippingIsFullyCovered =
+    Boolean(
+      quote &&
+        quote.shippingDiscountAmount >
+          0 &&
+        shipping === 0,
     );
-
-  const qualifiesForFreeShipping =
-    quote?.freeShipping === true;
 
   if (cart.length === 0) {
     return (
@@ -105,9 +144,9 @@ export default function OrderSummary({
           </h2>
 
           <p className="mt-3 leading-7 text-gray-500">
-            Add products to your
-            cart before continuing
-            with checkout.
+            Add products to your cart
+            before continuing with
+            checkout.
           </p>
 
           <Link
@@ -205,10 +244,18 @@ export default function OrderSummary({
                 className="shadow-none"
               >
                 <div className="flex items-start gap-4">
-                  <CheckoutItemImage
-                    src={item.image}
-                    alt={item.name}
-                  />
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#FFF4DE]">
+                    <Image
+                      src={
+                        item.image ||
+                        "/images/no-image.jpg"
+                      }
+                      alt={item.name}
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                    />
+                  </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
@@ -265,23 +312,21 @@ export default function OrderSummary({
                       </span>
 
                       {item.variantWeightGrams !==
-                        null &&
-                        item.variantWeightGrams !==
-                          undefined && (
-                          <>
-                            <span aria-hidden="true">
-                              •
-                            </span>
+                        null && (
+                        <>
+                          <span aria-hidden="true">
+                            •
+                          </span>
 
-                            <span>
-                              Net weight:{" "}
-                              {
-                                item.variantWeightGrams
-                              }{" "}
-                              g
-                            </span>
-                          </>
-                        )}
+                          <span>
+                            Net weight:{" "}
+                            {
+                              item.variantWeightGrams
+                            }{" "}
+                            g
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -318,7 +363,7 @@ export default function OrderSummary({
                     Calculating
                   </span>
                 ) : quote ? (
-                  qualifiesForFreeShipping ? (
+                  shippingIsFullyCovered ? (
                     <span className="text-green-700">
                       FREE
                     </span>
@@ -413,7 +458,7 @@ export default function OrderSummary({
           padding="md"
           className="mt-6 bg-[#FFF8ED] shadow-none"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white shadow-sm">
               <Truck
                 size={22}
@@ -422,64 +467,60 @@ export default function OrderSummary({
               />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <h3 className="font-semibold text-[#6D2E00]">
-                Free Delivery
+                Shipping Savings
               </h3>
 
-              <p className="text-sm text-gray-500">
-                Unlock free shipping
-                on eligible orders.
+              <p className="mt-1 text-sm leading-6 text-gray-500">
+                ₹99 OFF shipping on
+                orders ₹999+ and ₹199
+                OFF shipping on orders
+                ₹1,499+. The discount
+                applies only to
+                shipping.
               </p>
             </div>
           </div>
 
-          {qualifiesForFreeShipping ? (
-            <div
-              role="status"
-              className="mt-5 rounded-2xl border border-green-200 bg-green-50 p-4"
-            >
-              <p className="font-semibold text-green-700">
-                Congratulations!
-              </p>
+          <div
+            role="status"
+            className="mt-5 rounded-2xl border border-[#E7C98C] bg-white/80 p-4"
+          >
+            <p className="font-semibold text-[#6D2E00]">
+              {shippingSavings.title}
+            </p>
 
-              <p className="mt-1 text-sm leading-6 text-green-700">
-                Your order qualifies
-                for free delivery.
-              </p>
-            </div>
-          ) : (
-            <>
-              <p className="mt-5 text-sm leading-7 text-gray-600">
+            <p className="mt-1 text-sm leading-6 text-gray-600">
+              {
+                shippingSavings.description
+              }
+            </p>
+
+            {shippingSavings.remaining >
+              0 && (
+              <p className="mt-2 text-sm font-medium text-[#8A3B00]">
                 Add{" "}
-                <span className="font-semibold text-[#6D2E00]">
-                  {formatCurrency(
-                    remaining,
-                  )}
-                </span>{" "}
-                more to unlock free
-                delivery.
+                {formatCurrency(
+                  shippingSavings.remaining,
+                )}{" "}
+                more for the next
+                shipping offer.
               </p>
+            )}
 
-              <div
-                className="mt-5 h-3 overflow-hidden rounded-full bg-gray-200"
-                role="progressbar"
-                aria-label="Free shipping progress"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(
-                  progress,
-                )}
-              >
-                <div
-                  className="h-full rounded-full bg-[#C89B3C] transition-all duration-500"
-                  style={{
-                    width: `${progress}%`,
-                  }}
-                />
-              </div>
-            </>
-          )}
+            {quote &&
+              quote.shippingDiscountAmount >
+                0 && (
+                <p className="mt-3 text-sm font-semibold text-green-700">
+                  Applied shipping
+                  saving:{" "}
+                  {formatCurrency(
+                    quote.shippingDiscountAmount,
+                  )}
+                </p>
+              )}
+          </div>
         </Card>
 
         <Card
@@ -527,64 +568,6 @@ export default function OrderSummary({
         </Card>
       </Card>
     </aside>
-  );
-}
-
-interface CheckoutItemImageProps {
-  src: string | null | undefined;
-  alt: string;
-}
-
-function CheckoutItemImage({
-  src,
-  alt,
-}: CheckoutItemImageProps) {
-  const normalizedSrc =
-    src?.trim() ?? "";
-
-  const [
-    imageFailed,
-    setImageFailed,
-  ] = useState(
-    !normalizedSrc,
-  );
-
-  useEffect(() => {
-    setImageFailed(
-      !normalizedSrc,
-    );
-  }, [normalizedSrc]);
-
-  const showPlaceholder =
-    !normalizedSrc ||
-    imageFailed;
-
-  return (
-    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#FFF8EA] via-[#FFF4DE] to-[#FFE8BF]">
-      {!showPlaceholder ? (
-        <Image
-          src={normalizedSrc}
-          alt={alt}
-          fill
-          sizes="64px"
-          className="object-cover"
-          onError={() => {
-            setImageFailed(true);
-          }}
-        />
-      ) : (
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          aria-label={`${alt} image unavailable`}
-        >
-          <ImageOff
-            size={22}
-            className="text-[#C89B3C]"
-            aria-hidden="true"
-          />
-        </div>
-      )}
-    </div>
   );
 }
 

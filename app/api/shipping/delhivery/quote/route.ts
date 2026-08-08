@@ -9,10 +9,6 @@ import {
   getDelhiveryShippingRate,
 } from "@/lib/delhivery";
 import prisma from "@/lib/prisma";
-import { shopConfig } from "@/lib/shop";
-import {
-  checkShippingQuoteRateLimit,
-} from "@/lib/shipping-quote-rate-limit";
 
 interface QuoteItemInput {
   productId?: unknown;
@@ -35,6 +31,31 @@ interface ValidatedQuoteItem {
 const MAX_DISTINCT_ITEMS = 50;
 const MAX_QUANTITY_PER_ITEM = 100;
 
+const SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD = 999;
+const SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD = 1499;
+const SHIPPING_DISCOUNT_TIER_ONE_AMOUNT = 99;
+const SHIPPING_DISCOUNT_TIER_TWO_AMOUNT = 199;
+
+function getShippingDiscountAllowance(
+  subtotal: number,
+) {
+  if (
+    subtotal >=
+    SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD
+  ) {
+    return SHIPPING_DISCOUNT_TIER_TWO_AMOUNT;
+  }
+
+  if (
+    subtotal >=
+    SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD
+  ) {
+    return SHIPPING_DISCOUNT_TIER_ONE_AMOUNT;
+  }
+
+  return 0;
+}
+
 function isRecord(
   value: unknown,
 ): value is Record<string, unknown> {
@@ -49,46 +70,7 @@ function noStoreHeaders() {
   return {
     "Cache-Control":
       "private, no-store, max-age=0",
-    Pragma: "no-cache",
-    Expires: "0",
   };
-}
-
-function getClientIpAddress(
-  request: NextRequest,
-) {
-  const vercelForwardedFor =
-    request.headers
-      .get(
-        "x-vercel-forwarded-for",
-      )
-      ?.split(",")[0]
-      ?.trim();
-
-  if (vercelForwardedFor) {
-    return vercelForwardedFor;
-  }
-
-  const forwardedFor =
-    request.headers
-      .get("x-forwarded-for")
-      ?.split(",")[0]
-      ?.trim();
-
-  if (forwardedFor) {
-    return forwardedFor;
-  }
-
-  const realIp =
-    request.headers
-      .get("x-real-ip")
-      ?.trim();
-
-  if (realIp) {
-    return realIp;
-  }
-
-  return "unknown-client";
 }
 
 function errorResponse(
@@ -98,10 +80,6 @@ function errorResponse(
     string,
     unknown
   >,
-  additionalHeaders?: Record<
-    string,
-    string
-  >,
 ) {
   return NextResponse.json(
     {
@@ -110,10 +88,7 @@ function errorResponse(
     },
     {
       status,
-      headers: {
-        ...noStoreHeaders(),
-        ...additionalHeaders,
-      },
+      headers: noStoreHeaders(),
     },
   );
 }
@@ -388,34 +363,6 @@ export async function POST(
 
     const items =
       parseItems(body.items);
-
-    /*
-     * Rate-limit well-formed quote requests before
-     * database-heavy work and before contacting
-     * Delhivery.
-     */
-    const ipAddress =
-      getClientIpAddress(
-        request,
-      );
-
-    const rateLimit =
-      await checkShippingQuoteRateLimit(
-        ipAddress,
-      );
-
-    if (!rateLimit.allowed) {
-      return errorResponse(
-        "Too many shipping quote requests. Please wait a few minutes and try again.",
-        429,
-        undefined,
-        {
-          "Retry-After": String(
-            rateLimit.retryAfterSeconds,
-          ),
-        },
-      );
-    }
 
     const productIds =
       Array.from(
@@ -873,34 +820,35 @@ export async function POST(
       );
     }
 
-    const configuredThreshold =
-      Number(
-        shopConfig.freeShippingAbove,
+    const shippingDiscountAllowance =
+      getShippingDiscountAllowance(
+        subtotal,
       );
 
-    const freeShippingThreshold =
-      Number.isFinite(
-        configuredThreshold,
-      ) &&
-      configuredThreshold > 0
-        ? configuredThreshold
-        : null;
-
-    const qualifiesForFreeShipping =
-      freeShippingThreshold !==
-        null &&
-      subtotal >=
-        freeShippingThreshold;
-
-    const chargedShippingAmount =
-      qualifiesForFreeShipping
-        ? 0
-        : estimatedShippingAmount;
-
+    /*
+     * Shipping promotions reduce only the
+     * courier charge. Product subtotal is
+     * never discounted.
+     *
+     * The applied discount is capped at the
+     * actual Delhivery estimate so shipping
+     * can never become negative.
+     */
     const shippingDiscountAmount =
       roundMoney(
-        estimatedShippingAmount -
-          chargedShippingAmount,
+        Math.min(
+          estimatedShippingAmount,
+          shippingDiscountAllowance,
+        ),
+      );
+
+    const chargedShippingAmount =
+      roundMoney(
+        Math.max(
+          0,
+          estimatedShippingAmount -
+            shippingDiscountAmount,
+        ),
       );
 
     const totalAmount =
@@ -908,6 +856,20 @@ export async function POST(
         subtotal +
           chargedShippingAmount,
       );
+
+    /*
+     * Keep these legacy response properties
+     * temporarily for CheckoutContent's
+     * existing runtime response validator.
+     * There is no longer a free-shipping
+     * threshold.
+     */
+    const freeShipping =
+      chargedShippingAmount === 0 &&
+      shippingDiscountAmount > 0;
+
+    const freeShippingThreshold =
+      null;
 
     return NextResponse.json(
       {
@@ -979,8 +941,7 @@ export async function POST(
           shippingMode:
             rate.shippingMode,
 
-          freeShipping:
-            qualifiesForFreeShipping,
+          freeShipping,
 
           freeShippingThreshold,
 

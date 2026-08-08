@@ -16,7 +16,6 @@ import {
 } from "@/lib/delhivery";
 import { normalizeIndianPhone } from "@/lib/phone";
 import prisma from "@/lib/prisma";
-import { shopConfig } from "@/lib/shop";
 
 interface OrderItemInput {
   productId: string;
@@ -63,6 +62,31 @@ interface ResolvedOrderLine {
 
 const MAX_ORDER_ITEMS = 100;
 const MAX_QUANTITY_PER_ITEM = 100;
+
+const SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD = 999;
+const SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD = 1499;
+const SHIPPING_DISCOUNT_TIER_ONE_AMOUNT = 99;
+const SHIPPING_DISCOUNT_TIER_TWO_AMOUNT = 199;
+
+function getShippingDiscountAllowance(
+  subtotal: number,
+) {
+  if (
+    subtotal >=
+    SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD
+  ) {
+    return SHIPPING_DISCOUNT_TIER_TWO_AMOUNT;
+  }
+
+  if (
+    subtotal >=
+    SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD
+  ) {
+    return SHIPPING_DISCOUNT_TIER_ONE_AMOUNT;
+  }
+
+  return 0;
+}
 
 function isRecord(
   value: unknown,
@@ -946,34 +970,35 @@ export async function POST(
     const subtotalNumber =
       Number(subtotalAmount);
 
-    const configuredThreshold =
-      Number(
-        shopConfig.freeShippingAbove,
+    const shippingDiscountAllowance =
+      getShippingDiscountAllowance(
+        subtotalNumber,
       );
 
-    const freeShippingThreshold =
-      Number.isFinite(
-        configuredThreshold,
-      ) &&
-      configuredThreshold > 0
-        ? configuredThreshold
-        : null;
-
-    const qualifiesForFreeShipping =
-      freeShippingThreshold !==
-        null &&
-      subtotalNumber >=
-        freeShippingThreshold;
-
-    const chargedShippingNumber =
-      qualifiesForFreeShipping
-        ? 0
-        : estimatedShippingNumber;
-
+    /*
+     * The promotion applies only to the
+     * courier charge. Product subtotal is
+     * never discounted.
+     *
+     * Cap the applied discount at the
+     * Delhivery estimate so the charged
+     * shipping amount can never be negative.
+     */
     const shippingDiscountNumber =
       roundMoney(
-        estimatedShippingNumber -
-          chargedShippingNumber,
+        Math.min(
+          estimatedShippingNumber,
+          shippingDiscountAllowance,
+        ),
+      );
+
+    const chargedShippingNumber =
+      roundMoney(
+        Math.max(
+          0,
+          estimatedShippingNumber -
+            shippingDiscountNumber,
+        ),
       );
 
     const totalAmountNumber =
