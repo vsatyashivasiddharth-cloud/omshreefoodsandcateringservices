@@ -1,75 +1,151 @@
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
 import prisma from "@/lib/prisma";
 
-export async function GET(request: NextRequest) {
+const MAX_QUERY_LENGTH = 100;
+const MAX_RESULTS = 30;
+
+function noStoreHeaders() {
+  return {
+    "Cache-Control":
+      "private, no-store, max-age=0",
+    Pragma: "no-cache",
+    Expires: "0",
+  };
+}
+
+function jsonResponse(
+  body: unknown,
+  status = 200,
+) {
+  return NextResponse.json(
+    body,
+    {
+      status,
+      headers: noStoreHeaders(),
+    },
+  );
+}
+
+export async function GET(
+  request: NextRequest,
+) {
   try {
-    const query = request.nextUrl.searchParams.get("q")?.trim();
+    const query =
+      request.nextUrl.searchParams
+        .get("q")
+        ?.trim() ?? "";
 
     if (!query) {
-      return NextResponse.json([]);
+      return jsonResponse([]);
     }
 
-    const products = await prisma.product.findMany({
-      where: {
-        OR: [
-          {
-            name: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          {
-            description: {
-              contains: query,
-              mode: "insensitive",
-            },
-          },
-          {
-            category: {
+    if (
+      query.length >
+      MAX_QUERY_LENGTH
+    ) {
+      return jsonResponse(
+        {
+          error:
+            `Search terms must be ${MAX_QUERY_LENGTH} characters or fewer.`,
+        },
+        400,
+      );
+    }
+
+    const products =
+      await prisma.product.findMany({
+        where: {
+          OR: [
+            {
               name: {
                 contains: query,
                 mode: "insensitive",
               },
             },
-          },
-        ],
-      },
+            {
+              description: {
+                contains: query,
+                mode: "insensitive",
+              },
+            },
+            {
+              category: {
+                name: {
+                  contains: query,
+                  mode: "insensitive",
+                },
+              },
+            },
+          ],
+        },
 
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        price: true,
-        image: true,
-        stock: true,
-        category: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          price: true,
+          image: true,
+          stock: true,
+
+          category: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
           },
         },
-      },
 
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        orderBy: [
+          {
+            featured: "desc",
+          },
+          {
+            createdAt: "desc",
+          },
+        ],
 
-    return NextResponse.json(products);
+        take: MAX_RESULTS,
+      });
+
+    return jsonResponse(
+      products.map(
+        (product) => ({
+          ...product,
+
+          price:
+            Number(
+              product.price,
+            ),
+
+          stock:
+            Math.max(
+              0,
+              Math.floor(
+                Number(
+                  product.stock,
+                ) || 0,
+              ),
+            ),
+        }),
+      ),
+    );
   } catch (error) {
-    console.error("Search API Error:", error);
+    console.error(
+      "Search API Error:",
+      error,
+    );
 
-    return NextResponse.json(
+    return jsonResponse(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Failed to search products.",
+          "Unable to search products right now.",
       },
-      {
-        status: 500,
-      }
+      500,
     );
   }
 }
