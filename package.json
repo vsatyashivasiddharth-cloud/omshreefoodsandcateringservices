@@ -11,9 +11,6 @@
     "typecheck": "tsc --noEmit",
     "seed": "prisma db seed"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
     "@prisma/client": "^6.16.2",
