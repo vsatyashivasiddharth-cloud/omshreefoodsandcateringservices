@@ -324,11 +324,17 @@ function isOrderItem(
     isNullableString(value.variantSku) &&
     (value.variantWeightGrams === null ||
       value.variantWeightGrams === undefined ||
-      Number.isFinite(Number(value.variantWeightGrams))) &&
-    (value.variantShippingWeightGrams === null ||
-      value.variantShippingWeightGrams === undefined ||
       Number.isFinite(
-        Number(value.variantShippingWeightGrams),
+        Number(value.variantWeightGrams),
+      )) &&
+    (value.variantShippingWeightGrams ===
+      null ||
+      value.variantShippingWeightGrams ===
+        undefined ||
+      Number.isFinite(
+        Number(
+          value.variantShippingWeightGrams,
+        ),
       )) &&
     isOrderProduct(value.product) &&
     (value.variant === null ||
@@ -340,18 +346,25 @@ function isOrderItem(
 function isCreateShipmentResponse(
   value: unknown,
 ): value is CreateShipmentResponse {
-  if (!isRecord(value) || !isRecord(value.order)) {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.order)
+  ) {
     return false;
   }
 
   return (
     value.success === true &&
-    typeof value.alreadyCreated === "boolean" &&
+    typeof value.alreadyCreated ===
+      "boolean" &&
     typeof value.message === "string" &&
     typeof value.order.id === "string" &&
-    typeof value.order.shipmentStatus === "string" &&
-    typeof value.order.delhiveryWaybill === "string" &&
-    value.order.delhiveryWaybill.trim().length > 0 &&
+    typeof value.order.shipmentStatus ===
+      "string" &&
+    typeof value.order.delhiveryWaybill ===
+      "string" &&
+    value.order.delhiveryWaybill.trim()
+      .length > 0 &&
     isNullableString(
       value.order.delhiveryShipmentId,
     ) &&
@@ -379,24 +392,45 @@ function isSyncShipmentResponse(
     value.success === true &&
     typeof value.message === "string" &&
     typeof value.order.id === "string" &&
-    isOrderStatus(value.order.status) &&
-    typeof value.order.shipmentStatus === "string" &&
-    typeof value.order.delhiveryWaybill === "string" &&
-    value.order.delhiveryWaybill.trim().length > 0 &&
-    isNullableString(value.order.delhiveryStatus) &&
-    isNullableString(value.order.pickupScheduledAt) &&
-    isNullableString(value.order.shippedAt) &&
+    isOrderStatus(
+      value.order.status,
+    ) &&
+    typeof value.order.shipmentStatus ===
+      "string" &&
+    typeof value.order.delhiveryWaybill ===
+      "string" &&
+    value.order.delhiveryWaybill.trim()
+      .length > 0 &&
+    isNullableString(
+      value.order.delhiveryStatus,
+    ) &&
+    isNullableString(
+      value.order.pickupScheduledAt,
+    ) &&
+    isNullableString(
+      value.order.shippedAt,
+    ) &&
     isNullableString(
       value.order.estimatedDeliveryAt,
     ) &&
-    isNullableString(value.order.deliveredAt) &&
-    typeof value.order.updatedAt === "string" &&
-    typeof value.tracking.waybill === "string" &&
-    typeof value.tracking.status === "string" &&
-    isNullableString(value.tracking.statusCode) &&
-    typeof value.tracking.scanCount === "number" &&
-Number.isInteger(value.tracking.scanCount) &&
-value.tracking.scanCount >= 0
+    isNullableString(
+      value.order.deliveredAt,
+    ) &&
+    typeof value.order.updatedAt ===
+      "string" &&
+    typeof value.tracking.waybill ===
+      "string" &&
+    typeof value.tracking.status ===
+      "string" &&
+    isNullableString(
+      value.tracking.statusCode,
+    ) &&
+    typeof value.tracking.scanCount ===
+      "number" &&
+    Number.isInteger(
+      value.tracking.scanCount,
+    ) &&
+    value.tracking.scanCount >= 0
   );
 }
 
@@ -409,14 +443,17 @@ function isOrder(
 
   return (
     typeof value.id === "string" &&
-    typeof value.customerName === "string" &&
+    typeof value.customerName ===
+      "string" &&
     typeof value.phone === "string" &&
     isNullableString(value.email) &&
     typeof value.address === "string" &&
     typeof value.city === "string" &&
     typeof value.state === "string" &&
     typeof value.pincode === "string" &&
-    isOptionalFiniteNumber(value.subtotalAmount) &&
+    isOptionalFiniteNumber(
+      value.subtotalAmount,
+    ) &&
     isOptionalFiniteNumber(
       value.shippingEstimatedAmount,
     ) &&
@@ -426,15 +463,31 @@ function isOrder(
     isOptionalFiniteNumber(
       value.shippingDiscountAmount,
     ) &&
-    Number.isFinite(Number(value.totalAmount)) &&
+    Number.isFinite(
+      Number(value.totalAmount),
+    ) &&
     isOrderStatus(value.status) &&
-    isPaymentStatus(value.paymentStatus) &&
-    isNullableString(value.paymentMethod) &&
-    isNullableString(value.razorpayOrderId) &&
-    isNullableString(value.razorpayPaymentId) &&
-    isNullableString(value.shippingProvider) &&
-    isNullableString(value.shippingMode) &&
-    isNullableString(value.shipmentStatus) &&
+    isPaymentStatus(
+      value.paymentStatus,
+    ) &&
+    isNullableString(
+      value.paymentMethod,
+    ) &&
+    isNullableString(
+      value.razorpayOrderId,
+    ) &&
+    isNullableString(
+      value.razorpayPaymentId,
+    ) &&
+    isNullableString(
+      value.shippingProvider,
+    ) &&
+    isNullableString(
+      value.shippingMode,
+    ) &&
+    isNullableString(
+      value.shipmentStatus,
+    ) &&
     isOptionalFiniteNumber(
       value.packageWeightGrams,
     ) &&
@@ -447,36 +500,62 @@ function isOrder(
     isOptionalFiniteNumber(
       value.packageHeightCm,
     ) &&
-    isNullableString(value.delhiveryWaybill) &&
+    isNullableString(
+      value.delhiveryWaybill,
+    ) &&
     isNullableString(
       value.delhiveryShipmentId,
     ) &&
-    isNullableString(value.delhiveryOrderId) &&
-    isNullableString(value.delhiveryStatus) &&
-    isNullableString(value.shippingQuotedAt) &&
+    isNullableString(
+      value.delhiveryOrderId,
+    ) &&
+    isNullableString(
+      value.delhiveryStatus,
+    ) &&
+    isNullableString(
+      value.shippingQuotedAt,
+    ) &&
     isNullableString(
       value.pickupScheduledAt,
     ) &&
-    isNullableString(value.shippedAt) &&
+    isNullableString(
+      value.shippedAt,
+    ) &&
     isNullableString(
       value.estimatedDeliveryAt,
     ) &&
-    isNullableString(value.deliveredAt) &&
+    isNullableString(
+      value.deliveredAt,
+    ) &&
     typeof value.createdAt === "string" &&
-    isNullableString(value.updatedAt) &&
+    isNullableString(
+      value.updatedAt,
+    ) &&
     Array.isArray(value.items) &&
-    value.items.every(isOrderItem)
+    value.items.every(
+      isOrderItem,
+    )
   );
 }
 
-function normalizeMoney(value: unknown) {
-  const amount = Number(value);
+function normalizeMoney(
+  value: unknown,
+) {
+  const amount =
+    Number(value);
 
-  if (!Number.isFinite(amount) || amount < 0) {
+  if (
+    !Number.isFinite(amount) ||
+    amount < 0
+  ) {
     return 0;
   }
 
-  return Math.round(amount * 100) / 100;
+  return (
+    Math.round(
+      amount * 100,
+    ) / 100
+  );
 }
 
 function normalizeOptionalNumber(
@@ -490,9 +569,12 @@ function normalizeOptionalNumber(
     return null;
   }
 
-  const number = Number(value);
+  const number =
+    Number(value);
 
-  if (!Number.isFinite(number)) {
+  if (
+    !Number.isFinite(number)
+  ) {
     return null;
   }
 
@@ -504,12 +586,15 @@ function normalizeOrder(
 ): Order {
   return {
     ...order,
+
     subtotalAmount:
-      order.subtotalAmount === undefined
+      order.subtotalAmount ===
+      undefined
         ? undefined
         : normalizeMoney(
             order.subtotalAmount,
           ),
+
     shippingEstimatedAmount:
       order.shippingEstimatedAmount ===
       undefined
@@ -517,6 +602,7 @@ function normalizeOrder(
         : normalizeMoney(
             order.shippingEstimatedAmount,
           ),
+
     shippingChargedAmount:
       order.shippingChargedAmount ===
       undefined
@@ -524,6 +610,7 @@ function normalizeOrder(
         : normalizeMoney(
             order.shippingChargedAmount,
           ),
+
     shippingDiscountAmount:
       order.shippingDiscountAmount ===
       undefined
@@ -531,52 +618,79 @@ function normalizeOrder(
         : normalizeMoney(
             order.shippingDiscountAmount,
           ),
-    totalAmount: normalizeMoney(
-      order.totalAmount,
-    ),
+
+    totalAmount:
+      normalizeMoney(
+        order.totalAmount,
+      ),
+
     packageWeightGrams:
       normalizeOptionalNumber(
         order.packageWeightGrams,
       ),
+
     packageLengthCm:
       normalizeOptionalNumber(
         order.packageLengthCm,
       ),
+
     packageBreadthCm:
       normalizeOptionalNumber(
         order.packageBreadthCm,
       ),
+
     packageHeightCm:
       normalizeOptionalNumber(
         order.packageHeightCm,
       ),
-    items: order.items.map((item) => ({
-      ...item,
-      quantity: Math.max(
-        1,
-        Math.floor(Number(item.quantity)),
-      ),
-      price: normalizeMoney(item.price),
-      product: {
-        ...item.product,
-        price:
-          item.product.price === undefined
-            ? undefined
-            : normalizeMoney(
-                item.product.price,
+
+    items:
+      order.items.map(
+        (item) => ({
+          ...item,
+
+          quantity:
+            Math.max(
+              1,
+              Math.floor(
+                Number(
+                  item.quantity,
+                ),
               ),
-      },
-    })),
+            ),
+
+          price:
+            normalizeMoney(
+              item.price,
+            ),
+
+          product: {
+            ...item.product,
+
+            price:
+              item.product.price ===
+              undefined
+                ? undefined
+                : normalizeMoney(
+                    item.product.price,
+                  ),
+          },
+        }),
+      ),
   };
 }
 
-function formatStatus(value: string) {
+function formatStatus(
+  value: string,
+) {
   return value
     .toLowerCase()
     .split("_")
     .map(
       (word) =>
-        word.charAt(0).toUpperCase() +
+        word
+          .charAt(0)
+          .toUpperCase() +
         word.slice(1),
     )
     .join(" ");
@@ -589,19 +703,27 @@ function formatDate(
     return "Not available";
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return "Not available";
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "en-IN",
+    {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  ).format(date);
 }
 
 function getOrderStatusVariant(
@@ -656,6 +778,25 @@ function getPaymentStatusVariant(
   }
 }
 
+function getPaymentStatusLabel(
+  status: PaymentStatus,
+) {
+  switch (status) {
+    case "SUCCESS":
+      return "Payment Successful";
+
+    case "FAILED":
+      return "Payment Failed";
+
+    case "REFUNDED":
+      return "Refunded";
+
+    case "PENDING":
+    default:
+      return "Payment Pending";
+  }
+}
+
 function getShipmentStatusVariant(
   status?: string,
 ):
@@ -664,7 +805,9 @@ function getShipmentStatusVariant(
   | "success"
   | "danger"
   | "neutral" {
-  switch (status?.toUpperCase()) {
+  switch (
+    status?.toUpperCase()
+  ) {
     case "QUOTED":
     case "CREATED":
     case "PICKUP_SCHEDULED":
@@ -742,14 +885,26 @@ function SummaryRow({
 export default function OrderDetails({
   id,
 }: OrderDetailsProps) {
-  const [order, setOrder] =
-    useState<Order | null>(null);
+  const [
+    order,
+    setOrder,
+  ] =
+    useState<Order | null>(
+      null,
+    );
 
-  const [loading, setLoading] =
-    useState(true);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null,
+    );
 
   const [
     shipmentCreating,
@@ -761,90 +916,124 @@ export default function OrderDetails({
     setShipmentSyncing,
   ] = useState(false);
 
-  const loadOrder = useCallback(
-    async (signal?: AbortSignal) => {
-      const orderId = id.trim();
+  const loadOrder =
+    useCallback(
+      async (
+        signal?: AbortSignal,
+      ) => {
+        const orderId =
+          id.trim();
 
-      if (!orderId) {
-        setOrder(null);
-        setError("Order ID is required.");
-        setLoading(false);
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(
-          `/api/admin/orders/${encodeURIComponent(
-            orderId,
-          )}/details`,
-          {
-            method: "GET",
-            cache: "no-store",
-            signal,
-          },
-        );
-
-        const data: unknown = await response
-          .json()
-          .catch(() => null);
-
-        if (!response.ok) {
-          const apiError =
-            isRecord(data)
-              ? (data as ApiError)
-              : null;
-
-          throw new Error(
-            apiError?.error ||
-              apiError?.message ||
-              "Unable to load order details.",
+        if (!orderId) {
+          setOrder(null);
+          setError(
+            "Order ID is required.",
           );
-        }
-
-        if (!isOrder(data)) {
-          throw new Error(
-            "The order details response was invalid.",
-          );
-        }
-
-        setOrder(normalizeOrder(data));
-      } catch (loadError) {
-        if (
-          loadError instanceof DOMException &&
-          loadError.name === "AbortError"
-        ) {
+          setLoading(false);
           return;
         }
 
-        console.error(
-          "Order details loading error:",
-          loadError,
-        );
+        setLoading(true);
+        setError(null);
 
-        setOrder(null);
+        try {
+          const response =
+            await fetch(
+              `/api/admin/orders/${encodeURIComponent(
+                orderId,
+              )}/details`,
+              {
+                method:
+                  "GET",
+                cache:
+                  "no-store",
+                signal,
+              },
+            );
 
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Something went wrong while loading the order.",
-        );
-      } finally {
-        if (!signal?.aborted) {
-          setLoading(false);
+          const data:
+            unknown =
+            await response
+              .json()
+              .catch(
+                () => null,
+              );
+
+          if (
+            !response.ok
+          ) {
+            const apiError =
+              isRecord(
+                data,
+              )
+                ? (data as ApiError)
+                : null;
+
+            throw new Error(
+              apiError?.error ||
+                apiError?.message ||
+                "Unable to load order details.",
+            );
+          }
+
+          if (
+            !isOrder(data)
+          ) {
+            throw new Error(
+              "The order details response was invalid.",
+            );
+          }
+
+          setOrder(
+            normalizeOrder(
+              data,
+            ),
+          );
+        } catch (
+          loadError
+        ) {
+          if (
+            loadError instanceof
+              DOMException &&
+            loadError.name ===
+              "AbortError"
+          ) {
+            return;
+          }
+
+          console.error(
+            "Order details loading error:",
+            loadError,
+          );
+
+          setOrder(null);
+
+          setError(
+            loadError instanceof
+              Error
+              ? loadError.message
+              : "Something went wrong while loading the order.",
+          );
+        } finally {
+          if (
+            !signal?.aborted
+          ) {
+            setLoading(
+              false,
+            );
+          }
         }
-      }
-    },
-    [id],
-  );
+      },
+      [id],
+    );
 
   useEffect(() => {
     const controller =
       new AbortController();
 
-    void loadOrder(controller.signal);
+    void loadOrder(
+      controller.signal,
+    );
 
     return () => {
       controller.abort();
@@ -852,158 +1041,212 @@ export default function OrderDetails({
   }, [loadOrder]);
 
   const createShipment =
-    useCallback(async () => {
-      if (shipmentCreating) {
-        return;
-      }
-
-      const orderId = id.trim();
-
-      if (!orderId) {
-        toast.error(
-          "Order ID is required.",
-        );
-        return;
-      }
-
-      setShipmentCreating(true);
-
-      try {
-        const response = await fetch(
-          `/api/orders/${encodeURIComponent(
-            orderId,
-          )}/shipment`,
-          {
-            method: "POST",
-            cache: "no-store",
-          },
-        );
-
-        const data: unknown =
-          await response
-            .json()
-            .catch(() => null);
-
-        if (!response.ok) {
-          const apiError =
-            isRecord(data)
-              ? (data as ApiError)
-              : null;
-
-          throw new Error(
-            apiError?.error ||
-              apiError?.message ||
-              "Unable to create the shipment.",
-          );
-        }
-
+    useCallback(
+      async () => {
         if (
-          !isCreateShipmentResponse(data)
+          shipmentCreating
         ) {
-          throw new Error(
-            "The shipment response was invalid.",
-          );
+          return;
         }
 
-        toast.success(data.message);
+        const orderId =
+          id.trim();
 
-        await loadOrder();
-      } catch (shipmentError) {
-        console.error(
-          "Shipment creation error:",
-          shipmentError,
+        if (!orderId) {
+          toast.error(
+            "Order ID is required.",
+          );
+          return;
+        }
+
+        setShipmentCreating(
+          true,
         );
 
-        toast.error(
-          shipmentError instanceof Error
-            ? shipmentError.message
-            : "Unable to create the shipment.",
-        );
-      } finally {
-        setShipmentCreating(false);
-      }
-    }, [
-      id,
-      loadOrder,
-      shipmentCreating,
-    ]);
+        try {
+          const response =
+            await fetch(
+              `/api/orders/${encodeURIComponent(
+                orderId,
+              )}/shipment`,
+              {
+                method:
+                  "POST",
+                cache:
+                  "no-store",
+              },
+            );
 
+          const data:
+            unknown =
+            await response
+              .json()
+              .catch(
+                () => null,
+              );
+
+          if (
+            !response.ok
+          ) {
+            const apiError =
+              isRecord(
+                data,
+              )
+                ? (data as ApiError)
+                : null;
+
+            throw new Error(
+              apiError?.error ||
+                apiError?.message ||
+                "Unable to create the shipment.",
+            );
+          }
+
+          if (
+            !isCreateShipmentResponse(
+              data,
+            )
+          ) {
+            throw new Error(
+              "The shipment response was invalid.",
+            );
+          }
+
+          toast.success(
+            data.message,
+          );
+
+          await loadOrder();
+        } catch (
+          shipmentError
+        ) {
+          console.error(
+            "Shipment creation error:",
+            shipmentError,
+          );
+
+          toast.error(
+            shipmentError instanceof
+              Error
+              ? shipmentError.message
+              : "Unable to create the shipment.",
+          );
+        } finally {
+          setShipmentCreating(
+            false,
+          );
+        }
+      },
+      [
+        id,
+        loadOrder,
+        shipmentCreating,
+      ],
+    );
 
   const syncShipment =
-    useCallback(async () => {
-      if (shipmentSyncing) {
-        return;
-      }
-
-      const orderId = id.trim();
-
-      if (!orderId) {
-        toast.error(
-          "Order ID is required.",
-        );
-        return;
-      }
-
-      setShipmentSyncing(true);
-
-      try {
-        const response = await fetch(
-          `/api/admin/orders/${encodeURIComponent(
-            orderId,
-          )}/sync-shipment`,
-          {
-            method: "POST",
-            cache: "no-store",
-          },
-        );
-
-        const data: unknown =
-          await response
-            .json()
-            .catch(() => null);
-
-        if (!response.ok) {
-          const apiError =
-            isRecord(data)
-              ? (data as ApiError)
-              : null;
-
-          throw new Error(
-            apiError?.error ||
-              apiError?.message ||
-              "Unable to synchronize the shipment.",
-          );
+    useCallback(
+      async () => {
+        if (
+          shipmentSyncing
+        ) {
+          return;
         }
 
-        if (!isSyncShipmentResponse(data)) {
-          throw new Error(
-            "The shipment synchronization response was invalid.",
+        const orderId =
+          id.trim();
+
+        if (!orderId) {
+          toast.error(
+            "Order ID is required.",
           );
+          return;
         }
 
-        toast.success(data.message);
-
-        await loadOrder();
-      } catch (syncError) {
-        console.error(
-          "Shipment synchronization error:",
-          syncError,
+        setShipmentSyncing(
+          true,
         );
 
-        toast.error(
-          syncError instanceof Error
-            ? syncError.message
-            : "Unable to synchronize the shipment.",
-        );
-      } finally {
-        setShipmentSyncing(false);
-      }
-    }, [
-      id,
-      loadOrder,
-      shipmentSyncing,
-    ]);
+        try {
+          const response =
+            await fetch(
+              `/api/admin/orders/${encodeURIComponent(
+                orderId,
+              )}/sync-shipment`,
+              {
+                method:
+                  "POST",
+                cache:
+                  "no-store",
+              },
+            );
 
+          const data:
+            unknown =
+            await response
+              .json()
+              .catch(
+                () => null,
+              );
+
+          if (
+            !response.ok
+          ) {
+            const apiError =
+              isRecord(
+                data,
+              )
+                ? (data as ApiError)
+                : null;
+
+            throw new Error(
+              apiError?.error ||
+                apiError?.message ||
+                "Unable to synchronize the shipment.",
+            );
+          }
+
+          if (
+            !isSyncShipmentResponse(
+              data,
+            )
+          ) {
+            throw new Error(
+              "The shipment synchronization response was invalid.",
+            );
+          }
+
+          toast.success(
+            data.message,
+          );
+
+          await loadOrder();
+        } catch (
+          syncError
+        ) {
+          console.error(
+            "Shipment synchronization error:",
+            syncError,
+          );
+
+          toast.error(
+            syncError instanceof
+              Error
+              ? syncError.message
+              : "Unable to synchronize the shipment.",
+          );
+        } finally {
+          setShipmentSyncing(
+            false,
+          );
+        }
+      },
+      [
+        id,
+        loadOrder,
+        shipmentSyncing,
+      ],
+    );
 
   if (loading) {
     return (
@@ -1018,7 +1261,10 @@ export default function OrderDetails({
     );
   }
 
-  if (!order || error) {
+  if (
+    !order ||
+    error
+  ) {
     return (
       <section className="min-h-[70vh] bg-gradient-to-br from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE] py-12">
         <Container>
@@ -1072,15 +1318,20 @@ export default function OrderDetails({
 
   const calculatedItemsSubtotal =
     order.items.reduce(
-      (total, item) =>
+      (
+        total,
+        item,
+      ) =>
         total +
-        item.price * item.quantity,
+        item.price *
+          item.quantity,
       0,
     );
 
   const subtotalAmount =
     order.subtotalAmount &&
-    order.subtotalAmount > 0
+    order.subtotalAmount >
+      0
       ? order.subtotalAmount
       : calculatedItemsSubtotal;
 
@@ -1093,7 +1344,8 @@ export default function OrderDetails({
     );
 
   const shippingEstimatedAmount =
-    order.shippingEstimatedAmount ?? 0;
+    order.shippingEstimatedAmount ??
+    0;
 
   const shippingDiscountAmount =
     order.shippingDiscountAmount ??
@@ -1105,27 +1357,40 @@ export default function OrderDetails({
 
   const totalQuantity =
     order.items.reduce(
-      (total, item) =>
-        total + item.quantity,
+      (
+        total,
+        item,
+      ) =>
+        total +
+        item.quantity,
       0,
     );
 
   const hasPackageDetails =
-    order.packageWeightGrams !== null &&
+    order.packageWeightGrams !==
+      null &&
     order.packageWeightGrams !==
       undefined;
 
   const hasShippingDetails =
-    Boolean(order.delhiveryWaybill) ||
-    Boolean(order.delhiveryShipmentId) ||
-    Boolean(order.shipmentStatus) ||
+    Boolean(
+      order.delhiveryWaybill,
+    ) ||
+    Boolean(
+      order.delhiveryShipmentId,
+    ) ||
+    Boolean(
+      order.shipmentStatus,
+    ) ||
     hasPackageDetails;
 
   const canCreateShipment =
     order.shippingProvider ===
       "DELHIVERY" &&
-    order.paymentStatus === "SUCCESS" &&
-    order.status !== "CANCELLED" &&
+    order.paymentStatus ===
+      "SUCCESS" &&
+    order.status !==
+      "CANCELLED" &&
     !order.delhiveryWaybill;
 
   const canSyncShipment =
@@ -1173,15 +1438,43 @@ export default function OrderDetails({
             </p>
           </div>
 
-          <Badge
-            variant={getOrderStatusVariant(
-              order.status,
-            )}
-            size="lg"
-            rounded
-          >
-            {formatStatus(order.status)}
-          </Badge>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-2xl border border-[#F3DFC2] bg-white/90 px-4 py-3 shadow-sm">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
+                Order Status
+              </p>
+
+              <Badge
+                variant={getOrderStatusVariant(
+                  order.status,
+                )}
+                size="lg"
+                rounded
+              >
+                {formatStatus(
+                  order.status,
+                )}
+              </Badge>
+            </div>
+
+            <div className="rounded-2xl border border-[#F3DFC2] bg-white/90 px-4 py-3 shadow-sm">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
+                Payment
+              </p>
+
+              <Badge
+                variant={getPaymentStatusVariant(
+                  order.paymentStatus,
+                )}
+                size="lg"
+                rounded
+              >
+                {getPaymentStatusLabel(
+                  order.paymentStatus,
+                )}
+              </Badge>
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
@@ -1274,7 +1567,8 @@ export default function OrderDetails({
                   <address className="not-italic font-normal leading-7">
                     {order.address}
                     <br />
-                    {order.city}, {order.state}
+                    {order.city},{" "}
+                    {order.state}
                     <br />
                     {order.pincode}
                   </address>
@@ -1334,7 +1628,7 @@ export default function OrderDetails({
                   )}
                   rounded
                 >
-                  {formatStatus(
+                  {getPaymentStatusLabel(
                     order.paymentStatus,
                   )}
                 </Badge>
@@ -1357,7 +1651,9 @@ export default function OrderDetails({
                   </span>
                 }
               >
-                {formatDate(order.createdAt)}
+                {formatDate(
+                  order.createdAt,
+                )}
               </SummaryRow>
 
               <SummaryRow label="Products subtotal">
@@ -1366,7 +1662,8 @@ export default function OrderDetails({
                 )}
               </SummaryRow>
 
-              {shippingEstimatedAmount > 0 && (
+              {shippingEstimatedAmount >
+                0 && (
                 <SummaryRow label="Courier estimate">
                   {formatCurrency(
                     shippingEstimatedAmount,
@@ -1374,7 +1671,8 @@ export default function OrderDetails({
                 </SummaryRow>
               )}
 
-              {shippingDiscountAmount > 0 && (
+              {shippingDiscountAmount >
+                0 && (
                 <SummaryRow label="Shipping discount">
                   -
                   {formatCurrency(
@@ -1384,7 +1682,8 @@ export default function OrderDetails({
               )}
 
               <SummaryRow label="Shipping charged">
-                {shippingChargedAmount === 0
+                {shippingChargedAmount ===
+                0
                   ? "FREE"
                   : formatCurrency(
                       shippingChargedAmount,
@@ -1595,7 +1894,8 @@ export default function OrderDetails({
             </p>
           </div>
 
-          {order.items.length === 0 ? (
+          {order.items.length ===
+          0 ? (
             <div className="p-10 text-center">
               <Package
                 size={38}
@@ -1633,117 +1933,143 @@ export default function OrderDetails({
                   </thead>
 
                   <tbody>
-                    {order.items.map((item) => (
-                      <tr
-                        key={item.id}
-                        className="border-t border-[#F3DFC2] transition-colors hover:bg-[#FFFDF8]"
-                      >
-                        <td className="px-6 py-5">
-                          <p className="font-semibold text-[#6D2E00]">
-                            {item.productName ||
-                              item.product.name}
-                          </p>
-
-                          {item.variantLabel && (
-                            <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
-                              {item.variantLabel}
-                              {item.variantSku
-                                ? ` • SKU: ${item.variantSku}`
-                                : ""}
+                    {order.items.map(
+                      (item) => (
+                        <tr
+                          key={
+                            item.id
+                          }
+                          className="border-t border-[#F3DFC2] transition-colors hover:bg-[#FFFDF8]"
+                        >
+                          <td className="px-6 py-5">
+                            <p className="font-semibold text-[#6D2E00]">
+                              {item.productName ||
+                                item
+                                  .product
+                                  .name}
                             </p>
-                          )}
 
-                          {item.variantWeightGrams !==
-                            null &&
-                            item.variantWeightGrams !==
-                              undefined && (
-                              <p className="mt-1 text-xs text-gray-500">
-                                Net weight:{" "}
+                            {item.variantLabel && (
+                              <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
                                 {
-                                  item.variantWeightGrams
-                                }{" "}
-                                g
+                                  item.variantLabel
+                                }
+                                {item.variantSku
+                                  ? ` • SKU: ${item.variantSku}`
+                                  : ""}
                               </p>
                             )}
-                        </td>
 
-                        <td className="px-6 py-5 text-center text-gray-600">
-                          {item.quantity}
-                        </td>
+                            {item.variantWeightGrams !==
+                              null &&
+                              item.variantWeightGrams !==
+                                undefined && (
+                                <p className="mt-1 text-xs text-gray-500">
+                                  Net
+                                  weight:{" "}
+                                  {
+                                    item.variantWeightGrams
+                                  }{" "}
+                                  g
+                                </p>
+                              )}
+                          </td>
 
-                        <td className="px-6 py-5 text-right text-gray-600">
-                          {formatCurrency(
-                            item.price,
-                          )}
-                        </td>
+                          <td className="px-6 py-5 text-center text-gray-600">
+                            {
+                              item.quantity
+                            }
+                          </td>
 
-                        <td className="px-6 py-5 text-right font-bold text-[#6D2E00]">
-                          {formatCurrency(
-                            item.price *
-                              item.quantity,
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="px-6 py-5 text-right text-gray-600">
+                            {formatCurrency(
+                              item.price,
+                            )}
+                          </td>
+
+                          <td className="px-6 py-5 text-right font-bold text-[#6D2E00]">
+                            {formatCurrency(
+                              item.price *
+                                item.quantity,
+                            )}
+                          </td>
+                        </tr>
+                      ),
+                    )}
                   </tbody>
                 </table>
               </div>
 
               <div className="space-y-4 p-5 md:hidden">
-                {order.items.map((item) => (
-                  <Card
-                    key={item.id}
-                    variant="filled"
-                    padding="md"
-                    className="shadow-none"
-                  >
-                    <h3 className="font-bold text-[#6D2E00]">
-                      {item.productName ||
-                        item.product.name}
-                    </h3>
+                {order.items.map(
+                  (item) => (
+                    <Card
+                      key={
+                        item.id
+                      }
+                      variant="filled"
+                      padding="md"
+                      className="shadow-none"
+                    >
+                      <h3 className="font-bold text-[#6D2E00]">
+                        {item.productName ||
+                          item
+                            .product
+                            .name}
+                      </h3>
 
-                    {item.variantLabel && (
-                      <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
-                        {item.variantLabel}
-                        {item.variantSku
-                          ? ` • SKU: ${item.variantSku}`
-                          : ""}
-                      </p>
-                    )}
-
-                    {item.variantWeightGrams !==
-                      null &&
-                      item.variantWeightGrams !==
-                        undefined && (
-                        <p className="mt-1 text-xs text-gray-500">
-                          Net weight:{" "}
-                          {item.variantWeightGrams} g
+                      {item.variantLabel && (
+                        <p className="mt-1 text-sm font-semibold text-[#C89B3C]">
+                          {
+                            item.variantLabel
+                          }
+                          {item.variantSku
+                            ? ` • SKU: ${item.variantSku}`
+                            : ""}
                         </p>
                       )}
 
-                    <div className="mt-4 flex items-end justify-between gap-4">
-                      <div className="text-sm leading-7 text-gray-500">
-                        <p>
-                          Quantity: {item.quantity}
-                        </p>
+                      {item.variantWeightGrams !==
+                        null &&
+                        item.variantWeightGrams !==
+                          undefined && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Net
+                            weight:{" "}
+                            {
+                              item.variantWeightGrams
+                            }{" "}
+                            g
+                          </p>
+                        )}
 
-                        <p>
+                      <div className="mt-4 flex items-end justify-between gap-4">
+                        <div className="text-sm leading-7 text-gray-500">
+                          <p>
+                            Quantity:{" "}
+                            {
+                              item.quantity
+                            }
+                          </p>
+
+                          <p>
+                            {formatCurrency(
+                              item.price,
+                            )}{" "}
+                            each
+                          </p>
+                        </div>
+
+                        <p className="font-bold text-[#6D2E00]">
                           {formatCurrency(
-                            item.price,
-                          )}{" "}
-                          each
+                            item.price *
+                              item.quantity,
+                          )}
                         </p>
                       </div>
-
-                      <p className="font-bold text-[#6D2E00]">
-                        {formatCurrency(
-                          item.price *
-                            item.quantity,
-                        )}
-                      </p>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  ),
+                )}
               </div>
             </>
           )}
