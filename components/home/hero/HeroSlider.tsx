@@ -17,28 +17,38 @@ const slides = [
   {
     src: "/images/hero/hero-1.jpg",
     alt: "Traditional homemade Andhra snacks",
+    imageClass:
+      "object-cover object-center",
   },
   {
     src: "/images/hero/hero-2.jpg",
     alt: "Fresh homemade snacks and sweets",
+    imageClass:
+      "object-cover object-center",
   },
   {
     src: "/images/hero/hero-3.jpg",
     alt: "Traditional Indian catering spread",
+    imageClass:
+      "object-cover object-center scale-[0.92]",
   },
   {
-  src: "/images/hero/hero-4.webp",
-  alt: "Authentic homemade food prepared with care",
-},
+    src: "/images/hero/hero-4.webp",
+    alt: "Authentic homemade food prepared with care",
+    imageClass:
+      "object-cover object-center scale-[0.92]",
+  },
   {
     src: "/images/hero/hero-5.jpg",
     alt: "Tasty homemade food prepared with care",
+    imageClass:
+      "object-cover object-center",
   },
 ];
 
 export default function HeroSlider() {
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0 overflow-hidden">
       <Swiper
         modules={[
           Autoplay,
@@ -65,7 +75,7 @@ export default function HeroSlider() {
             <SwiperSlide
               key={slide.src}
             >
-              <div className="relative h-full w-full overflow-hidden">
+              <div className="relative h-full w-full overflow-hidden bg-black">
                 <Image
                   src={slide.src}
                   alt={slide.alt}
@@ -74,7 +84,7 @@ export default function HeroSlider() {
                     index === 0
                   }
                   sizes="100vw"
-                  className="object-cover object-center"
+                  className={`transition-transform duration-700 ${slide.imageClass}`}
                 />
               </div>
             </SwiperSlide>
