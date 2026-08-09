@@ -15,7 +15,9 @@ import {
 
 import Card from "@/components/ui/Card";
 import { useCart } from "@/context/CartContext";
-import { formatCurrency } from "@/lib/shop";
+import {
+  formatCurrency,
+} from "@/lib/shop";
 
 import type {
   ShippingQuoteState,
@@ -36,12 +38,9 @@ function getNextShippingDiscountMessage(
     SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD
   ) {
     return {
-      title:
-        "₹199 shipping discount unlocked",
-
+      title: "₹199 shipping discount unlocked",
       description:
         "You qualify for up to ₹199 off the Delhivery shipping charge.",
-
       remaining: 0,
     };
   }
@@ -51,12 +50,9 @@ function getNextShippingDiscountMessage(
     SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD
   ) {
     return {
-      title:
-        "₹99 shipping discount unlocked",
-
+      title: "₹99 shipping discount unlocked",
       description:
         "You qualify for up to ₹99 off shipping. Add more to unlock the ₹199 shipping discount.",
-
       remaining:
         SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD -
         subtotal,
@@ -65,10 +61,8 @@ function getNextShippingDiscountMessage(
 
   return {
     title: "Save on shipping",
-
     description:
       "Orders of ₹999 or more receive up to ₹99 off the shipping charge.",
-
     remaining:
       SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD -
       subtotal,
@@ -87,13 +81,15 @@ export default function OrderSummary({
   const quote =
     shippingQuoteState.status ===
     "success"
-      ? shippingQuoteState.data.quote
+      ? shippingQuoteState.data
+          .quote
       : null;
 
   const packageDetails =
     shippingQuoteState.status ===
     "success"
-      ? shippingQuoteState.data.package
+      ? shippingQuoteState.data
+          .package
       : null;
 
   const subtotal =
@@ -101,7 +97,7 @@ export default function OrderSummary({
     totalPrice;
 
   const shipping =
-    quote?.chargedShippingAmount ??
+    quote?.estimatedShippingAmount ??
     0;
 
   const total =
@@ -111,14 +107,6 @@ export default function OrderSummary({
   const shippingSavings =
     getNextShippingDiscountMessage(
       subtotal,
-    );
-
-  const shippingIsFullyCovered =
-    Boolean(
-      quote &&
-        quote.shippingDiscountAmount >
-          0 &&
-        shipping === 0,
     );
 
   if (cart.length === 0) {
@@ -144,9 +132,9 @@ export default function OrderSummary({
           </h2>
 
           <p className="mt-3 leading-7 text-gray-500">
-            Add products to your cart
-            before continuing with
-            checkout.
+            Add products to your
+            cart before continuing
+            with checkout.
           </p>
 
           <Link
@@ -363,14 +351,8 @@ export default function OrderSummary({
                     Calculating
                   </span>
                 ) : quote ? (
-                  shippingIsFullyCovered ? (
-                    <span className="text-green-700">
-                      FREE
-                    </span>
-                  ) : (
-                    formatCurrency(
-                      shipping,
-                    )
+                  formatCurrency(
+                    shipping,
                   )
                 ) : (
                   <span className="text-gray-400">
@@ -473,12 +455,9 @@ export default function OrderSummary({
               </h3>
 
               <p className="mt-1 text-sm leading-6 text-gray-500">
-                ₹99 OFF shipping on
-                orders ₹999+ and ₹199
-                OFF shipping on orders
-                ₹1,499+. The discount
-                applies only to
-                shipping.
+                ₹99 OFF shipping on orders ₹999+ and
+                ₹199 OFF shipping on orders ₹1,499+.
+                The discount applies only to shipping.
               </p>
             </div>
           </div>
@@ -492,29 +471,23 @@ export default function OrderSummary({
             </p>
 
             <p className="mt-1 text-sm leading-6 text-gray-600">
-              {
-                shippingSavings.description
-              }
+              {shippingSavings.description}
             </p>
 
-            {shippingSavings.remaining >
-              0 && (
+            {shippingSavings.remaining > 0 && (
               <p className="mt-2 text-sm font-medium text-[#8A3B00]">
                 Add{" "}
                 {formatCurrency(
                   shippingSavings.remaining,
                 )}{" "}
-                more for the next
-                shipping offer.
+                more for the next shipping offer.
               </p>
             )}
 
             {quote &&
-              quote.shippingDiscountAmount >
-                0 && (
+              quote.shippingDiscountAmount > 0 && (
                 <p className="mt-3 text-sm font-semibold text-green-700">
-                  Applied shipping
-                  saving:{" "}
+                  Applied shipping saving:{" "}
                   {formatCurrency(
                     quote.shippingDiscountAmount,
                   )}
