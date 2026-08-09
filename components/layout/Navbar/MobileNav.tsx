@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import Container from "@/components/ui/Container";
+import { useCart } from "@/context/CartContext";
 import { siteConfig } from "@/lib/site";
 
 import Logo from "./Logo";
@@ -60,6 +61,7 @@ function isPathActive(
 
 export default function MobileNav() {
   const pathname = usePathname();
+  const { totalItems } = useCart();
 
   const [open, setOpen] = useState(false);
 
@@ -78,32 +80,63 @@ export default function MobileNav() {
       <Container className="flex h-20 items-center justify-between">
         <Logo />
 
-        <button
-          type="button"
-          onClick={() =>
-            setOpen((current) => !current)
-          }
-          aria-label={
-            open
-              ? "Close navigation menu"
-              : "Open navigation menu"
-          }
-          aria-expanded={open}
-          aria-controls="mobile-navigation"
-          className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F3DFC2] bg-[#FFF4DE] text-[#6D2E00] transition-all duration-300 hover:bg-[#C89B3C] hover:text-white focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
-        >
-          {open ? (
-            <X
-              size={24}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/cart"
+            onClick={closeNavigation}
+            aria-label={
+              totalItems > 0
+                ? `View cart with ${totalItems} ${
+                    totalItems === 1 ? "item" : "items"
+                  }`
+                : "View cart"
+            }
+            className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F3DFC2] bg-white text-[#6D2E00] shadow-sm transition-all duration-300 hover:border-[#C89B3C] hover:bg-[#FFF4DE] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
+          >
+            <ShoppingCart
+              size={22}
               aria-hidden="true"
             />
-          ) : (
-            <Menu
-              size={24}
-              aria-hidden="true"
-            />
-          )}
-        </button>
+
+            {totalItems > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute -right-1.5 -top-1.5 flex h-6 min-w-6 items-center justify-center rounded-full bg-[#C89B3C] px-1.5 text-xs font-bold leading-none text-white shadow-md"
+              >
+                {totalItems > 99
+                  ? "99+"
+                  : totalItems}
+              </span>
+            )}
+          </Link>
+
+          <button
+            type="button"
+            onClick={() =>
+              setOpen((current) => !current)
+            }
+            aria-label={
+              open
+                ? "Close navigation menu"
+                : "Open navigation menu"
+            }
+            aria-expanded={open}
+            aria-controls="mobile-navigation"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F3DFC2] bg-[#FFF4DE] text-[#6D2E00] transition-all duration-300 hover:bg-[#C89B3C] hover:text-white focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
+          >
+            {open ? (
+              <X
+                size={24}
+                aria-hidden="true"
+              />
+            ) : (
+              <Menu
+                size={24}
+                aria-hidden="true"
+              />
+            )}
+          </button>
+        </div>
       </Container>
 
       <div
