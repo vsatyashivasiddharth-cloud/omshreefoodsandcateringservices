@@ -61,12 +61,6 @@ export interface ShippingQuote {
       | "SURFACE"
       | "EXPRESS";
 
-    freeShipping: boolean;
-
-    freeShippingThreshold:
-      | number
-      | null;
-
     quotedAt: string;
   };
 }
@@ -217,13 +211,6 @@ function isShippingQuote(
       "SURFACE" ||
       quote.shippingMode ===
         "EXPRESS") &&
-    typeof quote.freeShipping ===
-      "boolean" &&
-    (quote.freeShippingThreshold ===
-      null ||
-      isFiniteNumber(
-        quote.freeShippingThreshold,
-      )) &&
     typeof quote.quotedAt ===
       "string"
   );

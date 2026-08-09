@@ -9,6 +9,7 @@ import {
   getDelhiveryShippingRate,
 } from "@/lib/delhivery";
 import prisma from "@/lib/prisma";
+import { calculateShippingDiscount } from "@/lib/shop";
 
 interface QuoteItemInput {
   productId?: unknown;
@@ -30,31 +31,6 @@ interface ValidatedQuoteItem {
 
 const MAX_DISTINCT_ITEMS = 50;
 const MAX_QUANTITY_PER_ITEM = 100;
-
-const SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD = 999;
-const SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD = 1499;
-const SHIPPING_DISCOUNT_TIER_ONE_AMOUNT = 99;
-const SHIPPING_DISCOUNT_TIER_TWO_AMOUNT = 199;
-
-function getShippingDiscountAllowance(
-  subtotal: number,
-) {
-  if (
-    subtotal >=
-    SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD
-  ) {
-    return SHIPPING_DISCOUNT_TIER_TWO_AMOUNT;
-  }
-
-  if (
-    subtotal >=
-    SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD
-  ) {
-    return SHIPPING_DISCOUNT_TIER_ONE_AMOUNT;
-  }
-
-  return 0;
-}
 
 function isRecord(
   value: unknown,
@@ -820,56 +796,21 @@ export async function POST(
       );
     }
 
-    const shippingDiscountAllowance =
-      getShippingDiscountAllowance(
-        subtotal,
-      );
-
-    /*
-     * Shipping promotions reduce only the
-     * courier charge. Product subtotal is
-     * never discounted.
-     *
-     * The applied discount is capped at the
-     * actual Delhivery estimate so shipping
-     * can never become negative.
-     */
-    const shippingDiscountAmount =
-      roundMoney(
-        Math.min(
-          estimatedShippingAmount,
-          shippingDiscountAllowance,
-        ),
-      );
-
-    const chargedShippingAmount =
-      roundMoney(
-        Math.max(
-          0,
-          estimatedShippingAmount -
-            shippingDiscountAmount,
-        ),
-      );
+    const {
+      appliedDiscount:
+        shippingDiscountAmount,
+      chargedShipping:
+        chargedShippingAmount,
+    } = calculateShippingDiscount(
+      subtotal,
+      estimatedShippingAmount,
+    );
 
     const totalAmount =
       roundMoney(
         subtotal +
           chargedShippingAmount,
       );
-
-    /*
-     * Keep these legacy response properties
-     * temporarily for CheckoutContent's
-     * existing runtime response validator.
-     * There is no longer a free-shipping
-     * threshold.
-     */
-    const freeShipping =
-      chargedShippingAmount === 0 &&
-      shippingDiscountAmount > 0;
-
-    const freeShippingThreshold =
-      null;
 
     return NextResponse.json(
       {
@@ -940,10 +881,6 @@ export async function POST(
 
           shippingMode:
             rate.shippingMode,
-
-          freeShipping,
-
-          freeShippingThreshold,
 
           quotedAt:
             new Date().toISOString(),

@@ -2,25 +2,46 @@ export const shopConfig = {
   currency: "INR",
   currencySymbol: "₹",
 
-  shippingCharge: 50,
-  freeShippingAbove: 999,
-
-  estimatedDelivery: "2–5 business days",
+  estimatedDelivery:
+    "2–5 business days",
 
   taxRate: 0,
 
+  shippingDiscounts: {
+    tierOne: {
+      threshold: 999,
+      amount: 99,
+    },
+
+    tierTwo: {
+      threshold: 1499,
+      amount: 199,
+    },
+  },
+
   supportPhone: "7013820854",
-  supportWhatsapp: "917013820854",
+  supportWhatsapp:
+    "917013820854",
 } as const;
 
 interface OrderTotals {
   subtotal: number;
   shipping: number;
+  shippingDiscount: number;
   tax: number;
   total: number;
 }
 
-function normalizeMoney(value: number): number {
+export interface ShippingDiscountDetails {
+  threshold: number | null;
+  discountCap: number;
+  appliedDiscount: number;
+  chargedShipping: number;
+}
+
+function normalizeMoney(
+  value: number,
+): number {
   const amount = Number(value);
 
   if (!Number.isFinite(amount)) {
@@ -29,12 +50,14 @@ function normalizeMoney(value: number): number {
 
   return Math.max(
     0,
-    Math.round((amount + Number.EPSILON) * 100) /
-      100,
+    Math.round(
+      (amount + Number.EPSILON) *
+        100,
+    ) / 100,
   );
 }
 
-export function calculateShipping(
+export function getShippingDiscountCap(
   subtotal: number,
 ): number {
   const normalizedSubtotal =
@@ -42,14 +65,142 @@ export function calculateShipping(
 
   if (
     normalizedSubtotal >=
-    shopConfig.freeShippingAbove
+    shopConfig.shippingDiscounts
+      .tierTwo.threshold
   ) {
-    return 0;
+    return shopConfig
+      .shippingDiscounts.tierTwo
+      .amount;
   }
 
-  return normalizeMoney(
-    shopConfig.shippingCharge,
-  );
+  if (
+    normalizedSubtotal >=
+    shopConfig.shippingDiscounts
+      .tierOne.threshold
+  ) {
+    return shopConfig
+      .shippingDiscounts.tierOne
+      .amount;
+  }
+
+  return 0;
+}
+
+export function calculateShippingDiscount(
+  subtotal: number,
+  estimatedShipping: number,
+): ShippingDiscountDetails {
+  const normalizedSubtotal =
+    normalizeMoney(subtotal);
+
+  const normalizedShipping =
+    normalizeMoney(
+      estimatedShipping,
+    );
+
+  const discountCap =
+    getShippingDiscountCap(
+      normalizedSubtotal,
+    );
+
+  const appliedDiscount =
+    normalizeMoney(
+      Math.min(
+        normalizedShipping,
+        discountCap,
+      ),
+    );
+
+  const chargedShipping =
+    normalizeMoney(
+      Math.max(
+        0,
+        normalizedShipping -
+          appliedDiscount,
+      ),
+    );
+
+  const threshold =
+    discountCap >=
+    shopConfig.shippingDiscounts
+      .tierTwo.amount
+      ? shopConfig
+          .shippingDiscounts
+          .tierTwo.threshold
+      : discountCap >=
+          shopConfig
+            .shippingDiscounts
+            .tierOne.amount
+        ? shopConfig
+            .shippingDiscounts
+            .tierOne.threshold
+        : null;
+
+  return {
+    threshold,
+    discountCap,
+    appliedDiscount,
+    chargedShipping,
+  };
+}
+
+export function getNextShippingDiscount(
+  subtotal: number,
+) {
+  const normalizedSubtotal =
+    normalizeMoney(subtotal);
+
+  if (
+    normalizedSubtotal >=
+    shopConfig.shippingDiscounts
+      .tierTwo.threshold
+  ) {
+    return null;
+  }
+
+  if (
+    normalizedSubtotal >=
+    shopConfig.shippingDiscounts
+      .tierOne.threshold
+  ) {
+    return {
+      threshold:
+        shopConfig
+          .shippingDiscounts
+          .tierTwo.threshold,
+
+      amount:
+        shopConfig
+          .shippingDiscounts
+          .tierTwo.amount,
+
+      remaining:
+        normalizeMoney(
+          shopConfig
+            .shippingDiscounts
+            .tierTwo.threshold -
+            normalizedSubtotal,
+        ),
+    };
+  }
+
+  return {
+    threshold:
+      shopConfig.shippingDiscounts
+        .tierOne.threshold,
+
+    amount:
+      shopConfig.shippingDiscounts
+        .tierOne.amount,
+
+    remaining:
+      normalizeMoney(
+        shopConfig
+          .shippingDiscounts
+          .tierOne.threshold -
+          normalizedSubtotal,
+      ),
+  };
 }
 
 export function calculateTax(
@@ -66,12 +217,17 @@ export function calculateTax(
 
 export function calculateOrderTotal(
   subtotal: number,
+  estimatedShipping = 0,
 ): OrderTotals {
   const normalizedSubtotal =
     normalizeMoney(subtotal);
 
-  const shipping = calculateShipping(
+  const {
+    appliedDiscount,
+    chargedShipping,
+  } = calculateShippingDiscount(
     normalizedSubtotal,
+    estimatedShipping,
   );
 
   const tax = calculateTax(
@@ -79,58 +235,39 @@ export function calculateOrderTotal(
   );
 
   return {
-    subtotal: normalizedSubtotal,
-    shipping,
+    subtotal:
+      normalizedSubtotal,
+
+    shipping:
+      chargedShipping,
+
+    shippingDiscount:
+      appliedDiscount,
+
     tax,
-    total: normalizeMoney(
-      normalizedSubtotal + shipping + tax,
-    ),
+
+    total:
+      normalizeMoney(
+        normalizedSubtotal +
+          chargedShipping +
+          tax,
+      ),
   };
-}
-
-export function getFreeShippingRemaining(
-  subtotal: number,
-): number {
-  const normalizedSubtotal =
-    normalizeMoney(subtotal);
-
-  return normalizeMoney(
-    Math.max(
-      0,
-      shopConfig.freeShippingAbove -
-        normalizedSubtotal,
-    ),
-  );
-}
-
-export function getFreeShippingProgress(
-  subtotal: number,
-): number {
-  const normalizedSubtotal =
-    normalizeMoney(subtotal);
-
-  if (shopConfig.freeShippingAbove <= 0) {
-    return 100;
-  }
-
-  return Math.min(
-    100,
-    Math.max(
-      0,
-      (normalizedSubtotal /
-        shopConfig.freeShippingAbove) *
-        100,
-    ),
-  );
 }
 
 export function formatCurrency(
   amount: number,
 ): string {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: shopConfig.currency,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  }).format(normalizeMoney(amount));
+  return new Intl.NumberFormat(
+    "en-IN",
+    {
+      style: "currency",
+      currency:
+        shopConfig.currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    },
+  ).format(
+    normalizeMoney(amount),
+  );
 }
