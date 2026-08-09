@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -421,6 +422,14 @@ export default function ShopContent() {
     PRODUCTS_PER_PAGE,
   );
 
+  const loadMoreStartRef =
+    useRef<HTMLDivElement | null>(
+      null,
+    );
+
+  const pendingLoadMoreScrollTopRef =
+    useRef<number | null>(null);
+
   const requestedCategorySlug =
     searchParams
       .get("category")
@@ -820,6 +829,54 @@ export default function ShopContent() {
       visible,
     );
 
+  function handleLoadMore() {
+    const loadMoreStart =
+      loadMoreStartRef.current;
+
+    if (loadMoreStart) {
+      pendingLoadMoreScrollTopRef.current =
+        window.scrollY +
+        loadMoreStart.getBoundingClientRect()
+          .top;
+    } else {
+      pendingLoadMoreScrollTopRef.current =
+        null;
+    }
+
+    setVisible(
+      (currentVisible) =>
+        Math.min(
+          currentVisible +
+            PRODUCTS_PER_PAGE,
+          filteredProducts.length,
+        ),
+    );
+  }
+
+  useEffect(() => {
+    const targetScrollTop =
+      pendingLoadMoreScrollTopRef.current;
+
+    if (targetScrollTop === null) {
+      return;
+    }
+
+    pendingLoadMoreScrollTopRef.current =
+      null;
+
+    window.requestAnimationFrame(
+      () => {
+        window.scrollTo({
+          top: Math.max(
+            0,
+            targetScrollTop - 24,
+          ),
+          behavior: "smooth",
+        });
+      },
+    );
+  }, [visible]);
+
   const selectedCategoryMissing =
     Boolean(
       requestedCategorySlug,
@@ -952,11 +1009,19 @@ export default function ShopContent() {
 
       {displayedProducts.length >
       0 ? (
-        <ProductGrid
-          products={
-            displayedProducts
-          }
-        />
+        <>
+          <ProductGrid
+            products={
+              displayedProducts
+            }
+          />
+
+          <div
+            ref={loadMoreStartRef}
+            aria-hidden="true"
+            className="h-px"
+          />
+        </>
       ) : (
         <EmptyState
           icon={
@@ -980,14 +1045,8 @@ export default function ShopContent() {
           <Button
             type="button"
             variant="primary"
-            onClick={() =>
-              setVisible(
-                (
-                  currentVisible,
-                ) =>
-                  currentVisible +
-                  PRODUCTS_PER_PAGE,
-              )
+            onClick={
+              handleLoadMore
             }
           >
             Load More Products
