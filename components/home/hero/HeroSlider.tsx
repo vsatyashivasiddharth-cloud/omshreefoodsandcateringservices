@@ -30,13 +30,13 @@ const slides = [
     src: "/images/hero/hero-3.jpg",
     alt: "Traditional Indian catering spread",
     imageClass:
-      "object-cover object-center scale-[0.92]",
+      "object-cover object-center",
   },
   {
-    src: "/images/hero/hero-4.webp",
+    src: "/images/hero/hero-4.jpg",
     alt: "Authentic homemade food prepared with care",
     imageClass:
-      "object-cover object-center scale-[0.92]",
+      "object-cover object-center",
   },
   {
     src: "/images/hero/hero-5.jpg",
@@ -75,7 +75,7 @@ export default function HeroSlider() {
             <SwiperSlide
               key={slide.src}
             >
-              <div className="relative h-full w-full overflow-hidden bg-black">
+              <div className="relative h-full w-full overflow-hidden">
                 <Image
                   src={slide.src}
                   alt={slide.alt}
@@ -84,7 +84,9 @@ export default function HeroSlider() {
                     index === 0
                   }
                   sizes="100vw"
-                  className={`transition-transform duration-700 ${slide.imageClass}`}
+                  className={
+                    slide.imageClass
+                  }
                 />
               </div>
             </SwiperSlide>
