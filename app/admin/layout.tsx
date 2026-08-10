@@ -15,6 +15,7 @@ import {
   FolderTree,
   LayoutDashboard,
   LogOut,
+  Package,
   PackageSearch,
   ShoppingBag,
 } from "lucide-react";
@@ -72,7 +73,7 @@ export default function AdminLayout({
         label: "Orders",
         href: "/admin/orders",
         icon: (
-          <PackageSearch
+          <ShoppingBag
             size={19}
             aria-hidden="true"
           />
@@ -82,7 +83,7 @@ export default function AdminLayout({
         label: "Products",
         href: "/admin/products",
         icon: (
-          <ShoppingBag
+          <PackageSearch
             size={19}
             aria-hidden="true"
           />
@@ -93,6 +94,16 @@ export default function AdminLayout({
         href: "/admin/categories",
         icon: (
           <FolderTree
+            size={19}
+            aria-hidden="true"
+          />
+        ),
+      },
+      {
+        label: "Shipping Packages",
+        href: "/admin/shipping-packages",
+        icon: (
+          <Package
             size={19}
             aria-hidden="true"
           />
@@ -161,19 +172,22 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex min-h-screen bg-[#FFF9F0]">
       {/* Sidebar */}
-      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col bg-black text-white">
-        <div className="border-b border-gray-800 px-6 py-7">
+
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-black md:flex">
+        <div className="border-b border-gray-800 px-6 py-8">
           <Link
             href="/admin/dashboard"
-            className="inline-flex rounded-lg focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/30"
+            className="inline-block focus:outline-none focus:ring-4 focus:ring-yellow-400/20"
           >
-            <span className="text-2xl font-bold leading-tight text-yellow-400">
+            <p className="text-2xl font-bold leading-tight text-yellow-400">
               Om Shree
-              <br />
+            </p>
+
+            <p className="text-2xl font-bold leading-tight text-yellow-400">
               Admin
-            </span>
+            </p>
           </Link>
         </div>
 
@@ -241,8 +255,61 @@ export default function AdminLayout({
         </nav>
       </aside>
 
+      {/* Mobile admin navigation */}
+
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-gray-800 bg-black md:hidden">
+        <nav
+          className="flex items-stretch overflow-x-auto px-2"
+          aria-label="Mobile admin navigation"
+        >
+          {navigationItems.map(
+            (item) => {
+              const active =
+                isActive(
+                  item.href,
+                );
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={
+                    active
+                      ? "page"
+                      : undefined
+                  }
+                  className={`flex min-w-[78px] flex-1 flex-col items-center justify-center gap-1 px-2 py-3 text-center text-[11px] font-semibold transition ${
+                    active
+                      ? "bg-[#C89B3C] text-black"
+                      : "text-white"
+                  }`}
+                >
+                  <span
+                    className={
+                      active
+                        ? "text-black"
+                        : "text-yellow-400"
+                    }
+                  >
+                    {item.icon}
+                  </span>
+
+                  <span className="whitespace-nowrap">
+                    {item.label ===
+                    "Shipping Packages"
+                      ? "Shipping"
+                      : item.label}
+                  </span>
+                </Link>
+              );
+            },
+          )}
+        </nav>
+      </div>
+
       {/* Content */}
-      <main className="min-w-0 flex-1">
+
+      <main className="min-w-0 flex-1 pb-20 md:pb-0">
         {children}
       </main>
     </div>
