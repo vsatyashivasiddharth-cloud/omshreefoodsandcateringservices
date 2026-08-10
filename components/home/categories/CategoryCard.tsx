@@ -167,7 +167,7 @@ export default function CategoryCard({
 
         <div className="flex items-center justify-between gap-5 p-6">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C89B3C]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A00]">
               Browse Collection
             </p>
 

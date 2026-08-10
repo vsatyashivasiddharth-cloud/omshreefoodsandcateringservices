@@ -1,4 +1,6 @@
-import { MessageCircleHeart } from "lucide-react";
+import {
+  MessageCircleHeart,
+} from "lucide-react";
 
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
@@ -6,7 +8,9 @@ import Container from "@/components/ui/Container";
 import SectionHeader from "@/components/ui/SectionHeader";
 
 import TestimonialCard from "./TestimonialCard";
-import { testimonials } from "./testimonialData";
+import {
+  testimonials,
+} from "./testimonialData";
 
 const stats = [
   {
@@ -58,12 +62,14 @@ export default function TestimonialsSection() {
         />
 
         <div className="mt-14 grid gap-6 sm:mt-16 md:grid-cols-2 lg:gap-8 xl:grid-cols-3">
-          {testimonials.map((testimonial) => (
-            <TestimonialCard
-              key={`${testimonial.name}-${testimonial.location}`}
-              {...testimonial}
-            />
-          ))}
+          {testimonials.map(
+            (testimonial) => (
+              <TestimonialCard
+                key={`${testimonial.name}-${testimonial.location}`}
+                {...testimonial}
+              />
+            ),
+          )}
         </div>
 
         <Card
@@ -77,7 +83,7 @@ export default function TestimonialsSection() {
                 key={stat.label}
                 className="rounded-3xl border border-[#F3DFC2] bg-[#FFFDF8] p-6 transition-all duration-300 hover:-translate-y-1 hover:bg-[#FFF4DE] sm:p-8"
               >
-                <h3 className="text-4xl font-bold text-[#C89B3C] sm:text-5xl">
+                <h3 className="text-4xl font-bold text-[#8A5A00] sm:text-5xl">
                   {stat.value}
                 </h3>
 

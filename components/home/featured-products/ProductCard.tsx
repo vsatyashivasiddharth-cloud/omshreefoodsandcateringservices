@@ -503,7 +503,7 @@ export default function ProductCard({
             </button>
 
             <div className="flex flex-1 flex-col items-center justify-center text-center">
-              <p className="text-xs font-semibold uppercase tracking-wide text-[#C89B3C]">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[#8A5A00]">
                 Select Package
               </p>
 
@@ -608,7 +608,7 @@ export default function ProductCard({
           href={productHref}
           className="rounded-lg focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
         >
-          <h3 className="line-clamp-2 text-lg font-bold leading-snug text-[#6D2E00] transition-colors duration-300 group-hover:text-[#C89B3C]">
+          <h3 className="line-clamp-2 text-lg font-bold leading-snug text-[#6D2E00] transition-colors duration-300 group-hover:text-[#8A5A00]">
             {product.name}
           </h3>
         </Link>
@@ -631,7 +631,7 @@ export default function ProductCard({
                 : "Price"}
           </p>
 
-          <p className="mt-1 text-xl font-bold text-[#C89B3C]">
+          <p className="mt-1 text-xl font-bold text-[#8A5A00]">
             {priceLabel}
           </p>
         </div>
@@ -687,7 +687,7 @@ export default function ProductCard({
 
         <Link
           href={productHref}
-          className="mt-4 inline-flex items-center gap-2 self-start rounded-lg text-sm font-semibold text-[#6D2E00] transition-colors hover:text-[#C89B3C] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
+          className="mt-4 inline-flex items-center gap-2 self-start rounded-lg text-sm font-semibold text-[#6D2E00] transition-colors hover:text-[#8A5A00] focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20"
         >
           View Details
 
