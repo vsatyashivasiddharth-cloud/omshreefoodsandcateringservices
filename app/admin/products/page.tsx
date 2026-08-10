@@ -32,6 +32,9 @@ interface ProductVariant {
   label: string;
   weightGrams: number;
   shippingWeightGrams: number;
+  packedLengthCm: number | null;
+  packedBreadthCm: number | null;
+  packedHeightCm: number | null;
   price: number;
   stock: number;
   sku: string | null;
@@ -54,6 +57,9 @@ interface Product {
   price: number;
   stock: number;
   shippingWeightGrams: number;
+  packedLengthCm: number | null;
+  packedBreadthCm: number | null;
+  packedHeightCm: number | null;
 
   featured: boolean;
   image: string | null;
@@ -129,6 +135,99 @@ function normalizeNonNegativeInteger(
       value,
     ),
   );
+}
+
+function normalizeOptionalPositiveNumber(
+  value: unknown,
+) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  const number = Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number <= 0
+  ) {
+    return null;
+  }
+
+  return number;
+}
+
+function hasCompletePackedDimensions({
+  packedLengthCm,
+  packedBreadthCm,
+  packedHeightCm,
+}: {
+  packedLengthCm: unknown;
+  packedBreadthCm: unknown;
+  packedHeightCm: unknown;
+}) {
+  return (
+    normalizeOptionalPositiveNumber(
+      packedLengthCm,
+    ) !== null &&
+    normalizeOptionalPositiveNumber(
+      packedBreadthCm,
+    ) !== null &&
+    normalizeOptionalPositiveNumber(
+      packedHeightCm,
+    ) !== null
+  );
+}
+
+function formatDimension(
+  value: number | null,
+) {
+  if (
+    value === null ||
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return "—";
+  }
+
+  return value.toLocaleString(
+    "en-IN",
+    {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    },
+  );
+}
+
+function formatPackedDimensions({
+  packedLengthCm,
+  packedBreadthCm,
+  packedHeightCm,
+}: {
+  packedLengthCm: number | null;
+  packedBreadthCm: number | null;
+  packedHeightCm: number | null;
+}) {
+  if (
+    !hasCompletePackedDimensions({
+      packedLengthCm,
+      packedBreadthCm,
+      packedHeightCm,
+    })
+  ) {
+    return null;
+  }
+
+  return `${formatDimension(
+    packedLengthCm,
+  )} × ${formatDimension(
+    packedBreadthCm,
+  )} × ${formatDimension(
+    packedHeightCm,
+  )} cm`;
 }
 
 function formatPrice(
@@ -218,6 +317,92 @@ function productHasMissingWeight(
       variant.shippingWeightGrams <=
       0,
   );
+}
+
+function getPackedDimensionsSummary(
+  product: Product,
+) {
+  const activeVariants =
+    getActiveVariants(product);
+
+  if (
+    activeVariants.length === 0
+  ) {
+    const configured =
+      hasCompletePackedDimensions({
+        packedLengthCm:
+          product.packedLengthCm,
+        packedBreadthCm:
+          product.packedBreadthCm,
+        packedHeightCm:
+          product.packedHeightCm,
+      });
+
+    return {
+      configuredCount:
+        configured ? 1 : 0,
+      totalCount: 1,
+      allConfigured:
+        configured,
+      someConfigured:
+        configured,
+      legacyFallback: true,
+      defaultDimensions:
+        configured
+          ? formatPackedDimensions({
+              packedLengthCm:
+                product.packedLengthCm,
+              packedBreadthCm:
+                product.packedBreadthCm,
+              packedHeightCm:
+                product.packedHeightCm,
+            })
+          : null,
+    };
+  }
+
+  const configuredVariants =
+    activeVariants.filter(
+      (variant) =>
+        hasCompletePackedDimensions(
+          variant,
+        ),
+    );
+
+  const defaultVariant =
+    activeVariants.find(
+      (variant) =>
+        variant.isDefault,
+    ) ??
+    activeVariants[0] ??
+    null;
+
+  return {
+    configuredCount:
+      configuredVariants.length,
+    totalCount:
+      activeVariants.length,
+    allConfigured:
+      configuredVariants.length ===
+      activeVariants.length,
+    someConfigured:
+      configuredVariants.length > 0,
+    legacyFallback: false,
+    defaultDimensions:
+      defaultVariant
+        ? formatPackedDimensions(
+            defaultVariant,
+          )
+        : null,
+  };
+}
+
+function productHasMissingDimensions(
+  product: Product,
+) {
+  return !getPackedDimensionsSummary(
+    product,
+  ).allConfigured;
 }
 
 function productHasLowStock(
@@ -440,6 +625,21 @@ function normalizeProduct(
         product.shippingWeightGrams,
       ),
 
+    packedLengthCm:
+      normalizeOptionalPositiveNumber(
+        product.packedLengthCm,
+      ),
+
+    packedBreadthCm:
+      normalizeOptionalPositiveNumber(
+        product.packedBreadthCm,
+      ),
+
+    packedHeightCm:
+      normalizeOptionalPositiveNumber(
+        product.packedHeightCm,
+      ),
+
     variants:
       Array.isArray(
         product.variants,
@@ -466,6 +666,21 @@ function normalizeProduct(
               shippingWeightGrams:
                 normalizeNonNegativeInteger(
                   variant.shippingWeightGrams,
+                ),
+
+              packedLengthCm:
+                normalizeOptionalPositiveNumber(
+                  variant.packedLengthCm,
+                ),
+
+              packedBreadthCm:
+                normalizeOptionalPositiveNumber(
+                  variant.packedBreadthCm,
+                ),
+
+              packedHeightCm:
+                normalizeOptionalPositiveNumber(
+                  variant.packedHeightCm,
                 ),
 
               sortOrder:
@@ -735,6 +950,11 @@ export default function ProductsPage() {
           products.filter(
             productHasMissingWeight,
           ).length,
+
+        missingDimensions:
+          products.filter(
+            productHasMissingDimensions,
+          ).length,
       }),
       [products],
     );
@@ -757,7 +977,8 @@ export default function ProductsPage() {
                 Manage inventory,
                 variant pricing,
                 stock, packed
-                shipping weights
+                shipping weights,
+                packed dimensions
                 and featured
                 products.
               </p>
@@ -772,7 +993,7 @@ export default function ProductsPage() {
 
           {/* Stats */}
 
-          <div className="mb-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-10 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
             <StatCard
               title="Products"
               value={
@@ -824,6 +1045,19 @@ export default function ProductsPage() {
                 />
               }
             />
+
+            <StatCard
+              title="Missing Dimensions"
+              value={
+                stats.missingDimensions
+              }
+              icon={
+                <AlertTriangle
+                  size={24}
+                  aria-hidden="true"
+                />
+              }
+            />
           </div>
 
           <Card
@@ -858,7 +1092,7 @@ export default function ProductsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1180px]">
+                <table className="w-full min-w-[1360px]">
                   <thead className="bg-[#FFF8EE]">
                     <tr>
                       <th className="px-6 py-5 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">
@@ -875,6 +1109,10 @@ export default function ProductsPage() {
 
                       <th className="px-6 py-5 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">
                         Packed Weight
+                      </th>
+
+                      <th className="px-6 py-5 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">
+                        Packed Dimensions
                       </th>
 
                       <th className="px-6 py-5 text-left text-sm font-semibold uppercase tracking-wider text-gray-500">
@@ -906,6 +1144,11 @@ export default function ProductsPage() {
 
                         const hasMissingWeight =
                           productHasMissingWeight(
+                            product,
+                          );
+
+                        const dimensionsSummary =
+                          getPackedDimensionsSummary(
                             product,
                           );
 
@@ -1042,6 +1285,49 @@ export default function ProductsPage() {
                                   Not set
                                 </Badge>
                               )}
+                            </td>
+
+                            {/* Packed dimensions */}
+
+                            <td className="px-6 py-5">
+                              <div className="min-w-[190px]">
+                                <Badge
+                                  variant={
+                                    dimensionsSummary.allConfigured
+                                      ? "success"
+                                      : dimensionsSummary.someConfigured
+                                        ? "warning"
+                                        : "danger"
+                                  }
+                                  size="sm"
+                                >
+                                  {dimensionsSummary.allConfigured
+                                    ? "Dimensions configured"
+                                    : dimensionsSummary.someConfigured
+                                      ? `${dimensionsSummary.configuredCount}/${dimensionsSummary.totalCount} configured`
+                                      : "Dimensions missing"}
+                                </Badge>
+
+                                {dimensionsSummary.defaultDimensions && (
+                                  <p className="mt-2 whitespace-nowrap text-xs font-medium text-gray-600">
+                                    {
+                                      dimensionsSummary.defaultDimensions
+                                    }
+                                  </p>
+                                )}
+
+                                {!dimensionsSummary.allConfigured && (
+                                  <p className="mt-1 text-xs leading-5 text-gray-500">
+                                    Weight-only
+                                    fallback remains
+                                    active for
+                                    unconfigured{" "}
+                                    {dimensionsSummary.legacyFallback
+                                      ? "product data."
+                                      : "variants."}
+                                  </p>
+                                )}
+                              </div>
                             </td>
 
                             {/* Stock */}
@@ -1191,16 +1477,19 @@ export default function ProductsPage() {
                 </p>
 
                 <p className="mt-1 text-sm leading-6 text-gray-500">
-                  Prices, stock and
+                  Prices, stock,
                   packed shipping
-                  weights shown above
-                  are calculated from
-                  active package
-                  variants. Legacy
-                  product fields are
-                  used only when a
-                  product has no
-                  active variants.
+                  weights and packed
+                  dimension status are
+                  calculated from active
+                  package variants.
+                  Variants without all
+                  three packed dimensions
+                  continue using the
+                  weight-only shipping
+                  fallback until their
+                  measurements are
+                  configured.
                 </p>
               </div>
             </div>
