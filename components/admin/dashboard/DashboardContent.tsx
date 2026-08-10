@@ -632,6 +632,48 @@ export default function DashboardContent() {
           </div>
         </Card>
 
+        <Card
+          padding="lg"
+          className="mt-10 bg-white/95 shadow-xl backdrop-blur-sm"
+        >
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <Badge
+                variant="neutral"
+                rounded
+              >
+                Shipping Management
+              </Badge>
+
+              <h2 className="mt-4 text-2xl font-bold text-[#6D2E00]">
+                Shipping Packages
+              </h2>
+
+              <p className="mt-2 max-w-2xl leading-7 text-gray-600">
+                Manage your Small, Medium,
+                Large and other shipping
+                boxes, including outer
+                dimensions, empty package
+                weight and maximum packed
+                weight used for Delhivery
+                calculations.
+              </p>
+            </div>
+
+            <Link
+              href="/admin/shipping-packages"
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-5 font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#8B4513] focus:outline-none focus:ring-4 focus:ring-[#6D2E00]/20"
+            >
+              Manage Packages
+
+              <ChevronRight
+                size={18}
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
+        </Card>
+
         <div className="mt-10">
           <RevenueChart
             data={
