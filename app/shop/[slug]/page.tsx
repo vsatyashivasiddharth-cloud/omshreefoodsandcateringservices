@@ -3,6 +3,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -16,7 +17,6 @@ import {
 import Footer from "@/components/layout/footer";
 import Navbar from "@/components/layout/Navbar";
 import ProductActions from "@/components/shop/ProductActions";
-import ProductDetailImage from "@/components/shop/ProductDetailImage";
 import RelatedProducts from "@/components/shop/RelatedProducts";
 import prisma from "@/lib/prisma";
 import type { ProductWithCategory } from "@/types/product";
@@ -119,10 +119,11 @@ const getProduct = cache(
       return null;
     }
 
-    return prisma.product.findUnique({
+    return prisma.product.findFirst({
       where: {
         slug:
           normalizedSlug,
+        isActive: true,
       },
 
       select: {
@@ -313,7 +314,6 @@ export async function generateMetadata({
         `${product.name} | ${brandName}`,
 
       description,
-
       images: [
         imageUrl,
       ],
@@ -827,24 +827,29 @@ export default async function ProductPage({
           </nav>
 
           <div className="grid items-start gap-12 lg:grid-cols-2 lg:gap-16">
-            {/* Product image */}
-
             <div className="overflow-hidden rounded-[36px] border border-[#F3DFC2] bg-white p-4 shadow-2xl">
               <div className="relative aspect-square overflow-hidden rounded-[28px] bg-[#FFF8EE] lg:aspect-auto lg:h-[560px]">
-                <ProductDetailImage
-                  src={product.image}
-                  alt={product.name}
+                <Image
+                  src={
+                    normalizedProduct.image
+                  }
+                  alt={
+                    product.name
+                  }
+                  fill
                   priority
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="object-cover transition-transform duration-700 hover:scale-105"
                 />
 
                 {product.featured && (
-                  <div className="absolute left-5 top-5 z-10 rounded-full bg-[#C89B3C] px-4 py-2 text-sm font-bold text-white shadow-lg">
+                  <div className="absolute left-5 top-5 rounded-full bg-[#C89B3C] px-4 py-2 text-sm font-bold text-white shadow-lg">
                     Featured
                   </div>
                 )}
 
                 {!inStock && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/45">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/45">
                     <span className="rounded-full bg-white px-6 py-3 font-bold text-[#6D2E00] shadow-xl">
                       Currently Out
                       of Stock
@@ -853,8 +858,6 @@ export default async function ProductPage({
                 )}
               </div>
             </div>
-
-            {/* Product information */}
 
             <div className="flex flex-col self-start lg:sticky lg:top-28">
               <Link
@@ -878,7 +881,8 @@ export default async function ProductPage({
                 />
 
                 <span>
-                  Freshly Prepared
+                  Freshly
+                  Prepared
                 </span>
 
                 <span aria-hidden="true">
@@ -886,7 +890,8 @@ export default async function ProductPage({
                 </span>
 
                 <span>
-                  Premium Ingredients
+                  Premium
+                  Ingredients
                 </span>
               </div>
 
@@ -954,17 +959,16 @@ export default async function ProductPage({
             </div>
           </div>
 
-          {/* Description */}
-
           <section className="mt-24 rounded-[36px] border border-[#F3DFC2] bg-white/90 p-8 shadow-xl backdrop-blur-sm sm:p-10">
             <h2 className="text-3xl font-bold text-[#6D2E00]">
               Product Description
             </h2>
 
             <p className="mb-8 mt-3 text-gray-500">
-              Learn more about this
-              handcrafted product and
-              what makes it special.
+              Learn more about
+              this handcrafted
+              product and what
+              makes it special.
             </p>
 
             <div

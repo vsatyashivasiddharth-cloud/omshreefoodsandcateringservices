@@ -62,30 +62,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const products = await prisma.product.findMany({
-      select: {
-        slug: true,
-        updatedAt: true,
-      },
-      orderBy: {
-        updatedAt: "desc",
-      },
-    });
+    const products =
+      await prisma.product.findMany({
+        where: {
+          isActive: true,
+        },
+        select: {
+          slug: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          updatedAt: "desc",
+        },
+      });
 
     const productPages: MetadataRoute.Sitemap =
       products
         .filter((product) => {
           return (
-            typeof product.slug === "string" &&
-            product.slug.trim().length > 0
+            typeof product.slug ===
+              "string" &&
+            product.slug.trim().length >
+              0
           );
         })
         .map((product) => ({
           url: `${baseUrl}/shop/${encodeURIComponent(
             product.slug.trim(),
           )}`,
-          lastModified: product.updatedAt,
-          changeFrequency: "weekly",
+          lastModified:
+            product.updatedAt,
+          changeFrequency:
+            "weekly",
           priority: 0.8,
         }));
 
