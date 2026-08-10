@@ -74,6 +74,10 @@ export async function GET() {
   try {
     const products =
       await prisma.product.findMany({
+        where: {
+          isActive: true,
+        },
+
         include: {
           category: true,
 
@@ -297,6 +301,7 @@ export async function POST(
                 description,
                 image,
                 featured,
+                isActive: true,
                 categoryId,
 
                 price:

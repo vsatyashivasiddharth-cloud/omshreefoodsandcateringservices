@@ -69,6 +69,8 @@ interface Product {
 
 interface ApiError {
   error?: string;
+  message?: string;
+  archived?: boolean;
 }
 
 interface StatCardProps {
@@ -633,7 +635,7 @@ export default function ProductsPage() {
   ) {
     const confirmed =
       window.confirm(
-        `Delete "${product.name}"? This action cannot be undone.`,
+        `Remove "${product.name}" from the store? If it belongs to an existing order, its historical order data will be preserved.`,
       );
 
     if (!confirmed) {
@@ -679,7 +681,8 @@ export default function ProductsPage() {
       );
 
       toast.success(
-        "Product deleted successfully.",
+        result.message ||
+          "Product removed successfully.",
       );
     } catch (error) {
       console.error(

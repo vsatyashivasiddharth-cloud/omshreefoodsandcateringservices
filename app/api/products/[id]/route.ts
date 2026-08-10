@@ -783,9 +783,31 @@ export async function DELETE(
       product._count.orderItems >
       0
     ) {
-      return errorResponse(
-        "This product belongs to existing orders and cannot be deleted. Deactivate its variants instead.",
-        409,
+      await prisma.product.update({
+        where: {
+          id: productId,
+        },
+        data: {
+          isActive: false,
+          featured: false,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          message:
+            "Product removed from the store. Its historical order data has been preserved.",
+          archived: true,
+        },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control":
+              "private, no-store, max-age=0",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        },
       );
     }
 
@@ -799,6 +821,7 @@ export async function DELETE(
       {
         message:
           "Product deleted successfully.",
+        archived: false,
       },
       {
         status: 200,

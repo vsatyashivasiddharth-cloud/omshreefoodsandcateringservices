@@ -118,6 +118,12 @@ model Product {
 
   featured Boolean @default(false)
 
+  /// Controls whether this product is available for new customer purchases.
+  ///
+  /// Products referenced by historical orders should be archived by setting
+  /// this to false instead of deleting them.
+  isActive Boolean @default(true)
+
   /// Approximate packed contribution of one sellable product unit.
   /// During the compatibility period, this mirrors the default
   /// variant's shippingWeightGrams.
@@ -134,11 +140,15 @@ model Product {
 
   @@index([categoryId])
   @@index([featured])
+  @@index([isActive])
   @@index([stock])
   @@index([shippingWeightGrams])
   @@index([createdAt])
   @@index([categoryId, createdAt])
   @@index([featured, createdAt])
+  @@index([isActive, createdAt])
+  @@index([isActive, categoryId, createdAt])
+  @@index([isActive, featured, createdAt])
 }
 
 model ProductVariant {
