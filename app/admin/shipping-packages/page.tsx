@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from "react";
 import {
+  AlertTriangle,
   Box,
   CheckCircle2,
   Edit3,
@@ -33,6 +34,7 @@ interface ShippingPackage {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  warnings?: string[];
 }
 
 interface PackageFormData {
@@ -89,6 +91,109 @@ function formatNumber(
       maximumFractionDigits: 2,
     },
   );
+}
+
+
+function getPackageVolumeCm3(
+  shippingPackage:
+    Pick<
+      ShippingPackage,
+      | "lengthCm"
+      | "breadthCm"
+      | "heightCm"
+    >,
+) {
+  return (
+    shippingPackage.lengthCm *
+    shippingPackage.breadthCm *
+    shippingPackage.heightCm
+  );
+}
+
+function getPackageWarnings(
+  shippingPackage:
+    ShippingPackage,
+  allPackages:
+    ShippingPackage[],
+) {
+  if (!shippingPackage.active) {
+    return [];
+  }
+
+  const packageVolume =
+    getPackageVolumeCm3(
+      shippingPackage,
+    );
+
+  const warnings: string[] =
+    [];
+
+  for (const other of allPackages) {
+    if (
+      !other.active ||
+      other.id ===
+        shippingPackage.id
+    ) {
+      continue;
+    }
+
+    const otherVolume =
+      getPackageVolumeCm3(
+        other,
+      );
+
+    if (
+      Math.abs(
+        packageVolume -
+          otherVolume,
+      ) < 0.001 &&
+      shippingPackage.maxWeightGrams ===
+        other.maxWeightGrams
+    ) {
+      warnings.push(
+        `Same volume and max weight as ${other.name}.`,
+      );
+
+      continue;
+    }
+
+    if (
+      packageVolume <
+        otherVolume &&
+      shippingPackage.maxWeightGrams >
+        other.maxWeightGrams
+    ) {
+      warnings.push(
+        `Smaller than ${other.name}, but rated for more packed weight.`,
+      );
+    }
+
+    if (
+      packageVolume >
+        otherVolume &&
+      shippingPackage.maxWeightGrams <
+        other.maxWeightGrams
+    ) {
+      warnings.push(
+        `Larger than ${other.name}, but rated for less packed weight.`,
+      );
+    }
+
+    if (
+      packageVolume >=
+        otherVolume &&
+      shippingPackage.emptyWeightGrams <
+        other.emptyWeightGrams
+    ) {
+      warnings.push(
+        `At least as large as ${other.name}, but has a lower empty weight.`,
+      );
+    }
+  }
+
+  return Array.from(
+    new Set(warnings),
+  ).slice(0, 3);
 }
 
 function isShippingPackage(
@@ -380,12 +485,30 @@ export default function AdminShippingPackagesPage() {
             shippingPackage.active,
         );
 
+      const warningCount =
+        packages.reduce(
+          (
+            total,
+            shippingPackage,
+          ) =>
+            total +
+            (getPackageWarnings(
+              shippingPackage,
+              packages,
+            ).length > 0
+              ? 1
+              : 0),
+          0,
+        );
+
       return {
         total:
           packages.length,
 
         active:
           active.length,
+
+        warningCount,
 
         smallest:
           active[0]
@@ -574,6 +697,33 @@ export default function AdminShippingPackagesPage() {
           : "Shipping package created.",
       );
 
+      const responseWarnings =
+        data &&
+        typeof data === "object" &&
+        !Array.isArray(data) &&
+        Array.isArray(
+          (data as ShippingPackage)
+            .warnings,
+        )
+          ? (
+              (data as ShippingPackage)
+                .warnings ?? []
+            ).filter(
+              (warning):
+                warning is string =>
+                  typeof warning ===
+                  "string",
+            )
+          : [];
+
+      if (
+        responseWarnings.length > 0
+      ) {
+        toast.warning(
+          responseWarnings[0],
+        );
+      }
+
       closeModal();
 
       await loadPackages();
@@ -652,7 +802,7 @@ export default function AdminShippingPackagesPage() {
           </div>
         </div>
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
           <StatCard
             title="Total Packages"
             value={stats.total}
@@ -696,7 +846,45 @@ export default function AdminShippingPackagesPage() {
               />
             }
           />
+
+          <StatCard
+            title="Review Needed"
+            value={stats.warningCount}
+            icon={
+              <AlertTriangle
+                size={24}
+                aria-hidden="true"
+              />
+            }
+          />
         </div>
+
+        {stats.warningCount > 0 && (
+          <div className="mt-8 rounded-[2rem] border border-amber-300 bg-amber-50 p-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+                <AlertTriangle
+                  size={23}
+                  aria-hidden="true"
+                />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-amber-900">
+                  Package Configuration Review
+                </h2>
+
+                <p className="mt-1 leading-6 text-amber-800">
+                  {stats.warningCount} active package
+                  {stats.warningCount === 1 ? "" : "s"} have unusual
+                  size, empty-weight or maximum-weight relationships.
+                  These are warnings only because real packaging can
+                  legitimately use different materials and strength ratings.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-8 overflow-hidden rounded-[2rem] border border-[#F0D5A2] bg-white shadow-xl">
           <div className="border-b border-[#F3DFC2] px-6 py-5 sm:px-8">
@@ -770,7 +958,14 @@ export default function AdminShippingPackagesPage() {
                   {packages.map(
                     (
                       shippingPackage,
-                    ) => (
+                    ) => {
+                      const packageWarnings =
+                        getPackageWarnings(
+                          shippingPackage,
+                          packages,
+                        );
+
+                      return (
                       <tr
                         key={
                           shippingPackage.id
@@ -852,6 +1047,25 @@ export default function AdminShippingPackagesPage() {
                               ? "Active"
                               : "Inactive"}
                           </span>
+
+                          {packageWarnings.length > 0 && (
+                            <div className="mt-2">
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                                <AlertTriangle
+                                  size={13}
+                                  aria-hidden="true"
+                                />
+                                Review
+                              </span>
+
+                              <p
+                                className="mt-2 max-w-[240px] text-xs leading-5 text-amber-800"
+                                title={packageWarnings.join(" ")}
+                              >
+                                {packageWarnings[0]}
+                              </p>
+                            </div>
+                          )}
                         </td>
 
                         <td className="px-6 py-5 text-right">
@@ -872,7 +1086,8 @@ export default function AdminShippingPackagesPage() {
                           </button>
                         </td>
                       </tr>
-                    ),
+                      );
+                    },
                   )}
                 </tbody>
               </table>
@@ -913,7 +1128,10 @@ export default function AdminShippingPackagesPage() {
                   dimensions and empty
                   packing weight of the
                   carton or courier
-                  packet.
+                  packet. Unusual
+                  size/weight relationships
+                  will be flagged for review
+                  after saving.
                 </p>
               </div>
 

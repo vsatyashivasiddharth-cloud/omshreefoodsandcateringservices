@@ -149,6 +149,163 @@ function normalizeCode(
     );
 }
 
+
+interface ComparableShippingPackage {
+  id: string;
+  name: string;
+  lengthCm: unknown;
+  breadthCm: unknown;
+  heightCm: unknown;
+  emptyWeightGrams: number;
+  maxWeightGrams: number;
+  active: boolean;
+}
+
+function toPositiveNumber(
+  value: unknown,
+) {
+  const number = Number(value);
+
+  return Number.isFinite(number) &&
+    number > 0
+    ? number
+    : null;
+}
+
+function packageVolumeCm3(
+  shippingPackage:
+    ComparableShippingPackage,
+) {
+  const lengthCm =
+    toPositiveNumber(
+      shippingPackage.lengthCm,
+    );
+
+  const breadthCm =
+    toPositiveNumber(
+      shippingPackage.breadthCm,
+    );
+
+  const heightCm =
+    toPositiveNumber(
+      shippingPackage.heightCm,
+    );
+
+  if (
+    lengthCm === null ||
+    breadthCm === null ||
+    heightCm === null
+  ) {
+    return null;
+  }
+
+  return (
+    lengthCm *
+    breadthCm *
+    heightCm
+  );
+}
+
+function getConfigurationWarnings(
+  candidate:
+    ComparableShippingPackage,
+  others:
+    ComparableShippingPackage[],
+) {
+  if (!candidate.active) {
+    return [];
+  }
+
+  const candidateVolume =
+    packageVolumeCm3(
+      candidate,
+    );
+
+  if (candidateVolume === null) {
+    return [];
+  }
+
+  const warnings: string[] =
+    [];
+
+  for (const other of others) {
+    if (
+      !other.active ||
+      other.id ===
+        candidate.id
+    ) {
+      continue;
+    }
+
+    const otherVolume =
+      packageVolumeCm3(
+        other,
+      );
+
+    if (otherVolume === null) {
+      continue;
+    }
+
+    const sameVolume =
+      Math.abs(
+        candidateVolume -
+          otherVolume,
+      ) < 0.001;
+
+    const sameWeightCapacity =
+      candidate.maxWeightGrams ===
+      other.maxWeightGrams;
+
+    if (
+      sameVolume &&
+      sameWeightCapacity
+    ) {
+      warnings.push(
+        `"${candidate.name}" has the same outer volume and maximum packed weight as "${other.name}". Confirm both presets are intentionally different.`,
+      );
+
+      continue;
+    }
+
+    if (
+      candidateVolume <
+        otherVolume &&
+      candidate.maxWeightGrams >
+        other.maxWeightGrams
+    ) {
+      warnings.push(
+        `"${candidate.name}" is physically smaller than "${other.name}" but has a higher maximum packed weight. Confirm this matches the real packaging limits.`,
+      );
+    }
+
+    if (
+      candidateVolume >
+        otherVolume &&
+      candidate.maxWeightGrams <
+        other.maxWeightGrams
+    ) {
+      warnings.push(
+        `"${candidate.name}" is physically larger than "${other.name}" but has a lower maximum packed weight. Confirm this matches the real packaging limits.`,
+      );
+    }
+
+    if (
+      candidateVolume >=
+        otherVolume &&
+      candidate.emptyWeightGrams <
+        other.emptyWeightGrams
+    ) {
+      warnings.push(
+        `"${candidate.name}" is at least as large as "${other.name}" but has a lower empty package weight. Confirm the measured packing weights are correct.`,
+      );
+    }
+  }
+
+  return Array.from(
+    new Set(warnings),
+  ).slice(0, 5);
+}
+
 function serializePackage<
   T extends {
     id: string;
@@ -367,6 +524,25 @@ export async function PUT(
       }
     }
 
+    const otherPackages =
+      await prisma.shippingPackage.findMany({
+        where: {
+          NOT: {
+            id: packageId,
+          },
+        },
+        select: {
+          id: true,
+          name: true,
+          lengthCm: true,
+          breadthCm: true,
+          heightCm: true,
+          emptyWeightGrams: true,
+          maxWeightGrams: true,
+          active: true,
+        },
+      });
+
     const shippingPackage =
       await prisma.shippingPackage.update({
         where: {
@@ -384,10 +560,19 @@ export async function PUT(
         },
       });
 
-    return NextResponse.json(
-      serializePackage(
+    const warnings =
+      getConfigurationWarnings(
         shippingPackage,
-      ),
+        otherPackages,
+      );
+
+    return NextResponse.json(
+      {
+        ...serializePackage(
+          shippingPackage,
+        ),
+        warnings,
+      },
       {
         status: 200,
         headers: noStoreHeaders(),
