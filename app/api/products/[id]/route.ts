@@ -454,6 +454,18 @@ export async function PUT(
                     variant
                       .shippingWeightGrams,
 
+                  packedLengthCm:
+                    variant
+                      .packedLengthCm,
+
+                  packedBreadthCm:
+                    variant
+                      .packedBreadthCm,
+
+                  packedHeightCm:
+                    variant
+                      .packedHeightCm,
+
                   price:
                     variant.price,
 
@@ -492,6 +504,18 @@ export async function PUT(
                   shippingWeightGrams:
                     variant
                       .shippingWeightGrams,
+
+                  packedLengthCm:
+                    variant
+                      .packedLengthCm,
+
+                  packedBreadthCm:
+                    variant
+                      .packedBreadthCm,
+
+                  packedHeightCm:
+                    variant
+                      .packedHeightCm,
 
                   price:
                     variant.price,
@@ -609,6 +633,18 @@ export async function PUT(
               shippingWeightGrams:
                 defaultVariant
                   .shippingWeightGrams,
+
+              packedLengthCm:
+                defaultVariant
+                  .packedLengthCm,
+
+              packedBreadthCm:
+                defaultVariant
+                  .packedBreadthCm,
+
+              packedHeightCm:
+                defaultVariant
+                  .packedHeightCm,
             },
 
             include: {

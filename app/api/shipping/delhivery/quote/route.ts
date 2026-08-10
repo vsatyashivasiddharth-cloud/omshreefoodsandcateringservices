@@ -309,6 +309,81 @@ function normalizePositiveNumber(
   return number;
 }
 
+function getPackedDimensions(
+  lengthValue: unknown,
+  breadthValue: unknown,
+  heightValue: unknown,
+) {
+  const lengthCm =
+    normalizePositiveNumber(
+      lengthValue,
+    );
+
+  const breadthCm =
+    normalizePositiveNumber(
+      breadthValue,
+    );
+
+  const heightCm =
+    normalizePositiveNumber(
+      heightValue,
+    );
+
+  if (
+    lengthCm === null ||
+    breadthCm === null ||
+    heightCm === null
+  ) {
+    return null;
+  }
+
+  return {
+    lengthCm,
+    breadthCm,
+    heightCm,
+    volumeCm3:
+      lengthCm *
+      breadthCm *
+      heightCm,
+  };
+}
+
+function dimensionsFitInPackage(
+  itemDimensions: {
+    lengthCm: number;
+    breadthCm: number;
+    heightCm: number;
+  },
+  packageDimensions: {
+    lengthCm: number;
+    breadthCm: number;
+    heightCm: number;
+  },
+) {
+  const itemSides = [
+    itemDimensions.lengthCm,
+    itemDimensions.breadthCm,
+    itemDimensions.heightCm,
+  ].sort(
+    (first, second) =>
+      first - second,
+  );
+
+  const packageSides = [
+    packageDimensions.lengthCm,
+    packageDimensions.breadthCm,
+    packageDimensions.heightCm,
+  ].sort(
+    (first, second) =>
+      first - second,
+  );
+
+  return itemSides.every(
+    (side, index) =>
+      side <= packageSides[index],
+  );
+}
+
 function roundMoney(
   value: number,
 ) {
@@ -391,6 +466,10 @@ export async function POST(
           shippingWeightGrams:
             true,
 
+          packedLengthCm: true,
+          packedBreadthCm: true,
+          packedHeightCm: true,
+
           variants: {
             select: {
               id: true,
@@ -401,6 +480,10 @@ export async function POST(
 
               shippingWeightGrams:
                 true,
+
+              packedLengthCm: true,
+              packedBreadthCm: true,
+              packedHeightCm: true,
 
               isActive: true,
             },
@@ -430,6 +513,17 @@ export async function POST(
 
     let subtotal = 0;
     let productWeightGrams = 0;
+
+    let productVolumeCm3 = 0;
+
+    let allItemsHavePackedDimensions =
+      true;
+
+    const packedItemDimensions: Array<{
+      lengthCm: number;
+      breadthCm: number;
+      heightCm: number;
+    }> = [];
 
     for (const item of items) {
       const product =
@@ -579,6 +673,48 @@ export async function POST(
         );
       }
 
+      const unitPackedDimensions =
+        getPackedDimensions(
+          variant
+            ? variant.packedLengthCm
+            : product.packedLengthCm,
+          variant
+            ? variant.packedBreadthCm
+            : product.packedBreadthCm,
+          variant
+            ? variant.packedHeightCm
+            : product.packedHeightCm,
+        );
+
+      if (unitPackedDimensions) {
+        productVolumeCm3 +=
+          unitPackedDimensions
+            .volumeCm3 *
+          item.quantity;
+
+        for (
+          let quantityIndex = 0;
+          quantityIndex <
+          item.quantity;
+          quantityIndex += 1
+        ) {
+          packedItemDimensions.push({
+            lengthCm:
+              unitPackedDimensions
+                .lengthCm,
+            breadthCm:
+              unitPackedDimensions
+                .breadthCm,
+            heightCm:
+              unitPackedDimensions
+                .heightCm,
+          });
+        }
+      } else {
+        allItemsHavePackedDimensions =
+          false;
+      }
+
       subtotal +=
         unitPrice *
         item.quantity;
@@ -636,36 +772,116 @@ export async function POST(
       );
     }
 
-    const shippingPackage =
-      packages.find(
-        (packageOption) => {
-          const emptyWeightGrams =
-            normalizeNonNegativeInteger(
-              packageOption
-                .emptyWeightGrams,
-            );
+    const packageCandidates =
+      packages
+        .map(
+          (packageOption) => {
+            const emptyWeightGrams =
+              normalizeNonNegativeInteger(
+                packageOption
+                  .emptyWeightGrams,
+              );
 
-          const maxWeightGrams =
-            normalizeNonNegativeInteger(
-              packageOption
+            const maxWeightGrams =
+              normalizeNonNegativeInteger(
+                packageOption
+                  .maxWeightGrams,
+              );
+
+            const packageDimensions =
+              getPackedDimensions(
+                packageOption.lengthCm,
+                packageOption.breadthCm,
+                packageOption.heightCm,
+              );
+
+            if (
+              maxWeightGrams < 1 ||
+              productWeightGrams +
+                emptyWeightGrams >
+                maxWeightGrams ||
+              !packageDimensions
+            ) {
+              return null;
+            }
+
+            if (
+              allItemsHavePackedDimensions
+            ) {
+              if (
+                productVolumeCm3 >
+                packageDimensions
+                  .volumeCm3
+              ) {
+                return null;
+              }
+
+              const everyItemFits =
+                packedItemDimensions.every(
+                  (itemDimensions) =>
+                    dimensionsFitInPackage(
+                      itemDimensions,
+                      packageDimensions,
+                    ),
+                );
+
+              if (!everyItemFits) {
+                return null;
+              }
+            }
+
+            return {
+              packageOption,
+              packageVolumeCm3:
+                packageDimensions
+                  .volumeCm3,
+              packedWeightGrams:
+                productWeightGrams +
+                emptyWeightGrams,
+            };
+          },
+        )
+        .filter(
+          (
+            candidate,
+          ): candidate is {
+            packageOption:
+              (typeof packages)[number];
+            packageVolumeCm3: number;
+            packedWeightGrams: number;
+          } => candidate !== null,
+        )
+        .sort(
+          (first, second) =>
+            first.packageVolumeCm3 -
+              second.packageVolumeCm3 ||
+            first.packedWeightGrams -
+              second.packedWeightGrams ||
+            first.packageOption
+              .maxWeightGrams -
+              second.packageOption
                 .maxWeightGrams,
-            );
+        );
 
-          return (
-            maxWeightGrams > 0 &&
-            productWeightGrams +
-              emptyWeightGrams <=
-              maxWeightGrams
-          );
-        },
-      );
+    const shippingPackage =
+      packageCandidates[0]
+        ?.packageOption ??
+      null;
 
     if (!shippingPackage) {
       return errorResponse(
-        "This order is too heavy for the available shipping packages.",
+        allItemsHavePackedDimensions
+          ? "This order does not fit within the available shipping packages by weight and dimensions."
+          : "This order is too heavy for the available shipping packages.",
         422,
         {
           productWeightGrams,
+          productVolumeCm3:
+            allItemsHavePackedDimensions
+              ? productVolumeCm3
+              : null,
+          dimensionAwareSelection:
+            allItemsHavePackedDimensions,
         },
       );
     }

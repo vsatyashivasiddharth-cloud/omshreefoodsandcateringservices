@@ -15,6 +15,9 @@ export interface ProductVariantFormData {
   label: string;
   weightGrams: string;
   shippingWeightGrams: string;
+  packedLengthCm: string;
+  packedBreadthCm: string;
+  packedHeightCm: string;
   price: string;
   stock: string;
   sku: string;
@@ -45,6 +48,9 @@ export function createVariantRow({
   label = "",
   weightGrams = "",
   shippingWeightGrams = "",
+  packedLengthCm = "",
+  packedBreadthCm = "",
+  packedHeightCm = "",
   price = "",
   stock = "0",
   sku = "",
@@ -62,6 +68,9 @@ export function createVariantRow({
     label,
     weightGrams,
     shippingWeightGrams,
+    packedLengthCm,
+    packedBreadthCm,
+    packedHeightCm,
     price,
     stock,
     sku,
@@ -142,6 +151,26 @@ export function validateVariantRows(
         variant.shippingWeightGrams,
       );
 
+    const packedLengthRaw =
+      variant.packedLengthCm.trim();
+
+    const packedBreadthRaw =
+      variant.packedBreadthCm.trim();
+
+    const packedHeightRaw =
+      variant.packedHeightCm.trim();
+
+    const packedDimensionValues = [
+      packedLengthRaw,
+      packedBreadthRaw,
+      packedHeightRaw,
+    ];
+
+    const filledPackedDimensionCount =
+      packedDimensionValues.filter(
+        Boolean,
+      ).length;
+
     const price =
       Number(variant.price);
 
@@ -182,6 +211,34 @@ export function validateVariantRows(
       weightGrams
     ) {
       return `${label}: packed shipping weight cannot be less than net weight.`;
+    }
+
+    if (
+      filledPackedDimensionCount > 0 &&
+      filledPackedDimensionCount < 3
+    ) {
+      return `${label}: enter packed length, breadth and height together, or leave all three blank.`;
+    }
+
+    if (
+      filledPackedDimensionCount === 3
+    ) {
+      const packedDimensions =
+        packedDimensionValues.map(
+          Number,
+        );
+
+      if (
+        packedDimensions.some(
+          (dimension) =>
+            !Number.isFinite(
+              dimension,
+            ) ||
+            dimension <= 0,
+        )
+      ) {
+        return `${label}: packed dimensions must be valid numbers greater than zero.`;
+      }
     }
 
     if (
@@ -237,6 +294,27 @@ export function serializeVariantRows(
           variant
             .shippingWeightGrams,
         ),
+
+      packedLengthCm:
+        variant.packedLengthCm.trim()
+          ? Number(
+              variant.packedLengthCm,
+            )
+          : null,
+
+      packedBreadthCm:
+        variant.packedBreadthCm.trim()
+          ? Number(
+              variant.packedBreadthCm,
+            )
+          : null,
+
+      packedHeightCm:
+        variant.packedHeightCm.trim()
+          ? Number(
+              variant.packedHeightCm,
+            )
+          : null,
 
       price:
         Number(variant.price),
@@ -381,9 +459,11 @@ export default function ProductVariantFields({
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
             Enter price, stock, net
-            product weight and packed
-            shipping weight separately
-            for each package size.
+            weight, packed shipping weight
+            and the approximate packed
+            dimensions of each package size.
+            Existing variants may leave all
+            three dimensions blank temporarily.
           </p>
         </div>
 
@@ -412,10 +492,11 @@ export default function ProductVariantFields({
 
           <p className="mt-1 text-sm leading-6 text-amber-800">
             Enter verified prices,
-            stock and packed weights
-            before saving. Existing
-            product values have not been
-            automatically converted.
+            stock, packed weights and,
+            where available, packed
+            dimensions before saving.
+            Existing product values have
+            not been automatically converted.
           </p>
         </div>
       )}
@@ -565,6 +646,114 @@ export default function ProductVariantFields({
 
                     <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500">
                       grams
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-[#6D2E00]">
+                    Packed Length
+                  </label>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={
+                        variant.packedLengthCm
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        updateVariant(
+                          variant.clientId,
+                          "packedLengthCm",
+                          event.target
+                            .value,
+                        )
+                      }
+                      placeholder="24"
+                      disabled={
+                        disabled
+                      }
+                      className={`${inputClassName} pr-10`}
+                    />
+
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500">
+                      cm
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-[#6D2E00]">
+                    Packed Breadth
+                  </label>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={
+                        variant.packedBreadthCm
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        updateVariant(
+                          variant.clientId,
+                          "packedBreadthCm",
+                          event.target
+                            .value,
+                        )
+                      }
+                      placeholder="18"
+                      disabled={
+                        disabled
+                      }
+                      className={`${inputClassName} pr-10`}
+                    />
+
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500">
+                      cm
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-[#6D2E00]">
+                    Packed Height
+                  </label>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={
+                        variant.packedHeightCm
+                      }
+                      onChange={(
+                        event,
+                      ) =>
+                        updateVariant(
+                          variant.clientId,
+                          "packedHeightCm",
+                          event.target
+                            .value,
+                        )
+                      }
+                      placeholder="7"
+                      disabled={
+                        disabled
+                      }
+                      className={`${inputClassName} pr-10`}
+                    />
+
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-gray-500">
+                      cm
                     </span>
                   </div>
                 </div>

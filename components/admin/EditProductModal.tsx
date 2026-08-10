@@ -38,6 +38,9 @@ interface ProductVariantResponse {
   label: string;
   weightGrams: number;
   shippingWeightGrams: number;
+  packedLengthCm: number | string | null;
+  packedBreadthCm: number | string | null;
+  packedHeightCm: number | string | null;
   price: number | string;
   stock: number;
   sku: string | null;
@@ -307,6 +310,27 @@ export default function EditProductModal({
                     String(
                       variant.shippingWeightGrams,
                     ),
+                  packedLengthCm:
+                    variant.packedLengthCm ==
+                    null
+                      ? ""
+                      : String(
+                          variant.packedLengthCm,
+                        ),
+                  packedBreadthCm:
+                    variant.packedBreadthCm ==
+                    null
+                      ? ""
+                      : String(
+                          variant.packedBreadthCm,
+                        ),
+                  packedHeightCm:
+                    variant.packedHeightCm ==
+                    null
+                      ? ""
+                      : String(
+                          variant.packedHeightCm,
+                        ),
                   price:
                     String(
                       variant.price,

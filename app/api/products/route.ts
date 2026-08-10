@@ -314,6 +314,18 @@ export async function POST(
                   defaultVariant
                     .shippingWeightGrams,
 
+                packedLengthCm:
+                  defaultVariant
+                    .packedLengthCm,
+
+                packedBreadthCm:
+                  defaultVariant
+                    .packedBreadthCm,
+
+                packedHeightCm:
+                  defaultVariant
+                    .packedHeightCm,
+
                 variants: {
                   create:
                     variants.map(
@@ -330,6 +342,18 @@ export async function POST(
                         shippingWeightGrams:
                           variant
                             .shippingWeightGrams,
+
+                        packedLengthCm:
+                          variant
+                            .packedLengthCm,
+
+                        packedBreadthCm:
+                          variant
+                            .packedBreadthCm,
+
+                        packedHeightCm:
+                          variant
+                            .packedHeightCm,
 
                         price:
                           variant.price,

@@ -129,6 +129,16 @@ model Product {
   /// variant's shippingWeightGrams.
   shippingWeightGrams Int @default(0)
 
+  /// Approximate outer dimensions of one packed default product unit.
+  ///
+  /// These fields remain nullable during the compatibility period so
+  /// existing products without dimension data can continue to work.
+  ///
+  /// When variants are used, these values mirror the default variant.
+  packedLengthCm  Decimal? @db.Decimal(8, 2)
+  packedBreadthCm Decimal? @db.Decimal(8, 2)
+  packedHeightCm  Decimal? @db.Decimal(8, 2)
+
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
@@ -168,6 +178,17 @@ model ProductVariant {
   /// Packed contribution used for shipping calculations.
   /// This may be greater than weightGrams.
   shippingWeightGrams Int
+
+  /// Approximate outer dimensions of one sellable packed unit.
+  ///
+  /// These represent the product packet/container before it is placed
+  /// into the final shipping carton.
+  ///
+  /// They are nullable temporarily so existing variants remain compatible
+  /// until their real packed dimensions are entered in admin.
+  packedLengthCm  Decimal? @db.Decimal(8, 2)
+  packedBreadthCm Decimal? @db.Decimal(8, 2)
+  packedHeightCm  Decimal? @db.Decimal(8, 2)
 
   price Decimal @db.Decimal(10, 2)
   stock Int     @default(0)

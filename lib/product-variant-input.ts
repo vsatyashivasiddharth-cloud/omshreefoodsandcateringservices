@@ -10,6 +10,17 @@ export interface ParsedProductVariant {
   label: string;
   weightGrams: number;
   shippingWeightGrams: number;
+
+  packedLengthCm:
+    | Prisma.Decimal
+    | null;
+  packedBreadthCm:
+    | Prisma.Decimal
+    | null;
+  packedHeightCm:
+    | Prisma.Decimal
+    | null;
+
   price: Prisma.Decimal;
   stock: number;
   sku: string | null;
@@ -31,7 +42,10 @@ export type ProductVariantParseResult =
 
 function isRecord(
   value: unknown,
-): value is Record<string, unknown> {
+): value is Record<
+  string,
+  unknown
+> {
   return (
     value !== null &&
     typeof value === "object" &&
@@ -50,7 +64,8 @@ function readString(
 function readOptionalString(
   value: unknown,
 ) {
-  const result = readString(value);
+  const result =
+    readString(value);
 
   return result || null;
 }
@@ -65,7 +80,8 @@ function readWholeNumber(
     return Number.NaN;
   }
 
-  const number = Number(value);
+  const number =
+    Number(value);
 
   return Number.isInteger(number)
     ? number
@@ -76,7 +92,8 @@ function readBoolean(
   value: unknown,
   fallback: boolean,
 ) {
-  return typeof value === "boolean"
+  return typeof value ===
+    "boolean"
     ? value
     : fallback;
 }
@@ -91,7 +108,8 @@ function readPrice(
     return null;
   }
 
-  const normalized = String(value).trim();
+  const normalized =
+    String(value).trim();
 
   if (!normalized) {
     return null;
@@ -99,7 +117,9 @@ function readPrice(
 
   try {
     const price =
-      new Prisma.Decimal(normalized);
+      new Prisma.Decimal(
+        normalized,
+      );
 
     if (
       !price.isFinite() ||
@@ -112,6 +132,102 @@ function readPrice(
   } catch {
     return null;
   }
+}
+
+/**
+ * Reads an optional positive decimal.
+ *
+ * Empty / null / undefined values are
+ * treated as "not configured".
+ */
+function readOptionalPositiveDecimal(
+  value: unknown,
+): Prisma.Decimal | null {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  if (
+    typeof value !== "string" &&
+    typeof value !== "number"
+  ) {
+    return null;
+  }
+
+  const normalized =
+    String(value).trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    const decimal =
+      new Prisma.Decimal(
+        normalized,
+      );
+
+    if (
+      !decimal.isFinite() ||
+      decimal.lte(0)
+    ) {
+      return null;
+    }
+
+    return decimal;
+  } catch {
+    return null;
+  }
+}
+
+function hasDimensionInput(
+  value: unknown,
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return false;
+  }
+
+  if (
+    typeof value === "string"
+  ) {
+    return (
+      value.trim().length > 0
+    );
+  }
+
+  return (
+    typeof value === "number"
+  );
+}
+
+function normalizeOptionalDecimal(
+  value: unknown,
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number) ||
+    number <= 0
+  ) {
+    return null;
+  }
+
+  return number;
 }
 
 export function parseProductVariants(
@@ -150,7 +266,8 @@ export function parseProductVariants(
     index < value.length;
     index += 1
   ) {
-    const rawVariant = value[index];
+    const rawVariant =
+      value[index];
 
     if (!isRecord(rawVariant)) {
       return {
@@ -167,7 +284,9 @@ export function parseProductVariants(
       );
 
     const label =
-      readString(rawVariant.label);
+      readString(
+        rawVariant.label,
+      );
 
     const weightGrams =
       readWholeNumber(
@@ -176,11 +295,82 @@ export function parseProductVariants(
 
     const shippingWeightGrams =
       readWholeNumber(
-        rawVariant.shippingWeightGrams,
+        rawVariant
+          .shippingWeightGrams,
       );
 
+    /*
+     * Packed dimensions are optional
+     * during the compatibility period.
+     *
+     * If one dimension is supplied,
+     * all three must be supplied.
+     */
+    const hasPackedLength =
+      hasDimensionInput(
+        rawVariant
+          .packedLengthCm,
+      );
+
+    const hasPackedBreadth =
+      hasDimensionInput(
+        rawVariant
+          .packedBreadthCm,
+      );
+
+    const hasPackedHeight =
+      hasDimensionInput(
+        rawVariant
+          .packedHeightCm,
+      );
+
+    const dimensionInputCount =
+      [
+        hasPackedLength,
+        hasPackedBreadth,
+        hasPackedHeight,
+      ].filter(Boolean).length;
+
+    if (
+      dimensionInputCount > 0 &&
+      dimensionInputCount < 3
+    ) {
+      return {
+        success: false,
+        error: `${label || `Variant ${
+          index + 1
+        }`}: enter packed length, breadth and height together, or leave all three blank.`,
+      };
+    }
+
+    const packedLengthCm =
+      dimensionInputCount === 3
+        ? readOptionalPositiveDecimal(
+            rawVariant
+              .packedLengthCm,
+          )
+        : null;
+
+    const packedBreadthCm =
+      dimensionInputCount === 3
+        ? readOptionalPositiveDecimal(
+            rawVariant
+              .packedBreadthCm,
+          )
+        : null;
+
+    const packedHeightCm =
+      dimensionInputCount === 3
+        ? readOptionalPositiveDecimal(
+            rawVariant
+              .packedHeightCm,
+          )
+        : null;
+
     const price =
-      readPrice(rawVariant.price);
+      readPrice(
+        rawVariant.price,
+      );
 
     const stock =
       readWholeNumber(
@@ -234,7 +424,8 @@ export function parseProductVariants(
         weightGrams,
       ) ||
       weightGrams < 1 ||
-      weightGrams > 100_000
+      weightGrams >
+        100_000
     ) {
       return {
         success: false,
@@ -246,7 +437,8 @@ export function parseProductVariants(
       !Number.isInteger(
         shippingWeightGrams,
       ) ||
-      shippingWeightGrams < 1 ||
+      shippingWeightGrams <
+        1 ||
       shippingWeightGrams >
         100_000
     ) {
@@ -266,6 +458,40 @@ export function parseProductVariants(
       };
     }
 
+    if (
+      dimensionInputCount ===
+        3 &&
+      (!packedLengthCm ||
+        !packedBreadthCm ||
+        !packedHeightCm)
+    ) {
+      return {
+        success: false,
+        error: `${label}: packed dimensions must be valid numbers greater than zero.`,
+      };
+    }
+
+    /*
+     * 1000 cm is intentionally a
+     * generous upper safety limit.
+     */
+    if (
+      packedLengthCm?.gt(
+        1000,
+      ) ||
+      packedBreadthCm?.gt(
+        1000,
+      ) ||
+      packedHeightCm?.gt(
+        1000,
+      )
+    ) {
+      return {
+        success: false,
+        error: `${label}: packed dimensions cannot exceed 1000 cm.`,
+      };
+    }
+
     if (!price) {
       return {
         success: false,
@@ -274,7 +500,9 @@ export function parseProductVariants(
     }
 
     if (
-      !Number.isInteger(stock) ||
+      !Number.isInteger(
+        stock,
+      ) ||
       stock < 0 ||
       stock > 1_000_000
     ) {
@@ -336,6 +564,11 @@ export function parseProductVariants(
       label,
       weightGrams,
       shippingWeightGrams,
+
+      packedLengthCm,
+      packedBreadthCm,
+      packedHeightCm,
+
       price,
       stock,
       sku,
@@ -353,8 +586,8 @@ export function parseProductVariants(
     );
 
   if (
-    activeDefaultVariants.length !==
-    1
+    activeDefaultVariants
+      .length !== 1
   ) {
     return {
       success: false,
@@ -380,14 +613,19 @@ export function parseProductVariants(
 
   return {
     success: true,
+
     variants:
       parsedVariants.sort(
-        (first, second) =>
+        (
+          first,
+          second,
+        ) =>
           first.sortOrder -
             second.sortOrder ||
           first.weightGrams -
             second.weightGrams,
       ),
+
     defaultVariant:
       activeDefaultVariants[0],
   };
@@ -398,22 +636,32 @@ export function normalizeVariant<
     price: unknown;
     weightGrams: number;
     shippingWeightGrams: number;
+
+    packedLengthCm?: unknown;
+    packedBreadthCm?: unknown;
+    packedHeightCm?: unknown;
+
     stock: number;
   },
 >(variant: T) {
   return {
     ...variant,
-    price: Number(
-      variant.price,
-    ),
-    weightGrams: Math.max(
-      0,
-      Math.floor(
-        Number(
-          variant.weightGrams,
-        ) || 0,
+
+    price:
+      Number(
+        variant.price,
       ),
-    ),
+
+    weightGrams:
+      Math.max(
+        0,
+        Math.floor(
+          Number(
+            variant.weightGrams,
+          ) || 0,
+        ),
+      ),
+
     shippingWeightGrams:
       Math.max(
         0,
@@ -424,13 +672,31 @@ export function normalizeVariant<
           ) || 0,
         ),
       ),
-    stock: Math.max(
-      0,
-      Math.floor(
-        Number(variant.stock) ||
-          0,
+
+    packedLengthCm:
+      normalizeOptionalDecimal(
+        variant.packedLengthCm,
       ),
-    ),
+
+    packedBreadthCm:
+      normalizeOptionalDecimal(
+        variant.packedBreadthCm,
+      ),
+
+    packedHeightCm:
+      normalizeOptionalDecimal(
+        variant.packedHeightCm,
+      ),
+
+    stock:
+      Math.max(
+        0,
+        Math.floor(
+          Number(
+            variant.stock,
+          ) || 0,
+        ),
+      ),
   };
 }
 
@@ -439,6 +705,11 @@ export function normalizeProductWithVariants<
     price: unknown;
     stock: number;
     shippingWeightGrams: number;
+
+    packedLengthCm?: unknown;
+    packedBreadthCm?: unknown;
+    packedHeightCm?: unknown;
+
     variants: Array<
       Pick<
         ProductVariant,
@@ -447,6 +718,9 @@ export function normalizeProductWithVariants<
         | "label"
         | "weightGrams"
         | "shippingWeightGrams"
+        | "packedLengthCm"
+        | "packedBreadthCm"
+        | "packedHeightCm"
         | "price"
         | "stock"
         | "sku"
@@ -461,16 +735,22 @@ export function normalizeProductWithVariants<
 >(product: T) {
   return {
     ...product,
-    price: Number(
-      product.price,
-    ),
-    stock: Math.max(
-      0,
-      Math.floor(
-        Number(product.stock) ||
-          0,
+
+    price:
+      Number(
+        product.price,
       ),
-    ),
+
+    stock:
+      Math.max(
+        0,
+        Math.floor(
+          Number(
+            product.stock,
+          ) || 0,
+        ),
+      ),
+
     shippingWeightGrams:
       Math.max(
         0,
@@ -481,6 +761,22 @@ export function normalizeProductWithVariants<
           ) || 0,
         ),
       ),
+
+    packedLengthCm:
+      normalizeOptionalDecimal(
+        product.packedLengthCm,
+      ),
+
+    packedBreadthCm:
+      normalizeOptionalDecimal(
+        product.packedBreadthCm,
+      ),
+
+    packedHeightCm:
+      normalizeOptionalDecimal(
+        product.packedHeightCm,
+      ),
+
     variants:
       product.variants.map(
         normalizeVariant,
