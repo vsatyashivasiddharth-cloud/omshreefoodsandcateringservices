@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useEffect,
@@ -154,7 +154,7 @@ function getPriceLabel(
 
   return `${formatCurrency(
     minimum,
-  )} – ${formatCurrency(
+  )} â€“ ${formatCurrency(
     maximum,
   )}`;
 }
@@ -463,7 +463,7 @@ export default function ProductCard({
 
           <Badge
             variant="secondary"
-            className="absolute left-4 top-4 bg-[#C89B3C] text-white shadow-md"
+            className="absolute left-4 top-4 bg-[#8A5A00] text-white shadow-md"
           >
             {
               product.category
