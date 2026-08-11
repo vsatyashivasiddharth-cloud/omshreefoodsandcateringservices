@@ -1002,41 +1002,12 @@ export async function DELETE(
       product._count.orderItems >
       0
     ) {
-      await prisma.product.update({
-        where: {
-          id: productId,
-        },
-
-        data: {
-          isActive: false,
-          featured: false,
-        },
-      });
-
-      return NextResponse.json(
-        {
-          message:
-            "Product removed from the store. Its historical order data has been preserved.",
-
-          archived: true,
-        },
-        {
-          status: 200,
-          headers: {
-            "Cache-Control":
-              "private, no-store, max-age=0",
-            Pragma: "no-cache",
-            Expires: "0",
-          },
-        },
+      return errorResponse(
+        "This product is referenced by existing orders and cannot be permanently deleted. Hide the product instead.",
+        409,
       );
     }
 
-    /*
-     * A product with no historical order
-     * references can retain the existing
-     * hard-delete behavior.
-     */
     await prisma.product.delete({
       where: {
         id: productId,
