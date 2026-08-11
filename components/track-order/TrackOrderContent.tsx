@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -428,6 +429,12 @@ export default function TrackOrderContent() {
   const [blockedUntil, setBlockedUntil] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
 
+  const resultsRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const shouldScrollToResultsRef =
+    useRef(false);
+
   useEffect(() => {
     const timeoutId =
       window.setTimeout(() => {
@@ -476,6 +483,29 @@ export default function TrackOrderContent() {
       window.clearInterval(timer);
     };
   }, [blockedUntil]);
+
+  useEffect(() => {
+    if (
+      !result ||
+      !shouldScrollToResultsRef.current
+    ) {
+      return;
+    }
+
+    shouldScrollToResultsRef.current = false;
+
+    const frameId =
+      window.requestAnimationFrame(() => {
+        resultsRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [result]);
 
   const normalizedPhone = phone.trim();
 
@@ -618,6 +648,11 @@ export default function TrackOrderContent() {
         setBlockedPhone("");
         setBlockedUntil(0);
         setCurrentTime(Date.now());
+
+        if (!refresh) {
+          shouldScrollToResultsRef.current = true;
+        }
+
         setResult(data);
 
         setSelectedOrderId((currentOrderId) => {
@@ -855,6 +890,12 @@ export default function TrackOrderContent() {
               </button>
             </form>
           </Card>
+
+          <div
+            ref={resultsRef}
+            className="scroll-mt-32"
+            aria-hidden="true"
+          />
 
           {result && result.orders.length === 0 && (
             <Card

@@ -11,6 +11,7 @@ const pageUrl = `${baseUrl}/track-order`;
 
 export const metadata: Metadata = {
   title: "Track Your Order",
+
   description:
     "Track your recent Om Shree Foods & Caterers order and check its current delivery status securely using your registered mobile number.",
 
@@ -21,18 +22,26 @@ export const metadata: Metadata = {
   openGraph: {
     title:
       "Track Your Order | Om Shree Foods & Caterers",
+
     description:
       "Check your Om Shree Foods & Caterers order and delivery status using your registered mobile number.",
+
     url: pageUrl,
-    siteName: "Om Shree Foods & Caterers",
+
+    siteName:
+      "Om Shree Foods & Caterers",
+
     type: "website",
+
     locale: "en_IN",
   },
 
   twitter: {
     card: "summary",
+
     title:
       "Track Your Order | Om Shree Foods & Caterers",
+
     description:
       "Check your recent order and delivery status using your registered mobile number.",
   },
@@ -40,6 +49,7 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
+
     googleBot: {
       index: true,
       follow: true,
@@ -52,8 +62,11 @@ export const metadata: Metadata = {
 
 const breadcrumbSchema = {
   "@context": "https://schema.org",
+
   "@type": "BreadcrumbList",
+
   "@id": `${pageUrl}#breadcrumb`,
+
   itemListElement: [
     {
       "@type": "ListItem",
@@ -61,6 +74,7 @@ const breadcrumbSchema = {
       name: "Home",
       item: baseUrl,
     },
+
     {
       "@type": "ListItem",
       position: 2,
