@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -219,7 +219,7 @@ export default function NonVegPlatesPage() {
       <Navbar />
 
       <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-white pt-6">
-        <section className="py-14 sm:py-20">
+        <section className="py-10 sm:py-12">
           <Container>
             <Link
               href="/catering/plates"

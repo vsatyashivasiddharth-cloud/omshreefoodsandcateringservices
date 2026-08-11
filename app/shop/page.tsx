@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import { Sparkles } from "lucide-react";
 
 import Footer from "@/components/layout/footer";
@@ -196,7 +196,7 @@ export default function ShopPage() {
             className="pointer-events-none absolute -right-40 bottom-0 h-96 w-96 rounded-full bg-[#FFE7B8]/35 blur-3xl"
           />
 
-          <div className="relative mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8 lg:py-16">
+          <div className="relative mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
             <div className="mx-auto mb-14 max-w-3xl text-center lg:mb-16">
               <div className="inline-flex items-center gap-2 rounded-full border border-[#F3D9A4] bg-[#FFF3DA] px-5 py-2 text-sm font-semibold text-[#A66A00] shadow-sm">
                 <Sparkles

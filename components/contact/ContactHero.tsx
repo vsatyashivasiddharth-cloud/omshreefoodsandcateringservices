@@ -28,7 +28,7 @@ const contactMethods = [
 
 export default function ContactHero() {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-[#6D2E00] via-[#8B4513] to-[#C89B3C] py-20 text-white sm:py-24 lg:py-28">
+    <section className="relative overflow-hidden bg-gradient-to-br from-[#6D2E00] via-[#8B4513] to-[#C89B3C] py-12 text-white sm:py-14 lg:py-16">
       {/* Decorative background */}
 
       <div

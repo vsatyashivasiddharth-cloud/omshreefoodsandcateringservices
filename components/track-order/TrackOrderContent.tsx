@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   useCallback,
@@ -749,7 +749,7 @@ export default function TrackOrderContent() {
 
   return (
     <main className="min-h-screen bg-[#FFF8EE] pb-20 pt-6 lg:pt-8">
-      <section className="relative overflow-hidden py-12 sm:py-16">
+      <section className="relative overflow-hidden py-8 sm:py-10">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -left-28 top-0 h-80 w-80 rounded-full bg-green-100/50 blur-3xl"

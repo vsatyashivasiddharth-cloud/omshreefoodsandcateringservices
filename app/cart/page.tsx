@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -52,7 +52,7 @@ export default function CartPage() {
             className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-[#FFE5B5]/50 blur-3xl"
           />
 
-          <div className="relative mx-auto max-w-7xl px-6 py-16 sm:py-20">
+          <div className="relative mx-auto max-w-7xl px-6 py-10 sm:py-12">
             <nav
               aria-label="Breadcrumb"
               className="mb-8 inline-flex flex-wrap items-center gap-2 rounded-full border border-[#F3DFC2] bg-white/80 px-5 py-3 text-sm text-gray-500 shadow-sm backdrop-blur-sm"
