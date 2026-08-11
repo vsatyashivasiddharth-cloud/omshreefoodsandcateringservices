@@ -124,15 +124,8 @@ model Product {
 
   /// Controls whether this product is available for new customer purchases.
   ///
-  /// A product can be temporarily hidden by setting this to false while
-  /// keeping isArchived false.
+  /// A product can be temporarily hidden by setting this to false.
   isActive Boolean @default(true)
-
-  /// Marks a product as permanently removed from normal Admin catalog views
-  /// while preserving it for historical orders.
-  ///
-  /// Archived products must remain inactive.
-  isArchived Boolean @default(false)
 
   /// Approximate packed contribution of one sellable product unit.
   /// During the compatibility period, this mirrors the default
@@ -141,18 +134,18 @@ model Product {
 
   /// Approximate outer dimensions of one packed default product unit.
   ///
-  /// These fields remain nullable during the compatibility period so
-  /// existing products without dimension data can continue to work.
-  ///
-  /// When variants are used, these values mirror the default variant.
-  packedLengthCm  Decimal? @db.Decimal(8, 2)
-  packedBreadthCm Decimal? @db.Decimal(8, 2)
-  packedHeightCm  Decimal? @db.Decimal(8, 2)
+  /// These remain nullable during the compatibility period so older
+  /// products can continue using weight-only shipping until dimensions
+  /// are configured.
+  packedLengthCm  Decimal? @db.Decimal(10, 2)
+  packedBreadthCm Decimal? @db.Decimal(10, 2)
+  packedHeightCm  Decimal? @db.Decimal(10, 2)
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  variants   ProductVariant[]
+  variants ProductVariant[]
+
   orderItems OrderItem[]
 
   createdAt DateTime @default(now())
@@ -161,14 +154,12 @@ model Product {
   @@index([categoryId])
   @@index([featured])
   @@index([isActive])
-  @@index([isArchived])
   @@index([stock])
   @@index([shippingWeightGrams])
   @@index([createdAt])
   @@index([categoryId, createdAt])
   @@index([featured, createdAt])
   @@index([isActive, createdAt])
-  @@index([isArchived, createdAt])
   @@index([isActive, categoryId, createdAt])
   @@index([isActive, featured, createdAt])
 }
