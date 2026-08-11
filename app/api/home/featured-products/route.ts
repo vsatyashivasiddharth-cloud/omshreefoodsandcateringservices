@@ -66,6 +66,11 @@ export async function GET() {
       await prisma.product.findMany({
         where: {
           featured: true,
+          isActive: true,
+
+          category: {
+            isActive: true,
+          },
         },
 
         select: {

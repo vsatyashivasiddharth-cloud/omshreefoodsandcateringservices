@@ -11,6 +11,8 @@ import Image from "next/image";
 import {
   AlertTriangle,
   Edit3,
+  Eye,
+  EyeOff,
   ImageOff,
   Package,
   Scale,
@@ -63,11 +65,13 @@ interface Product {
 
   featured: boolean;
   image: string | null;
+  isActive: boolean;
   categoryId: string;
 
   category: {
     id: string;
     name: string;
+    isActive: boolean;
   };
 
   variants: ProductVariant[];
@@ -773,6 +777,11 @@ export default function ProductsPage() {
   ] = useState("");
 
   const [
+    visibilityChangingId,
+    setVisibilityChangingId,
+  ] = useState("");
+
+  const [
     editingProductId,
     setEditingProductId,
   ] = useState("");
@@ -844,6 +853,103 @@ export default function ProductsPage() {
         setLoading(false);
       }
     }, []);
+
+  async function toggleProductVisibility(
+    product: Product,
+  ) {
+    const nextIsActive =
+      !product.isActive;
+
+    const confirmed =
+      window.confirm(
+        nextIsActive
+          ? `Show "${product.name}" to customers again?`
+          : `Hide "${product.name}"? Customers will no longer see or purchase this product. Nothing will be deleted.`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setVisibilityChangingId(
+        product.id,
+      );
+
+      const response =
+        await fetch(
+          `/api/products/${product.id}`,
+          {
+            method: "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify({
+                isActive:
+                  nextIsActive,
+              }),
+          },
+        );
+
+      const result:
+        | (Product & ApiError)
+        | ApiError =
+        await response
+          .json()
+          .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in result
+            ? result.error ||
+                "Failed to update product visibility."
+            : "Failed to update product visibility.",
+        );
+      }
+
+      setProducts(
+        (currentProducts) =>
+          currentProducts.map(
+            (currentProduct) =>
+              currentProduct.id ===
+              product.id
+                ? normalizeProduct({
+                    ...currentProduct,
+                    ...result,
+                    isActive:
+                      nextIsActive,
+                  } as Product)
+                : currentProduct,
+          ),
+      );
+
+      toast.success(
+        "message" in result &&
+          result.message
+          ? result.message
+          : nextIsActive
+            ? "Product is now visible."
+            : "Product is now hidden.",
+      );
+    } catch (error) {
+      console.error(
+        "Product visibility error:",
+        error,
+      );
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update product visibility.",
+      );
+    } finally {
+      setVisibilityChangingId("");
+    }
+  }
 
   async function deleteProduct(
     product: Product,
@@ -1178,11 +1284,30 @@ export default function ProductsPage() {
                                 />
 
                                 <div className="min-w-0">
-                                  <p className="font-semibold text-[#6D2E00]">
-                                    {
-                                      product.name
-                                    }
-                                  </p>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="font-semibold text-[#6D2E00]">
+                                      {
+                                        product.name
+                                      }
+                                    </p>
+
+                                    <Badge
+                                      variant={
+                                        !product.isActive
+                                          ? "neutral"
+                                          : product.category.isActive
+                                            ? "success"
+                                            : "warning"
+                                      }
+                                      size="sm"
+                                    >
+                                      {!product.isActive
+                                        ? "HIDDEN"
+                                        : product.category.isActive
+                                          ? "VISIBLE"
+                                          : "CATEGORY HIDDEN"}
+                                    </Badge>
+                                  </div>
 
                                   <p className="mt-1 max-w-[240px] truncate text-sm text-gray-500">
                                     {
@@ -1420,6 +1545,38 @@ export default function ProductsPage() {
                                   }
                                 >
                                   Edit
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  loading={
+                                    visibilityChangingId ===
+                                    product.id
+                                  }
+                                  leftIcon={
+                                    product.isActive ? (
+                                      <EyeOff
+                                        size={16}
+                                        aria-hidden="true"
+                                      />
+                                    ) : (
+                                      <Eye
+                                        size={16}
+                                        aria-hidden="true"
+                                      />
+                                    )
+                                  }
+                                  onClick={() =>
+                                    void toggleProductVisibility(
+                                      product,
+                                    )
+                                  }
+                                >
+                                  {product.isActive
+                                    ? "Hide"
+                                    : "Show"}
                                 </Button>
 
                                 <Button

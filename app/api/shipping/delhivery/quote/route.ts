@@ -456,6 +456,10 @@ export async function POST(
             in: productIds,
           },
           isActive: true,
+
+          category: {
+            isActive: true,
+          },
         },
 
         select: {

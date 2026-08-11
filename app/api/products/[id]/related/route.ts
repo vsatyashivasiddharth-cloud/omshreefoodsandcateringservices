@@ -83,9 +83,14 @@ export async function GET(
     }
 
     const currentProduct =
-      await prisma.product.findUnique({
+      await prisma.product.findFirst({
         where: {
           id: productId,
+          isActive: true,
+
+          category: {
+            isActive: true,
+          },
         },
 
         select: {
@@ -110,6 +115,11 @@ export async function GET(
           id: {
             not:
               currentProduct.id,
+          },
+          isActive: true,
+
+          category: {
+            isActive: true,
           },
         },
 

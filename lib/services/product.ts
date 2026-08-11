@@ -1,13 +1,22 @@
 import prisma from "@/lib/prisma";
 
 /**
- * Get all products
+ * Get all customer-visible products
  */
 export async function getAllProducts() {
   return prisma.product.findMany({
+    where: {
+      isActive: true,
+
+      category: {
+        isActive: true,
+      },
+    },
+
     include: {
       category: true,
     },
+
     orderBy: {
       createdAt: "desc",
     },
@@ -15,31 +24,49 @@ export async function getAllProducts() {
 }
 
 /**
- * Get featured products
+ * Get featured customer-visible products
  */
-export async function getFeaturedProducts(limit = 6) {
+export async function getFeaturedProducts(
+  limit = 6,
+) {
   return prisma.product.findMany({
     where: {
       featured: true,
+      isActive: true,
+
+      category: {
+        isActive: true,
+      },
     },
+
     include: {
       category: true,
     },
+
     orderBy: {
       createdAt: "desc",
     },
+
     take: limit,
   });
 }
 
 /**
- * Get a single product by slug
+ * Get a single customer-visible product by slug
  */
-export async function getProductBySlug(slug: string) {
-  return prisma.product.findUnique({
+export async function getProductBySlug(
+  slug: string,
+) {
+  return prisma.product.findFirst({
     where: {
       slug,
+      isActive: true,
+
+      category: {
+        isActive: true,
+      },
     },
+
     include: {
       category: true,
     },
@@ -47,17 +74,26 @@ export async function getProductBySlug(slug: string) {
 }
 
 /**
- * Get related products
+ * Get related customer-visible products
  */
-export async function getRelatedProducts(slug: string) {
-  const product = await prisma.product.findUnique({
-    where: {
-      slug,
-    },
-    include: {
-      category: true,
-    },
-  });
+export async function getRelatedProducts(
+  slug: string,
+) {
+  const product =
+    await prisma.product.findFirst({
+      where: {
+        slug,
+        isActive: true,
+
+        category: {
+          isActive: true,
+        },
+      },
+
+      include: {
+        category: true,
+      },
+    });
 
   if (!product) {
     return [];
@@ -65,29 +101,48 @@ export async function getRelatedProducts(slug: string) {
 
   return prisma.product.findMany({
     where: {
-      categoryId: product.categoryId,
+      categoryId:
+        product.categoryId,
+
+      isActive: true,
+
+      category: {
+        isActive: true,
+      },
+
       NOT: {
         slug,
       },
     },
+
     include: {
       category: true,
     },
+
     take: 4,
   });
 }
 
 /**
- * Get products by category
+ * Get customer-visible products by category
  */
-export async function getProductsByCategory(categoryId: string) {
+export async function getProductsByCategory(
+  categoryId: string,
+) {
   return prisma.product.findMany({
     where: {
       categoryId,
+      isActive: true,
+
+      category: {
+        isActive: true,
+      },
     },
+
     include: {
       category: true,
     },
+
     orderBy: {
       createdAt: "desc",
     },
@@ -95,11 +150,19 @@ export async function getProductsByCategory(categoryId: string) {
 }
 
 /**
- * Search products
+ * Search customer-visible products
  */
-export async function searchProducts(search: string) {
+export async function searchProducts(
+  search: string,
+) {
   return prisma.product.findMany({
     where: {
+      isActive: true,
+
+      category: {
+        isActive: true,
+      },
+
       OR: [
         {
           name: {
@@ -115,9 +178,11 @@ export async function searchProducts(search: string) {
         },
       ],
     },
+
     include: {
       category: true,
     },
+
     orderBy: {
       createdAt: "desc",
     },

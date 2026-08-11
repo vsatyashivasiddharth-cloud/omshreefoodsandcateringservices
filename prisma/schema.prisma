@@ -89,6 +89,10 @@ model Category {
   slug  String  @unique
   image String?
 
+  /// Controls whether this category and its products are visible to customers.
+  /// Hiding a category does not modify the individual Product.isActive values.
+  isActive Boolean @default(true)
+
   products Product[]
 
   createdAt DateTime @default(now())

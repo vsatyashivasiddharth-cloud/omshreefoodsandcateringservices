@@ -756,6 +756,165 @@ export async function PUT(
   }
 }
 
+/* ---------- VISIBILITY ---------- */
+
+export async function PATCH(
+  request: NextRequest,
+  {
+    params,
+  }: RouteContext,
+) {
+  try {
+    const authentication =
+      await requireAdmin(
+        request,
+      );
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
+    const {
+      id,
+    } = await params;
+
+    const productId =
+      id.trim();
+
+    if (!productId) {
+      return errorResponse(
+        "Product ID is required.",
+        400,
+      );
+    }
+
+    const body: unknown =
+      await request.json();
+
+    if (!isRecord(body)) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
+      );
+    }
+
+    if (
+      typeof body.isActive !==
+      "boolean"
+    ) {
+      return errorResponse(
+        "isActive must be a boolean.",
+        400,
+      );
+    }
+
+    const existingProduct =
+      await prisma.product.findUnique({
+        where: {
+          id: productId,
+        },
+
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+
+    if (!existingProduct) {
+      return errorResponse(
+        "Product not found.",
+        404,
+      );
+    }
+
+    const product =
+      await prisma.product.update({
+        where: {
+          id: productId,
+        },
+
+        data: {
+          isActive:
+            body.isActive,
+        },
+
+        include: {
+          category: true,
+
+          variants: {
+            orderBy: [
+              {
+                sortOrder: "asc",
+              },
+              {
+                weightGrams:
+                  "asc",
+              },
+            ],
+          },
+        },
+      });
+
+    return NextResponse.json(
+      {
+        ...normalizeProductWithVariants(
+          product,
+        ),
+
+        message:
+          product.isActive
+            ? `"${product.name}" is now visible to customers.`
+            : `"${product.name}" is now hidden from customers.`,
+      },
+      {
+        status: 200,
+        headers: {
+          "Cache-Control":
+            "private, no-store, max-age=0",
+        },
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Update Product Visibility Error:",
+      error,
+    );
+
+    if (
+      error instanceof SyntaxError
+    ) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
+      );
+    }
+
+    if (
+      error instanceof
+        Prisma
+          .PrismaClientKnownRequestError
+    ) {
+      if (
+        error.code === "P2025"
+      ) {
+        return errorResponse(
+          "Product not found.",
+          404,
+        );
+      }
+    }
+
+    return errorResponse(
+      "Failed to update product visibility.",
+      500,
+    );
+  }
+}
 export async function DELETE(
   request: NextRequest,
   {

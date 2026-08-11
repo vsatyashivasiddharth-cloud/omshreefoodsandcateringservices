@@ -21,6 +21,11 @@ export default async function FeaturedProducts() {
     await prisma.product.findMany({
       where: {
         featured: true,
+        isActive: true,
+
+        category: {
+          isActive: true,
+        },
       },
 
       include: {

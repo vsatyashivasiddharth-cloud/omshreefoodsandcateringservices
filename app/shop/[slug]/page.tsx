@@ -124,6 +124,10 @@ const getProduct = cache(
         slug:
           normalizedSlug,
         isActive: true,
+
+        category: {
+          isActive: true,
+        },
       },
 
       select: {
@@ -886,7 +890,7 @@ export default async function ProductPage({
                 </span>
 
                 <span aria-hidden="true">
-                  •
+                  â€¢
                 </span>
 
                 <span>

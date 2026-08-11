@@ -370,6 +370,163 @@ export async function PUT(
   }
 }
 
+/* ---------- VISIBILITY ---------- */
+
+export async function PATCH(
+  request: NextRequest,
+  {
+    params,
+  }: RouteContext,
+) {
+  try {
+    const authentication =
+      await requireAdmin(
+        request,
+      );
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
+    const {
+      id,
+    } = await params;
+
+    const categoryId =
+      id.trim();
+
+    if (!categoryId) {
+      return errorResponse(
+        "Category ID is required.",
+        400,
+      );
+    }
+
+    const body: unknown =
+      await request.json();
+
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
+      );
+    }
+
+    const data =
+      body as Record<
+        string,
+        unknown
+      >;
+
+    if (
+      typeof data.isActive !==
+      "boolean"
+    ) {
+      return errorResponse(
+        "isActive must be a boolean.",
+        400,
+      );
+    }
+
+    const existingCategory =
+      await prisma.category.findUnique({
+        where: {
+          id: categoryId,
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+    if (!existingCategory) {
+      return errorResponse(
+        "Category not found.",
+        404,
+      );
+    }
+
+    const category =
+      await prisma.category.update({
+        where: {
+          id: categoryId,
+        },
+
+        data: {
+          isActive:
+            data.isActive,
+        },
+      });
+
+    return NextResponse.json(
+      {
+        ...category,
+
+        message:
+          category.isActive
+            ? `"${category.name}" is now visible to customers.`
+            : `"${category.name}" is now hidden from customers.`,
+      },
+      {
+        status: 200,
+        headers:
+          noStoreHeaders(),
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Update Category Visibility Error:",
+      error,
+    );
+
+    if (
+      error instanceof SyntaxError
+    ) {
+      return errorResponse(
+        "Invalid request body.",
+        400,
+      );
+    }
+
+    if (
+      error instanceof
+        Prisma
+          .PrismaClientKnownRequestError
+    ) {
+      if (
+        error.code === "P2025"
+      ) {
+        return errorResponse(
+          "Category not found.",
+          404,
+        );
+      }
+
+      if (
+        error.code === "P2023"
+      ) {
+        return errorResponse(
+          "Invalid category ID.",
+          400,
+        );
+      }
+    }
+
+    return errorResponse(
+      "Failed to update category visibility.",
+      500,
+    );
+  }
+}
 /* ---------- DELETE ---------- */
 
 export async function DELETE(

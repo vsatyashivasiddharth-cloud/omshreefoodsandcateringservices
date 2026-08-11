@@ -70,14 +70,24 @@ function errorResponse(
   );
 }
 
-export async function GET() {
+export async function GET(
+  request: NextRequest,
+) {
   try {
+    const authentication =
+      await requireAdmin(request);
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
     const products =
       await prisma.product.findMany({
-        where: {
-          isActive: true,
-        },
-
         include: {
           category: true,
 

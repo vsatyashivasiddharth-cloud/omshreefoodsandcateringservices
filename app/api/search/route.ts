@@ -81,6 +81,11 @@ export async function GET(
               },
             },
           ],
+          isActive: true,
+
+          category: {
+            isActive: true,
+          },
         },
 
         select: {

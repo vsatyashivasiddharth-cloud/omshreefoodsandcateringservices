@@ -6,6 +6,8 @@ import EditCategoryModal from "@/components/admin/EditCategoryModal";
 import Image from "next/image";
 import { toast } from "sonner";
 import {
+  Eye,
+  EyeOff,
   FolderTree,
   ImageIcon,
   Shapes,
@@ -16,6 +18,7 @@ interface Category {
   name: string;
   slug: string;
   image: string | null;
+  isActive: boolean;
 }
 
 function StatCard({
@@ -67,6 +70,11 @@ export default function CategoriesPage() {
   const [editOpen, setEditOpen] =
     useState(false);
 
+  const [
+    visibilityChangingId,
+    setVisibilityChangingId,
+  ] = useState("");
+
   async function loadCategories() {
     try {
       setLoading(true);
@@ -87,6 +95,89 @@ export default function CategoriesPage() {
     }
   }
 
+  async function toggleCategoryVisibility(
+    category: Category,
+  ) {
+    const nextIsActive =
+      !category.isActive;
+
+    const confirmed =
+      window.confirm(
+        nextIsActive
+          ? `Show "${category.name}" to customers again?`
+          : `Hide "${category.name}"? This category and all of its products will immediately disappear from customer-facing pages. Nothing will be deleted.`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setVisibilityChangingId(
+        category.id,
+      );
+
+      const response =
+        await fetch(
+          `/api/categories/${category.id}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              isActive:
+                nextIsActive,
+            }),
+          },
+        );
+
+      const result =
+        await response
+          .json()
+          .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+            "Failed to update category visibility.",
+        );
+      }
+
+      setCategories((current) =>
+        current.map((item) =>
+          item.id === category.id
+            ? {
+                ...item,
+                isActive:
+                  nextIsActive,
+              }
+            : item,
+        ),
+      );
+
+      toast.success(
+        result.message ||
+          (nextIsActive
+            ? "Category is now visible."
+            : "Category is now hidden."),
+      );
+    } catch (error) {
+      console.error(
+        "Category visibility error:",
+        error,
+      );
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Failed to update category visibility.",
+      );
+    } finally {
+      setVisibilityChangingId("");
+    }
+  }
   async function deleteCategory(id: string) {
     const confirmed = window.confirm(
       "Are you sure you want to delete this category?"
@@ -291,9 +382,23 @@ export default function CategoriesPage() {
 
                           <div>
 
+                            <div className="flex flex-wrap items-center gap-2">
                             <h3 className="font-bold text-lg text-[#6D2E00]">
                               {category.name}
                             </h3>
+
+                            <span
+                              className={
+                                category.isActive
+                                  ? "inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700"
+                                  : "inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600"
+                              }
+                            >
+                              {category.isActive
+                                ? "VISIBLE"
+                                : "HIDDEN"}
+                            </span>
+                          </div>
 
                             <p className="mt-1 text-sm text-gray-500">
                               Category ID: #{category.id.slice(0, 8)}
@@ -329,6 +434,39 @@ export default function CategoriesPage() {
                             className="rounded-xl bg-[#6D2E00] px-5 py-2 font-semibold text-white transition hover:bg-[#8B4513]"
                           >
                             Edit
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={
+                              visibilityChangingId ===
+                              category.id
+                            }
+                            onClick={() =>
+                              void toggleCategoryVisibility(
+                                category,
+                              )
+                            }
+                            className="inline-flex items-center gap-2 rounded-xl border border-[#E7C98C] bg-white px-5 py-2 font-semibold text-[#6D2E00] transition hover:bg-[#FFF8EE] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {category.isActive ? (
+                              <EyeOff
+                                size={16}
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              <Eye
+                                size={16}
+                                aria-hidden="true"
+                              />
+                            )}
+
+                            {visibilityChangingId ===
+                            category.id
+                              ? "Saving..."
+                              : category.isActive
+                                ? "Hide"
+                                : "Show"}
                           </button>
 
                           <button

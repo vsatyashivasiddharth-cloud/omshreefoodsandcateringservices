@@ -118,7 +118,11 @@ function serializeStructuredData(
 export default async function CategoriesPage() {
   const categories =
     await prisma.category.findMany({
-      include: {
+        where: {
+          isActive: true,
+        },
+
+        include: {
         _count: {
           select: {
             products: true,
