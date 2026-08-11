@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   Metadata,
 } from "next";
 import Link from "next/link";
@@ -307,7 +307,7 @@ export default async function CategoriesPage() {
 
       <Navbar />
 
-      <main className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9] pt-28">
+      <main className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9] pt-6">
         <section className="border-b border-[#F3DFC2] bg-[#FFF4DE]">
           <div className="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6 lg:px-8 lg:py-20">
             <Badge

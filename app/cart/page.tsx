@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import {
   CheckCircle2,
@@ -40,7 +40,7 @@ export default function CartPage() {
     <>
       <Navbar />
 
-      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE] pt-28">
+      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE] pt-6">
         <section className="relative overflow-hidden border-b border-[#F3DFC2] bg-gradient-to-br from-[#FFF8EE] via-[#FFFDF8] to-[#FFF4DE]">
           <div
             aria-hidden="true"

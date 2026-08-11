@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useCallback,
@@ -370,7 +370,7 @@ function formatDimension(value: number | null) {
     !Number.isFinite(value) ||
     value <= 0
   ) {
-    return "—";
+    return "â€”";
   }
 
   return value.toLocaleString("en-IN", {
@@ -748,7 +748,7 @@ export default function TrackOrderContent() {
   );
 
   return (
-    <main className="min-h-screen bg-[#FFF8EE] pb-20 pt-28 lg:pt-32">
+    <main className="min-h-screen bg-[#FFF8EE] pb-20 pt-6 lg:pt-8">
       <section className="relative overflow-hidden py-12 sm:py-16">
         <div
           aria-hidden="true"
@@ -1519,10 +1519,10 @@ export default function TrackOrderContent() {
                           value={`${formatDimension(
                             shipping.package.dimensions
                               .lengthCm,
-                          )} × ${formatDimension(
+                          )} Ã— ${formatDimension(
                             shipping.package.dimensions
                               .breadthCm,
-                          )} × ${formatDimension(
+                          )} Ã— ${formatDimension(
                             shipping.package.dimensions
                               .heightCm,
                           )} cm`}

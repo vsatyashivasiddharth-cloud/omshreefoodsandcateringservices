@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/footer";
@@ -84,7 +84,7 @@ const providerStructuredData = {
   description: siteConfig.description,
   telephone: `+91${siteConfig.phone}`,
   email: siteConfig.email,
-  priceRange: "₹₹",
+  priceRange: "â‚¹â‚¹",
 
   servesCuisine: [
     "Andhra",
@@ -195,7 +195,7 @@ export default function CateringPage() {
 
       <Navbar />
 
-      <main className="pt-24">
+      <main className="pt-6">
         <CateringContent />
       </main>
 

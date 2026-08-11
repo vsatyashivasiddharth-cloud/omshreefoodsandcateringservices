@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 
 import Footer from "@/components/layout/footer";
 import Navbar from "@/components/layout/Navbar";
@@ -25,7 +25,7 @@ export default function OrderSuccessPage() {
     <>
       <Navbar />
 
-      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE] pt-28">
+      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-[#FFF4DE] pt-6">
         <OrderSuccessContent />
       </main>
 

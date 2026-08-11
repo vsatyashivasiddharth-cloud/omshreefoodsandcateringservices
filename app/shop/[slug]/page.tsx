@@ -770,7 +770,7 @@ export default async function ProductPage({
 
       <Navbar />
 
-      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFFBF4] to-[#FFF8EE] pt-28">
+      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFFBF4] to-[#FFF8EE] pt-6">
         <div className="mx-auto max-w-7xl px-6 py-16">
           <nav
             aria-label="Breadcrumb"

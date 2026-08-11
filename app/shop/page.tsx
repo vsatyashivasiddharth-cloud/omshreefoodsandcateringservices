@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Sparkles } from "lucide-react";
 
 import Footer from "@/components/layout/footer";
@@ -184,7 +184,7 @@ export default function ShopPage() {
 
       <Navbar />
 
-      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-white pt-28">
+      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-white pt-6">
         <section className="relative overflow-hidden">
           <div
             aria-hidden="true"

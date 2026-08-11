@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -211,7 +211,7 @@ export default function CateringPlatesPage() {
 
       <Navbar />
 
-      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-white pt-28">
+      <main className="min-h-screen bg-gradient-to-b from-[#FFFDF8] via-[#FFF8EE] to-white pt-6">
         <section className="py-16 sm:py-20">
           <Container>
             <div className="mx-auto max-w-3xl text-center">

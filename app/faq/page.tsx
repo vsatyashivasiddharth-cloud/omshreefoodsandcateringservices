@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/footer";
@@ -108,7 +108,7 @@ export default function FAQPage() {
     <>
       <Navbar />
 
-      <main className="pt-24">
+      <main className="pt-6">
         <FAQContent />
       </main>
 
