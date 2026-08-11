@@ -3,6 +3,8 @@ import {
   NextResponse,
 } from "next/server";
 import {
+  OrderStatus,
+  PaymentStatus,
   Prisma,
 } from "@prisma/client";
 
@@ -974,12 +976,6 @@ export async function DELETE(
 
         select: {
           id: true,
-
-          _count: {
-            select: {
-              orderItems: true,
-            },
-          },
         },
       });
 
@@ -991,23 +987,61 @@ export async function DELETE(
     }
 
     /*
-     * Products referenced by historical
-     * orders must never be hard-deleted.
+     * Do not permanently delete a Product while an
+     * associated order can still reach successful
+     * payment finalization and inventory deduction.
      *
-     * isActive=false removes the product
-     * from the customer storefront while
-     * preserving historical order data.
+     * Completed payments are safe because inventory
+     * has already been finalized. Refunded orders are
+     * also final. Cancelled orders are safe because
+     * processPaidOrder explicitly avoids inventory
+     * deduction and uses the refund path if payment
+     * arrives after cancellation.
      */
-    if (
-      product._count.orderItems >
-      0
-    ) {
+    const blockingOrderItem =
+      await prisma.orderItem.findFirst({
+        where: {
+          productId,
+
+          order: {
+            status: {
+              not:
+                OrderStatus.CANCELLED,
+            },
+
+            paymentStatus: {
+              notIn: [
+                PaymentStatus.SUCCESS,
+                PaymentStatus.REFUNDED,
+              ],
+            },
+          },
+        },
+
+        select: {
+          id: true,
+        },
+      });
+
+    if (blockingOrderItem) {
       return errorResponse(
-        "This product is referenced by existing orders and cannot be permanently deleted. Hide the product instead.",
+        "This product is referenced by an order that has not finished payment processing. Cancel or complete that order before permanently deleting the product.",
         409,
       );
     }
 
+    /*
+     * Historical OrderItems are preserved.
+     *
+     * The database foreign key uses ON DELETE SET NULL,
+     * so deleting the Product clears OrderItem.productId
+     * without deleting the OrderItem snapshots.
+     *
+     * ProductVariants are deleted through the existing
+     * ProductVariant -> Product cascade, while historical
+     * OrderItem.variantId values are cleared through their
+     * existing ON DELETE SET NULL relation.
+     */
     await prisma.product.delete({
       where: {
         id: productId,
@@ -1054,7 +1088,7 @@ export async function DELETE(
         "P2003"
       ) {
         return errorResponse(
-          "This product is referenced by existing records and cannot be deleted.",
+          "This product is referenced by another record that still prevents permanent deletion.",
           409,
         );
       }

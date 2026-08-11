@@ -163,17 +163,26 @@ export async function GET(
           items:
             order.items.map(
               (item) => {
+                /*
+                 * Historical order snapshots are
+                 * authoritative. The live Product
+                 * relation may be null after a
+                 * permanent product deletion.
+                 */
                 const productName =
                   item.productName?.trim() ||
-                  item.product.name;
+                  item.product?.name ||
+                  "Deleted product";
 
                 const productSlug =
                   item.productSlug?.trim() ||
-                  item.product.slug;
+                  item.product?.slug ||
+                  "";
 
                 const productImage =
                   item.productImage ??
-                  item.product.image;
+                  item.product?.image ??
+                  null;
 
                 const variantLabel =
                   item.variantLabel?.trim() ||
@@ -234,10 +243,13 @@ export async function GET(
                    * Keep this nested shape for
                    * compatibility with the
                    * current admin UI.
+                   *
+                   * productId is null after the
+                   * live Product has been deleted.
                    */
                   product: {
                     id:
-                      item.product.id,
+                      item.productId ?? "",
 
                     name:
                       productName,

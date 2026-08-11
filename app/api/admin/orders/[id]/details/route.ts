@@ -351,15 +351,18 @@ export async function GET(
           (item) => {
             const productName =
               item.productName?.trim() ||
-              item.product.name;
+              item.product?.name ||
+              "Deleted product";
 
             const productSlug =
               item.productSlug?.trim() ||
-              item.product.slug;
+              item.product?.slug ||
+              "";
 
             const productImage =
               item.productImage ??
-              item.product.image;
+              item.product?.image ??
+              null;
 
             const variantLabel =
               item.variantLabel?.trim() ||
@@ -416,7 +419,7 @@ export async function GET(
 
               product: {
                 id:
-                  item.product.id,
+                  item.productId ?? "",
 
                 name:
                   productName,
@@ -431,10 +434,15 @@ export async function GET(
                  * Current live product price is
                  * supplied only for compatibility.
                  * Order displays must use item.price.
+                 *
+                 * If the live Product has been
+                 * permanently deleted, fall back to
+                 * the purchase-time OrderItem price.
                  */
                 price:
                   serializeDecimal(
-                    item.product.price,
+                    item.product?.price ??
+                      item.price,
                   ) ?? 0,
               },
 

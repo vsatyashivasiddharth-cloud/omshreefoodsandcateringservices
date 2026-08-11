@@ -124,7 +124,7 @@ function createInventoryDisplayName(
 
 function aggregateInventoryRequirements(
   items: Array<{
-    productId: string;
+    productId: string | null;
     variantId: string | null;
     quantity: number;
 
@@ -133,7 +133,7 @@ function aggregateInventoryRequirements(
 
     product: {
       name: string;
-    };
+    } | null;
 
     variant: {
       label: string;
@@ -147,9 +147,21 @@ function aggregateInventoryRequirements(
     >();
 
   for (const item of items) {
+    /*
+     * Historical OrderItems may outlive their live
+     * Product after an intentional permanent deletion.
+     *
+     * Use an empty product ID only as a sentinel for
+     * inventory lookup. It cannot match a real Product,
+     * so the existing stock-unavailable/refund path will
+     * handle a captured payment safely.
+     */
+    const productId =
+      item.productId ?? "";
+
     const key =
       createInventoryKey(
-        item.productId,
+        productId,
         item.variantId,
       );
 
@@ -158,7 +170,8 @@ function aggregateInventoryRequirements(
 
     const productName =
       item.productName?.trim() ||
-      item.product.name;
+      item.product?.name ||
+      "Deleted product";
 
     const variantLabel =
       item.variantId
@@ -170,8 +183,7 @@ function aggregateInventoryRequirements(
     requirements.set(key, {
       key,
 
-      productId:
-        item.productId,
+      productId,
 
       variantId:
         item.variantId,

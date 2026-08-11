@@ -70,17 +70,22 @@ function decimalToPositiveNumber(
 function formatProductDescription(
   items: Array<{
     quantity: number;
+    productName: string | null;
 
     product: {
       name: string;
-    };
+    } | null;
   }>,
 ) {
   return items
-    .map(
-      (item) =>
-        `${item.product.name} x ${item.quantity}`,
-    )
+    .map((item) => {
+      const productName =
+        item.productName?.trim() ||
+        item.product?.name ||
+        "Deleted product";
+
+      return `${productName} x ${item.quantity}`;
+    })
     .join(", ")
     .slice(0, 500);
 }
@@ -162,6 +167,7 @@ export async function POST(
                 items: {
                   select: {
                     quantity: true,
+                    productName: true,
 
                     product: {
                       select: {

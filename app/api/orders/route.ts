@@ -1558,19 +1558,22 @@ export async function POST(
 
                 product: {
                   id:
-                    item.productId,
+                    item.productId ?? "",
 
                   name:
-                    item.productName ??
-                    item.product.name,
+                    item.productName?.trim() ||
+                    item.product?.name ||
+                    "Deleted product",
 
                   slug:
-                    item.productSlug ??
-                    item.product.slug,
+                    item.productSlug?.trim() ||
+                    item.product?.slug ||
+                    "",
 
                   image:
                     item.productImage ??
-                    item.product.image,
+                    item.product?.image ??
+                    null,
                 },
 
                 variant:
