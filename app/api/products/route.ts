@@ -39,8 +39,7 @@ function isRecord(
 > {
   return (
     value !== null &&
-    typeof value ===
-      "object" &&
+    typeof value === "object" &&
     !Array.isArray(value)
   );
 }
@@ -86,6 +85,15 @@ export async function GET(
       );
     }
 
+    /*
+     * IMPORTANT:
+     *
+     * This is an Admin-only route.
+     *
+     * Do NOT filter by isActive here because
+     * Admin must be able to see hidden products
+     * so they can be shown again.
+     */
     const products =
       await prisma.product.findMany({
         include: {
@@ -161,14 +169,12 @@ export async function POST(
     }
 
     const name =
-      typeof body.name ===
-      "string"
+      typeof body.name === "string"
         ? body.name.trim()
         : "";
 
     const rawSlug =
-      typeof body.slug ===
-      "string"
+      typeof body.slug === "string"
         ? body.slug
         : "";
 
@@ -188,8 +194,7 @@ export async function POST(
         : "";
 
     const image =
-      typeof body.image ===
-      "string"
+      typeof body.image === "string"
         ? body.image.trim()
         : "";
 
@@ -259,13 +264,14 @@ export async function POST(
     }
 
     const [
-      conflictingProduct,
+      existingProduct,
       category,
     ] = await Promise.all([
       prisma.product.findUnique({
         where: {
           slug,
         },
+
         select: {
           id: true,
         },
@@ -275,13 +281,14 @@ export async function POST(
         where: {
           id: categoryId,
         },
+
         select: {
           id: true,
         },
       }),
     ]);
 
-    if (conflictingProduct) {
+    if (existingProduct) {
       return errorResponse(
         "A product with this slug already exists.",
         409,
@@ -296,124 +303,117 @@ export async function POST(
     }
 
     const {
-      variants,
       defaultVariant,
+      variants,
     } = variantResult;
 
     const product =
-      await prisma.$transaction(
-        async (transaction) => {
-          const createdProduct =
-            await transaction.product.create({
-              data: {
-                name,
-                slug,
-                description,
-                image,
-                featured,
-                isActive: true,
-                categoryId,
+      await prisma.product.create({
+        data: {
+          name,
+          slug,
+          description,
+          image,
+          featured,
+          categoryId,
 
-                price:
-                  defaultVariant.price,
+          /*
+           * New products are visible
+           * by default.
+           */
+          isActive: true,
 
-                stock:
-                  defaultVariant.stock,
+          /*
+           * Compatibility mirrors for
+           * storefront, order and shipping code.
+           */
+          price:
+            defaultVariant.price,
 
-                shippingWeightGrams:
-                  defaultVariant
-                    .shippingWeightGrams,
+          stock:
+            defaultVariant.stock,
 
-                packedLengthCm:
-                  defaultVariant
-                    .packedLengthCm,
+          shippingWeightGrams:
+            defaultVariant
+              .shippingWeightGrams,
 
-                packedBreadthCm:
-                  defaultVariant
-                    .packedBreadthCm,
+          packedLengthCm:
+            defaultVariant
+              .packedLengthCm,
 
-                packedHeightCm:
-                  defaultVariant
-                    .packedHeightCm,
+          packedBreadthCm:
+            defaultVariant
+              .packedBreadthCm,
 
-                variants: {
-                  create:
-                    variants.map(
-                      (
-                        variant,
-                      ) => ({
-                        label:
-                          variant.label,
+          packedHeightCm:
+            defaultVariant
+              .packedHeightCm,
 
-                        weightGrams:
-                          variant
-                            .weightGrams,
+          variants: {
+            create:
+              variants.map(
+                (variant) => ({
+                  label:
+                    variant.label,
 
-                        shippingWeightGrams:
-                          variant
-                            .shippingWeightGrams,
+                  weightGrams:
+                    variant
+                      .weightGrams,
 
-                        packedLengthCm:
-                          variant
-                            .packedLengthCm,
+                  shippingWeightGrams:
+                    variant
+                      .shippingWeightGrams,
 
-                        packedBreadthCm:
-                          variant
-                            .packedBreadthCm,
+                  packedLengthCm:
+                    variant
+                      .packedLengthCm,
 
-                        packedHeightCm:
-                          variant
-                            .packedHeightCm,
+                  packedBreadthCm:
+                    variant
+                      .packedBreadthCm,
 
-                        price:
-                          variant.price,
+                  packedHeightCm:
+                    variant
+                      .packedHeightCm,
 
-                        stock:
-                          variant.stock,
+                  price:
+                    variant.price,
 
-                        sku:
-                          variant.sku,
+                  stock:
+                    variant.stock,
 
-                        isActive:
-                          variant.isActive,
+                  sku:
+                    variant.sku,
 
-                        isDefault:
-                          variant.isDefault,
+                  isActive:
+                    variant.isActive,
 
-                        sortOrder:
-                          variant.sortOrder,
-                      }),
-                    ),
-                },
-              },
+                  isDefault:
+                    variant.isDefault,
 
-              include: {
-                category: true,
-
-                variants: {
-                  orderBy: [
-                    {
-                      sortOrder:
-                        "asc",
-                    },
-                    {
-                      weightGrams:
-                        "asc",
-                    },
-                  ],
-                },
-              },
-            });
-
-          return createdProduct;
+                  sortOrder:
+                    variant.sortOrder,
+                }),
+              ),
+          },
         },
-        {
-          isolationLevel:
-            Prisma
-              .TransactionIsolationLevel
-              .Serializable,
+
+        include: {
+          category: true,
+
+          variants: {
+            orderBy: [
+              {
+                sortOrder: "asc",
+              },
+              {
+                weightGrams:
+                  "asc",
+              },
+            ],
+          },
         },
-      );
+      });
 
     return NextResponse.json(
       normalizeProductWithVariants(
@@ -432,8 +432,7 @@ export async function POST(
     );
 
     if (
-      error instanceof
-        SyntaxError
+      error instanceof SyntaxError
     ) {
       return errorResponse(
         "Invalid request body.",
@@ -446,8 +445,7 @@ export async function POST(
         Prisma.PrismaClientKnownRequestError
     ) {
       if (
-        error.code ===
-        "P2002"
+        error.code === "P2002"
       ) {
         return errorResponse(
           "The product slug, variant weight, or SKU is already in use.",
@@ -456,11 +454,10 @@ export async function POST(
       }
 
       if (
-        error.code ===
-        "P2003"
+        error.code === "P2003"
       ) {
         return errorResponse(
-          "The selected category does not exist.",
+          "The selected category or variant relationship is invalid.",
           400,
         );
       }

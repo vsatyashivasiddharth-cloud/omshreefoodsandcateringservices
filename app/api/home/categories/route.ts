@@ -44,7 +44,11 @@ export async function GET() {
 
           _count: {
             select: {
-              products: true,
+              products: {
+                where: {
+                  isActive: true,
+                },
+              },
             },
           },
         },

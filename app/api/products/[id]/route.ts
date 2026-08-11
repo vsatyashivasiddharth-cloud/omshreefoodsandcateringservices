@@ -298,6 +298,14 @@ export async function PUT(
           id: productId,
         },
 
+        /*
+         * Hidden products must still
+         * remain editable by Admin.
+         *
+         * Keep variants because the
+         * update logic below validates
+         * variant ownership.
+         */
         select: {
           id: true,
 
@@ -365,7 +373,7 @@ export async function PUT(
 
     for (
       const variant of
-      variantResult.variants
+        variantResult.variants
     ) {
       if (
         variant.id &&
@@ -756,8 +764,6 @@ export async function PUT(
   }
 }
 
-/* ---------- VISIBILITY ---------- */
-
 export async function PATCH(
   request: NextRequest,
   {
@@ -813,6 +819,13 @@ export async function PATCH(
       );
     }
 
+    /*
+     * Do NOT filter by isActive.
+     *
+     * PATCH must be able to locate a
+     * hidden product so Admin can Show
+     * it again.
+     */
     const existingProduct =
       await prisma.product.findUnique({
         where: {
@@ -876,6 +889,8 @@ export async function PATCH(
         headers: {
           "Cache-Control":
             "private, no-store, max-age=0",
+          Pragma: "no-cache",
+          Expires: "0",
         },
       },
     );
@@ -915,6 +930,7 @@ export async function PATCH(
     );
   }
 }
+
 export async function DELETE(
   request: NextRequest,
   {
@@ -974,6 +990,14 @@ export async function DELETE(
       );
     }
 
+    /*
+     * Products referenced by historical
+     * orders must never be hard-deleted.
+     *
+     * isActive=false removes the product
+     * from the customer storefront while
+     * preserving historical order data.
+     */
     if (
       product._count.orderItems >
       0
@@ -982,6 +1006,7 @@ export async function DELETE(
         where: {
           id: productId,
         },
+
         data: {
           isActive: false,
           featured: false,
@@ -992,6 +1017,7 @@ export async function DELETE(
         {
           message:
             "Product removed from the store. Its historical order data has been preserved.",
+
           archived: true,
         },
         {
@@ -1006,6 +1032,11 @@ export async function DELETE(
       );
     }
 
+    /*
+     * A product with no historical order
+     * references can retain the existing
+     * hard-delete behavior.
+     */
     await prisma.product.delete({
       where: {
         id: productId,
@@ -1016,7 +1047,6 @@ export async function DELETE(
       {
         message:
           "Product deleted successfully.",
-        archived: false,
       },
       {
         status: 200,

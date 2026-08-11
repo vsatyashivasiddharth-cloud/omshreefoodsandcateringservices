@@ -124,9 +124,15 @@ model Product {
 
   /// Controls whether this product is available for new customer purchases.
   ///
-  /// Products referenced by historical orders should be archived by setting
-  /// this to false instead of deleting them.
+  /// A product can be temporarily hidden by setting this to false while
+  /// keeping isArchived false.
   isActive Boolean @default(true)
+
+  /// Marks a product as permanently removed from normal Admin catalog views
+  /// while preserving it for historical orders.
+  ///
+  /// Archived products must remain inactive.
+  isArchived Boolean @default(false)
 
   /// Approximate packed contribution of one sellable product unit.
   /// During the compatibility period, this mirrors the default
@@ -155,12 +161,14 @@ model Product {
   @@index([categoryId])
   @@index([featured])
   @@index([isActive])
+  @@index([isArchived])
   @@index([stock])
   @@index([shippingWeightGrams])
   @@index([createdAt])
   @@index([categoryId, createdAt])
   @@index([featured, createdAt])
   @@index([isActive, createdAt])
+  @@index([isArchived, createdAt])
   @@index([isActive, categoryId, createdAt])
   @@index([isActive, featured, createdAt])
 }

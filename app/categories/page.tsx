@@ -1,7 +1,9 @@
 import type {
   Metadata,
 } from "next";
+
 import Link from "next/link";
+
 import {
   ArrowRight,
   FolderOpen,
@@ -118,14 +120,18 @@ function serializeStructuredData(
 export default async function CategoriesPage() {
   const categories =
     await prisma.category.findMany({
-        where: {
-          isActive: true,
-        },
+      where: {
+        isActive: true,
+      },
 
-        include: {
+      include: {
         _count: {
           select: {
-            products: true,
+            products: {
+              where: {
+                isActive: true,
+              },
+            },
           },
         },
       },
@@ -153,7 +159,7 @@ export default async function CategoriesPage() {
         "Food Categories | Om Shree Foods & Caterers",
 
       description:
-        "Browse homemade snacks, pickles, sweets, spice powders and traditional Andhra food categories.",
+        "Browse homemade Andhra snacks, pickles, sweets, spice powders and traditional Andhra food categories.",
 
       isPartOf: {
         "@type":
