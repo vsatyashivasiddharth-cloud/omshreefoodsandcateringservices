@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -48,12 +49,21 @@ export default function SearchContent() {
   const [loading, setLoading] =
     useState(false);
 
+  const [
+    completedQuery,
+    setCompletedQuery,
+  ] = useState("");
+
+  const resultsRef =
+    useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     const normalizedQuery =
       query.trim();
 
     if (!normalizedQuery) {
       setProducts([]);
+      setCompletedQuery("");
       setLoading(false);
       return;
     }
@@ -82,6 +92,10 @@ export default function SearchContent() {
               ? data
               : [],
           );
+
+          setCompletedQuery(
+            normalizedQuery,
+          );
         } catch (error) {
           if (
             controller.signal.aborted
@@ -95,6 +109,10 @@ export default function SearchContent() {
           );
 
           setProducts([]);
+
+          setCompletedQuery(
+            normalizedQuery,
+          );
         } finally {
           if (
             !controller.signal.aborted
@@ -114,6 +132,40 @@ export default function SearchContent() {
 
   const hasQuery =
     query.trim().length > 0;
+
+  useEffect(() => {
+    const normalizedQuery =
+      query.trim();
+
+    if (
+      !normalizedQuery ||
+      loading ||
+      completedQuery !==
+        normalizedQuery
+    ) {
+      return;
+    }
+
+    const frame =
+      window.requestAnimationFrame(
+        () => {
+          resultsRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        },
+      );
+
+    return () => {
+      window.cancelAnimationFrame(
+        frame,
+      );
+    };
+  }, [
+    completedQuery,
+    loading,
+    query,
+  ]);
 
   return (
     <>
@@ -203,7 +255,10 @@ export default function SearchContent() {
 
       {/* Search results */}
 
-      <section className="bg-[#FFFDF8] pb-16 pt-8 sm:pt-10">
+      <section
+        ref={resultsRef}
+        className="scroll-mt-4 bg-[#FFFDF8] pb-16 pt-8 sm:pt-10"
+      >
         <Container>
           {!loading && !hasQuery && (
             <div className="py-9 text-center sm:py-10">

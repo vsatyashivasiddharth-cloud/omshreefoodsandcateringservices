@@ -382,7 +382,7 @@ function Stat({
       hover
       className="group bg-white/95 backdrop-blur-sm"
     >
-      <div className="flex items-start justify-between gap-5">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
             {title}
@@ -393,7 +393,7 @@ function Stat({
           </h3>
         </div>
 
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#FFF4DE] text-[#C89B3C] transition-all duration-300 group-hover:scale-110 group-hover:bg-[#C89B3C] group-hover:text-white">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#FFF4DE] text-[#C89B3C] transition-all duration-300 group-hover:scale-105 group-hover:bg-[#C89B3C] group-hover:text-white">
           {icon}
         </div>
       </div>
@@ -841,103 +841,103 @@ export default function OrdersContent() {
         )
       : viewOrders;
 
- const stats = useMemo(
-  () => ({
-    total: orders.length,
+  const stats = useMemo(
+    () => ({
+      total: orders.length,
 
-    successfulPayments:
-      orders.filter(
+      successfulPayments:
+        orders.filter(
+          (order) =>
+            order.paymentStatus ===
+            "SUCCESS",
+        ).length,
+
+      pendingPayments:
+        orders.filter(
+          (order) =>
+            order.paymentStatus ===
+            "PENDING",
+        ).length,
+
+      preparing: orders.filter(
         (order) =>
-          order.paymentStatus ===
-          "SUCCESS",
+          order.status === "PAID" ||
+          order.status === "PREPARING" ||
+          order.status === "PACKED" ||
+          order.status ===
+            "OUT_FOR_DELIVERY",
       ).length,
 
-    pendingPayments:
-      orders.filter(
+      delivered: orders.filter(
         (order) =>
-          order.paymentStatus ===
-          "PENDING",
+          order.status === "DELIVERED",
       ).length,
 
-    preparing: orders.filter(
-      (order) =>
-        order.status === "PAID" ||
-        order.status === "PREPARING" ||
-        order.status === "PACKED" ||
-        order.status ===
-          "OUT_FOR_DELIVERY",
-    ).length,
-
-    delivered: orders.filter(
-      (order) =>
-        order.status === "DELIVERED",
-    ).length,
-
-    overdue:
+      overdue:
+        overdueOrders.length,
+    }),
+    [
+      orders,
       overdueOrders.length,
-  }),
-  [
-    orders,
-    overdueOrders.length,
-  ],
-);
-
-if (loading) {
-  return (
-    <section className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9]">
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <Spinner
-          size="lg"
-          text="Loading orders..."
-        />
-      </div>
-    </section>
+    ],
   );
-}
 
-if (error) {
-  return (
-    <section className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9] py-12">
-      <Container>
-        <Card
-          padding="lg"
-          className="mx-auto max-w-xl border-red-200 bg-red-50 text-center"
-        >
-          <XCircle
-            size={42}
-            className="mx-auto text-red-500"
-            aria-hidden="true"
+  if (loading) {
+    return (
+      <section className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9]">
+        <div className="flex min-h-[70vh] items-center justify-center">
+          <Spinner
+            size="lg"
+            text="Loading orders..."
           />
+        </div>
+      </section>
+    );
+  }
 
-          <h1 className="mt-5 text-2xl font-bold text-red-700">
-            Orders Unavailable
-          </h1>
-
-          <p className="mt-3 leading-7 text-red-600">
-            {error}
-          </p>
-
-          <Button
-            type="button"
-            variant="primary"
-            leftIcon={
-              <RefreshCw
-                size={18}
-                aria-hidden="true"
-              />
-            }
-            className="mt-6"
-            onClick={() =>
-              void fetchOrders()
-            }
+  if (error) {
+    return (
+      <section className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9] py-12">
+        <Container>
+          <Card
+            padding="lg"
+            className="mx-auto max-w-xl border-red-200 bg-red-50 text-center"
           >
-            Try Again
-          </Button>
-        </Card>
-      </Container>
-    </section>
-  );
-}
+            <XCircle
+              size={42}
+              className="mx-auto text-red-500"
+              aria-hidden="true"
+            />
+
+            <h1 className="mt-5 text-2xl font-bold text-red-700">
+              Orders Unavailable
+            </h1>
+
+            <p className="mt-3 leading-7 text-red-600">
+              {error}
+            </p>
+
+            <Button
+              type="button"
+              variant="primary"
+              leftIcon={
+                <RefreshCw
+                  size={18}
+                  aria-hidden="true"
+                />
+              }
+              className="mt-6"
+              onClick={() =>
+                void fetchOrders()
+              }
+            >
+              Try Again
+            </Button>
+          </Card>
+        </Container>
+      </section>
+    );
+  }
 
   return (
     <section className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9] py-8 sm:py-10">
@@ -986,76 +986,72 @@ if (error) {
         </div>
 
         <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-  <Stat
-    title="Total"
-    value={stats.total}
-    icon={
-      <ShoppingBag
-        size={24}
-        aria-hidden="true"
-      />
-    }
-  />
+          <Stat
+            title="Total"
+            value={stats.total}
+            icon={
+              <ShoppingBag
+                size={24}
+                aria-hidden="true"
+              />
+            }
+          />
 
-  <Stat
-    title="Payment Successful"
-    value={
-      stats.successfulPayments
-    }
-    icon={
-      <CheckCircle2
-        size={24}
-        aria-hidden="true"
-      />
-    }
-  />
+          <Stat
+            title="Payment Successful"
+            value={stats.successfulPayments}
+            icon={
+              <CheckCircle2
+                size={24}
+                aria-hidden="true"
+              />
+            }
+          />
 
-  <Stat
-    title="Pending Payments"
-    value={
-      stats.pendingPayments
-    }
-    icon={
-      <Clock3
-        size={24}
-        aria-hidden="true"
-      />
-    }
-  />
+          <Stat
+            title="Pending Payments"
+            value={stats.pendingPayments}
+            icon={
+              <Clock3
+                size={24}
+                aria-hidden="true"
+              />
+            }
+          />
 
-  <Stat
-    title="In Progress"
-    value={stats.preparing}
-    icon={
-      <Package
-        size={24}
-        aria-hidden="true"
-      />
-    }
-  />
+          <Stat
+            title="In Progress"
+            value={stats.preparing}
+            icon={
+              <Package
+                size={24}
+                aria-hidden="true"
+              />
+            }
+          />
 
-  <Stat
-    title="Delivered"
-    value={stats.delivered}
-    icon={
-      <Truck
-        size={24}
-        aria-hidden="true"
-      />
-    }
-  />
+          <Stat
+            title="Delivered"
+            value={stats.delivered}
+            icon={
+              <Truck
+                size={24}
+                aria-hidden="true"
+              />
+            }
+          />
 
-  <Stat
-    title="Overdue Shipments"
-    value={stats.overdue}
-    icon={
-      <AlertTriangle
-        size={24}
-        aria-hidden="true"
-      />
-    }
-  />
-</div>
+          <Stat
+            title="Overdue Shipments"
+            value={stats.overdue}
+            icon={
+              <AlertTriangle
+                size={24}
+                aria-hidden="true"
+              />
+            }
+          />
+        </div>
 
         <Card
           padding="md"
