@@ -69,6 +69,7 @@ interface DashboardData {
   totalOrders: number;
   totalProducts: number;
   totalCategories: number;
+  successfulPaymentOrders: number;
   pendingOrders: number;
   deliveredOrders: number;
   revenue: number;
@@ -344,13 +345,24 @@ export default function DashboardContent() {
 
     {
       title:
-        "Pending Orders",
+        "Payment Successful",
+
+      value:
+        data.successfulPaymentOrders,
+
+      icon:
+        PackageCheck,
+    },
+
+    {
+      title:
+        "Pending Payments",
 
       value:
         data.pendingOrders,
 
       icon:
-        PackageCheck,
+        ClipboardList,
     },
 
     {
@@ -703,7 +715,7 @@ export default function DashboardContent() {
             </h2>
 
             <p className="mt-2 text-gray-500">
-              The latest customer orders
+              The latest checkout and order records
               received by your store.
             </p>
           </div>

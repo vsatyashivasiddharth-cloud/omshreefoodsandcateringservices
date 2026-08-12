@@ -39,6 +39,17 @@ type OrderStatus =
   | "DELIVERED"
   | "CANCELLED";
 
+type PaymentStatus =
+  | "PENDING"
+  | "SUCCESS"
+  | "FAILED"
+  | "REFUNDED";
+
+type OrderView =
+  | "successful"
+  | "pending"
+  | "recent";
+
 interface Product {
   id: string;
   name: string;
@@ -79,6 +90,7 @@ interface Order {
   email?: string | null;
   totalAmount: number;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
   canDelete: boolean;
   createdAt: string;
   items: OrderItem[];
@@ -133,6 +145,14 @@ const validStatuses = new Set<OrderStatus>(
   statusOptions.map((option) => option.value),
 );
 
+const validPaymentStatuses =
+  new Set<PaymentStatus>([
+    "PENDING",
+    "SUCCESS",
+    "FAILED",
+    "REFUNDED",
+  ]);
+
 function isRecord(
   value: unknown,
 ): value is Record<string, unknown> {
@@ -149,6 +169,17 @@ function isOrderStatus(
   return (
     typeof value === "string" &&
     validStatuses.has(value as OrderStatus)
+  );
+}
+
+function isPaymentStatus(
+  value: unknown,
+): value is PaymentStatus {
+  return (
+    typeof value === "string" &&
+    validPaymentStatuses.has(
+      value as PaymentStatus,
+    )
   );
 }
 
@@ -254,6 +285,7 @@ function isOrder(
       value.email === undefined) &&
     Number.isFinite(Number(value.totalAmount)) &&
     isOrderStatus(value.status) &&
+    isPaymentStatus(value.paymentStatus) &&
     typeof value.canDelete === "boolean" &&
     typeof value.createdAt === "string" &&
     Array.isArray(value.items) &&
@@ -395,6 +427,11 @@ export default function OrdersContent() {
     showOverdueOnly,
     setShowOverdueOnly,
   ] = useState(false);
+
+  const [
+    orderView,
+    setOrderView,
+  ] = useState<OrderView>("recent");
 
   const fetchOrders = useCallback(
     async (signal?: AbortSignal) => {
@@ -753,10 +790,56 @@ export default function OrdersContent() {
       ],
     );
 
+  const successfulOrders =
+    useMemo(
+      () =>
+        orders.filter(
+          (order) =>
+            order.paymentStatus ===
+            "SUCCESS",
+        ),
+      [orders],
+    );
+
+  const pendingPaymentOrders =
+    useMemo(
+      () =>
+        orders.filter(
+          (order) =>
+            order.paymentStatus ===
+            "PENDING",
+        ),
+      [orders],
+    );
+
+  const viewOrders =
+    useMemo(() => {
+      switch (orderView) {
+        case "successful":
+          return successfulOrders;
+
+        case "pending":
+          return pendingPaymentOrders;
+
+        default:
+          return orders;
+      }
+    }, [
+      orderView,
+      orders,
+      pendingPaymentOrders,
+      successfulOrders,
+    ]);
+
   const visibleOrders =
     showOverdueOnly
-      ? overdueOrders
-      : orders;
+      ? viewOrders.filter(
+          (order) =>
+            attentionIdSet.has(
+              order.id,
+            ),
+        )
+      : viewOrders;
 
   const stats = useMemo(
     () => ({
@@ -973,6 +1056,72 @@ export default function OrdersContent() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-bold text-[#6D2E00]">
+                Order View
+              </p>
+
+              <p className="mt-1 text-sm leading-6 text-gray-500">
+                View successful payments, pending payments,
+                or the most recent order records.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderView("successful");
+                  setShowOverdueOnly(false);
+                }}
+                className={`inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 ${
+                  orderView === "successful"
+                    ? "bg-green-600 text-white"
+                    : "border border-green-200 bg-green-50 text-green-800 hover:bg-green-100"
+                }`}
+              >
+                Payment Successful (
+                {successfulOrders.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderView("pending");
+                  setShowOverdueOnly(false);
+                }}
+                className={`inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 ${
+                  orderView === "pending"
+                    ? "bg-amber-500 text-white"
+                    : "border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                }`}
+              >
+                Pending ({pendingPaymentOrders.length})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderView("recent");
+                  setShowOverdueOnly(false);
+                }}
+                className={`inline-flex h-10 items-center justify-center rounded-xl px-4 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-[#C89B3C]/20 ${
+                  orderView === "recent"
+                    ? "bg-[#6D2E00] text-white"
+                    : "border border-[#E7C98C] bg-white text-[#6D2E00] hover:bg-[#FFF8EE]"
+                }`}
+              >
+                Recent ({orders.length})
+              </button>
+            </div>
+          </div>
+        </Card>
+
+        <Card
+          padding="md"
+          className="mt-8 border-[#F3DFC2] bg-white/90"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-bold text-[#6D2E00]">
                 Shipment priority
               </p>
 
@@ -995,7 +1144,7 @@ export default function OrdersContent() {
                     : "border border-[#E7C98C] bg-white text-[#6D2E00] hover:bg-[#FFF8EE]"
                 }`}
               >
-                All Orders ({orders.length})
+                Current View ({viewOrders.length})
               </button>
 
               <button

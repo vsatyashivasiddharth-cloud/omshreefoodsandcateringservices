@@ -308,6 +308,7 @@ export async function GET(
       totalOrders,
       totalProducts,
       totalCategories,
+      successfulPaymentOrders,
       pendingOrders,
       deliveredOrders,
       revenueResult,
@@ -325,8 +326,15 @@ export async function GET(
 
         prisma.order.count({
           where: {
-            status:
-              OrderStatus.PENDING,
+            paymentStatus:
+              PaymentStatus.SUCCESS,
+          },
+        }),
+
+        prisma.order.count({
+          where: {
+            paymentStatus:
+              PaymentStatus.PENDING,
           },
         }),
 
@@ -836,6 +844,7 @@ export async function GET(
         totalOrders,
         totalProducts,
         totalCategories,
+        successfulPaymentOrders,
         pendingOrders,
         deliveredOrders,
 
