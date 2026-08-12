@@ -73,7 +73,7 @@ export default function SearchBar({
           aria-label="Search products or categories"
           autoComplete="off"
           spellCheck={false}
-          className="h-20 rounded-[28px] pl-24 pr-20 text-lg font-medium"
+          className="h-20 rounded-[28px] pl-24 pr-20 text-lg font-medium [&::-webkit-search-cancel-button]:hidden"
         />
 
         {/* Clear Button */}
