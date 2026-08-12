@@ -1,6 +1,9 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import {
+  Search,
+  X,
+} from "lucide-react";
 
 import IconButton from "@/components/ui/IconButton";
 import Input from "@/components/ui/Input";
@@ -14,7 +17,8 @@ export default function SearchBar({
   value,
   onChange,
 }: SearchBarProps) {
-  const hasValue = value.trim().length > 0;
+  const hasValue =
+    value.trim().length > 0;
 
   return (
     <div className="relative w-full lg:max-w-xl">
@@ -22,7 +26,9 @@ export default function SearchBar({
         type="search"
         value={value}
         onChange={(event) =>
-          onChange(event.target.value)
+          onChange(
+            event.target.value,
+          )
         }
         placeholder="Search snacks, sweets, pickles..."
         aria-label="Search products"
@@ -34,7 +40,7 @@ export default function SearchBar({
             aria-hidden="true"
           />
         }
-        className="pr-14"
+        className="pr-14 [&::-webkit-search-cancel-button]:hidden"
       />
 
       {hasValue && (
@@ -51,7 +57,9 @@ export default function SearchBar({
             size="sm"
             rounded="full"
             aria-label="Clear product search"
-            onClick={() => onChange("")}
+            onClick={() =>
+              onChange("")
+            }
             className="shadow-none hover:translate-y-0"
           />
         </div>
