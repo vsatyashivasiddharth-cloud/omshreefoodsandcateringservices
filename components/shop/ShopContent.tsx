@@ -427,6 +427,11 @@ export default function ShopContent() {
       null,
     );
 
+  const productsSectionRef =
+    useRef<HTMLDivElement | null>(
+      null,
+    );
+
   const pendingLoadMoreScrollTopRef =
     useRef<number | null>(null);
 
@@ -709,6 +714,25 @@ export default function ShopContent() {
     );
   }
 
+  function handleSearchSubmit() {
+    if (!search.trim()) {
+      return;
+    }
+
+    setVisible(
+      PRODUCTS_PER_PAGE,
+    );
+
+    window.requestAnimationFrame(
+      () => {
+        productsSectionRef.current?.scrollIntoView({
+          behavior: "auto",
+          block: "start",
+        });
+      },
+    );
+  }
+
   function handleSortChange(
     value: string,
   ) {
@@ -952,6 +976,9 @@ export default function ShopContent() {
             onChange={
               handleSearchChange
             }
+            onSubmit={
+              handleSearchSubmit
+            }
           />
 
           <SortDropdown
@@ -973,7 +1000,10 @@ export default function ShopContent() {
         }
       />
 
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div
+        ref={productsSectionRef}
+        className="scroll-mt-28 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+      >
         <SectionHeader
           title={
             category === "All"
