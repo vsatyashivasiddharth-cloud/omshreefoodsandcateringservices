@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useEffect,
   useRef,
   useState,
 } from "react";
@@ -50,122 +49,110 @@ export default function SearchContent() {
     useState(false);
 
   const [
-    completedQuery,
-    setCompletedQuery,
+    searchedQuery,
+    setSearchedQuery,
   ] = useState("");
 
   const resultsRef =
     useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
+  const requestIdRef =
+    useRef(0);
+
+  function handleQueryChange(
+    value: string,
+  ) {
+    setQuery(value);
+
+    if (!value.trim()) {
+      requestIdRef.current += 1;
+
+      setProducts([]);
+      setSearchedQuery("");
+      setLoading(false);
+    }
+  }
+
+  async function handleSearch() {
     const normalizedQuery =
       query.trim();
 
     if (!normalizedQuery) {
-      setProducts([]);
-      setCompletedQuery("");
-      setLoading(false);
       return;
     }
 
-    const controller =
-      new AbortController();
+    const requestId =
+      requestIdRef.current + 1;
 
-    const timer = window.setTimeout(
-      async () => {
-        try {
-          setLoading(true);
+    requestIdRef.current =
+      requestId;
 
-          const data =
-            await searchProducts(
-              normalizedQuery,
-            );
-
-          if (
-            controller.signal.aborted
-          ) {
-            return;
-          }
-
-          setProducts(
-            Array.isArray(data)
-              ? data
-              : [],
-          );
-
-          setCompletedQuery(
-            normalizedQuery,
-          );
-        } catch (error) {
-          if (
-            controller.signal.aborted
-          ) {
-            return;
-          }
-
-          console.error(
-            "Product search error:",
-            error,
-          );
-
-          setProducts([]);
-
-          setCompletedQuery(
-            normalizedQuery,
-          );
-        } finally {
-          if (
-            !controller.signal.aborted
-          ) {
-            setLoading(false);
-          }
-        }
-      },
-      300,
+    setSearchedQuery(
+      normalizedQuery,
     );
 
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query]);
+    setProducts([]);
+    setLoading(true);
 
-  const hasQuery =
-    query.trim().length > 0;
+    /*
+     * The results section always exists,
+     * so move there immediately when the
+     * customer presses Enter or clicks
+     * the search button.
+     */
+    window.requestAnimationFrame(
+      () => {
+        resultsRef.current?.scrollIntoView({
+          behavior: "auto",
+          block: "start",
+        });
+      },
+    );
 
-  useEffect(() => {
-    const normalizedQuery =
-      query.trim();
+    try {
+      const data =
+        await searchProducts(
+          normalizedQuery,
+        );
 
-    if (
-      !normalizedQuery ||
-      loading ||
-      completedQuery !==
-        normalizedQuery
-    ) {
-      return;
+      if (
+        requestIdRef.current !==
+        requestId
+      ) {
+        return;
+      }
+
+      setProducts(
+        Array.isArray(data)
+          ? data
+          : [],
+      );
+    } catch (error) {
+      if (
+        requestIdRef.current !==
+        requestId
+      ) {
+        return;
+      }
+
+      console.error(
+        "Product search error:",
+        error,
+      );
+
+      setProducts([]);
+    } finally {
+      if (
+        requestIdRef.current ===
+        requestId
+      ) {
+        setLoading(false);
+      }
     }
+  }
 
-    const frame =
-      window.requestAnimationFrame(
-        () => {
-          resultsRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        },
-      );
-
-    return () => {
-      window.cancelAnimationFrame(
-        frame,
-      );
-    };
-  }, [
-    completedQuery,
-    loading,
-    query,
-  ]);
+  const hasSearched =
+    searchedQuery.length > 0;
 
   return (
     <>
@@ -247,7 +234,13 @@ export default function SearchContent() {
 
             <SearchBar
               value={query}
-              onChange={setQuery}
+              onChange={
+                handleQueryChange
+              }
+              onSubmit={
+                handleSearch
+              }
+              loading={loading}
             />
           </Card>
         </Container>
@@ -260,37 +253,39 @@ export default function SearchContent() {
         className="scroll-mt-4 bg-[#FFFDF8] pb-16 pt-8 sm:pt-10"
       >
         <Container>
-          {!loading && !hasQuery && (
-            <div className="py-9 text-center sm:py-10">
-              <PackageSearch
-                size={40}
-                className="mx-auto text-[#C89B3C]"
-                aria-hidden="true"
-              />
+          {!loading &&
+            !hasSearched && (
+              <div className="py-9 text-center sm:py-10">
+                <PackageSearch
+                  size={40}
+                  className="mx-auto text-[#C89B3C]"
+                  aria-hidden="true"
+                />
 
-              <h2 className="mt-4 text-2xl font-bold text-[#6D2E00]">
-                Start Your Search
-              </h2>
+                <h2 className="mt-4 text-2xl font-bold text-[#6D2E00]">
+                  Start Your Search
+                </h2>
 
-              <p className="mx-auto mt-2 max-w-xl leading-7 text-gray-500">
-                Enter a product name
-                or category above to
-                explore our homemade
-                foods.
-              </p>
-            </div>
-          )}
+                <p className="mx-auto mt-2 max-w-xl leading-7 text-gray-500">
+                  Enter a product name
+                  or category above,
+                  then press Enter or
+                  use the search button.
+                </p>
+              </div>
+            )}
 
           {loading && (
             <div className="flex justify-center py-16">
               <Spinner
                 size="lg"
-                text="Searching products..."
+                text={`Searching for "${searchedQuery}"...`}
               />
             </div>
           )}
 
           {!loading &&
+            hasSearched &&
             products.length > 0 && (
               <SearchResults
                 products={products}
@@ -298,11 +293,13 @@ export default function SearchContent() {
             )}
 
           {!loading &&
-            hasQuery &&
+            hasSearched &&
             products.length ===
               0 && (
               <SearchEmpty
-                query={query}
+                query={
+                  searchedQuery
+                }
               />
             )}
         </Container>
