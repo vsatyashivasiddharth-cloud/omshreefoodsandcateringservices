@@ -2,6 +2,11 @@ import {
   NextRequest,
   NextResponse,
 } from "next/server";
+import {
+  OrderStatus,
+  PaymentStatus,
+  ShipmentStatus,
+} from "@prisma/client";
 
 import {
   requireAdmin,
@@ -68,6 +73,16 @@ export async function GET(
           status: true,
           paymentStatus: true,
 
+          razorpayOrderId: true,
+          razorpayPaymentId: true,
+          razorpaySignature: true,
+
+          shipmentStatus: true,
+
+          delhiveryWaybill: true,
+          delhiveryShipmentId: true,
+          delhiveryOrderId: true,
+
           createdAt: true,
           updatedAt: true,
 
@@ -131,159 +146,216 @@ export async function GET(
 
     return NextResponse.json(
       orders.map(
-        (order) => ({
-          id: order.id,
+        (order) => {
+          /*
+           * Keep the Admin list deletion affordance
+           * aligned with the authoritative DELETE
+           * endpoint protection rules.
+           */
+          const removableOrderStatus =
+            order.status ===
+              OrderStatus.PENDING ||
+            order.status ===
+              OrderStatus.CANCELLED;
 
-          customerName:
-            order.customerName,
+          const removablePaymentStatus =
+            order.paymentStatus ===
+              PaymentStatus.PENDING ||
+            order.paymentStatus ===
+              PaymentStatus.FAILED;
 
-          phone:
-            order.phone,
+          const hasStartedPayment =
+            Boolean(
+              order.razorpayOrderId,
+            ) ||
+            Boolean(
+              order.razorpayPaymentId,
+            ) ||
+            Boolean(
+              order.razorpaySignature,
+            );
 
-          email:
-            order.email,
+          const removableShipmentStatus =
+            order.shipmentStatus ===
+              ShipmentStatus.NOT_CREATED ||
+            order.shipmentStatus ===
+              ShipmentStatus.QUOTED;
 
-          totalAmount:
-            Number(
-              order.totalAmount,
-            ),
+          const hasCreatedShipment =
+            Boolean(
+              order.delhiveryWaybill,
+            ) ||
+            Boolean(
+              order.delhiveryShipmentId,
+            ) ||
+            Boolean(
+              order.delhiveryOrderId,
+            );
 
-          status:
-            order.status,
+          const canDelete =
+            removableOrderStatus &&
+            removablePaymentStatus &&
+            !hasStartedPayment &&
+            removableShipmentStatus &&
+            !hasCreatedShipment;
 
-          paymentStatus:
-            order.paymentStatus,
+          return {
+            id:
+              order.id,
 
-          createdAt:
-            order.createdAt.toISOString(),
+            customerName:
+              order.customerName,
 
-          updatedAt:
-            order.updatedAt.toISOString(),
+            phone:
+              order.phone,
 
-          items:
-            order.items.map(
-              (item) => {
-                /*
-                 * Historical order snapshots are
-                 * authoritative. The live Product
-                 * relation may be null after a
-                 * permanent product deletion.
-                 */
-                const productName =
-                  item.productName?.trim() ||
-                  item.product?.name ||
-                  "Deleted product";
+            email:
+              order.email,
 
-                const productSlug =
-                  item.productSlug?.trim() ||
-                  item.product?.slug ||
-                  "";
+            totalAmount:
+              Number(
+                order.totalAmount,
+              ),
 
-                const productImage =
-                  item.productImage ??
-                  item.product?.image ??
-                  null;
+            status:
+              order.status,
 
-                const variantLabel =
-                  item.variantLabel?.trim() ||
-                  item.variant?.label ||
-                  null;
+            paymentStatus:
+              order.paymentStatus,
 
-                const variantSku =
-                  item.variantSku?.trim() ||
-                  item.variant?.sku ||
-                  null;
+            canDelete,
 
-                const variantWeightGrams =
-                  item.variantWeightGrams ??
-                  item.variant
-                    ?.weightGrams ??
-                  null;
+            createdAt:
+              order.createdAt.toISOString(),
 
-                const variantShippingWeightGrams =
-                  item
-                    .variantShippingWeightGrams ??
-                  item.variant
-                    ?.shippingWeightGrams ??
-                  null;
+            updatedAt:
+              order.updatedAt.toISOString(),
 
-                return {
-                  id:
-                    item.id,
-
-                  productId:
-                    item.productId,
-
-                  variantId:
-                    item.variantId,
-
-                  quantity:
-                    item.quantity,
-
-                  price:
-                    Number(
-                      item.price,
-                    ),
-
-                  productName,
-                  productSlug,
-                  productImage,
-
-                  variantLabel,
-                  variantSku,
-
-                  variantWeightGrams,
-
-                  variantShippingWeightGrams,
-
-                  createdAt:
-                    item.createdAt.toISOString(),
-
+            items:
+              order.items.map(
+                (item) => {
                   /*
-                   * Keep this nested shape for
-                   * compatibility with the
-                   * current admin UI.
-                   *
-                   * productId is null after the
-                   * live Product has been deleted.
+                   * Historical order snapshots are
+                   * authoritative. The live Product
+                   * relation may be null after a
+                   * permanent product deletion.
                    */
-                  product: {
+                  const productName =
+                    item.productName?.trim() ||
+                    item.product?.name ||
+                    "Deleted product";
+
+                  const productSlug =
+                    item.productSlug?.trim() ||
+                    item.product?.slug ||
+                    "";
+
+                  const productImage =
+                    item.productImage ??
+                    item.product?.image ??
+                    null;
+
+                  const variantLabel =
+                    item.variantLabel?.trim() ||
+                    item.variant?.label ||
+                    null;
+
+                  const variantSku =
+                    item.variantSku?.trim() ||
+                    item.variant?.sku ||
+                    null;
+
+                  const variantWeightGrams =
+                    item.variantWeightGrams ??
+                    item.variant
+                      ?.weightGrams ??
+                    null;
+
+                  const variantShippingWeightGrams =
+                    item
+                      .variantShippingWeightGrams ??
+                    item.variant
+                      ?.shippingWeightGrams ??
+                    null;
+
+                  return {
                     id:
-                      item.productId ?? "",
+                      item.id,
 
-                    name:
-                      productName,
+                    productId:
+                      item.productId,
 
-                    slug:
-                      productSlug,
+                    variantId:
+                      item.variantId,
 
-                    image:
-                      productImage,
-                  },
+                    quantity:
+                      item.quantity,
 
-                  variant:
-                    item.variantId
-                      ? {
-                          id:
-                            item.variantId,
+                    price:
+                      Number(
+                        item.price,
+                      ),
 
-                          label:
-                            variantLabel,
+                    productName,
+                    productSlug,
+                    productImage,
 
-                          sku:
-                            variantSku,
+                    variantLabel,
+                    variantSku,
 
-                          weightGrams:
-                            variantWeightGrams,
+                    variantWeightGrams,
 
-                          shippingWeightGrams:
-                            variantShippingWeightGrams,
-                        }
-                      : null,
-                };
-              },
-            ),
-        }),
+                    variantShippingWeightGrams,
+
+                    createdAt:
+                      item.createdAt.toISOString(),
+
+                    /*
+                     * Keep this nested shape for
+                     * compatibility with the
+                     * current admin UI.
+                     *
+                     * productId is null after the
+                     * live Product has been deleted.
+                     */
+                    product: {
+                      id:
+                        item.productId ?? "",
+
+                      name:
+                        productName,
+
+                      slug:
+                        productSlug,
+
+                      image:
+                        productImage,
+                    },
+
+                    variant:
+                      item.variantId
+                        ? {
+                            id:
+                              item.variantId,
+
+                            label:
+                              variantLabel,
+
+                            sku:
+                              variantSku,
+
+                            weightGrams:
+                              variantWeightGrams,
+
+                            shippingWeightGrams:
+                              variantShippingWeightGrams,
+                          }
+                        : null,
+                  };
+                },
+              ),
+          };
+        },
       ),
       {
         status: 200,

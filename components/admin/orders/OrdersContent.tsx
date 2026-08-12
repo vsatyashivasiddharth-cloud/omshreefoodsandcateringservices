@@ -79,6 +79,7 @@ interface Order {
   email?: string | null;
   totalAmount: number;
   status: OrderStatus;
+  canDelete: boolean;
   createdAt: string;
   items: OrderItem[];
 }
@@ -253,6 +254,7 @@ function isOrder(
       value.email === undefined) &&
     Number.isFinite(Number(value.totalAmount)) &&
     isOrderStatus(value.status) &&
+    typeof value.canDelete === "boolean" &&
     typeof value.createdAt === "string" &&
     Array.isArray(value.items) &&
     value.items.every(isOrderItem)
@@ -1061,8 +1063,7 @@ export default function OrdersContent() {
                 deletingOrderId === order.id;
 
               const canRequestDeletion =
-                order.status === "PENDING" ||
-                order.status === "CANCELLED";
+                order.canDelete;
 
               const needsAttention =
                 attentionIdSet.has(
