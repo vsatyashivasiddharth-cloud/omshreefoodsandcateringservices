@@ -304,222 +304,225 @@ export async function GET(
         ],
       };
 
-    const [
-      totalOrders,
-      totalProducts,
-      totalCategories,
-      successfulPaymentOrders,
-      pendingOrders,
-      deliveredOrders,
-      revenueResult,
-      revenueOrders,
-      recentOrders,
-      lowStockProductRecords,
-      attentionCandidates,
-    ] =
-      await Promise.all([
-        prisma.order.count(),
+    /*
+     * Keep dashboard reads sequential. Production
+     * currently uses a single Prisma connection, so
+     * launching every dashboard query concurrently can
+     * exhaust the connection pool and cause P2024-style
+     * acquisition timeouts.
+     */
+    const totalOrders =
+      await prisma.order.count();
 
-        prisma.product.count(),
+    const totalProducts =
+      await prisma.product.count();
 
-        prisma.category.count(),
+    const totalCategories =
+      await prisma.category.count();
 
-        prisma.order.count({
-          where: {
-            paymentStatus:
-              PaymentStatus.SUCCESS,
+    const successfulPaymentOrders =
+      await prisma.order.count({
+        where: {
+          paymentStatus:
+            PaymentStatus.SUCCESS,
+        },
+      });
+
+    const pendingOrders =
+      await prisma.order.count({
+        where: {
+          paymentStatus:
+            PaymentStatus.PENDING,
+        },
+      });
+
+    const deliveredOrders =
+      await prisma.order.count({
+        where: {
+          status:
+            OrderStatus.DELIVERED,
+        },
+      });
+
+    const revenueResult =
+      await prisma.order.aggregate({
+        where:
+          revenueOrderFilter,
+
+        _sum: {
+          totalAmount: true,
+        },
+      });
+
+    const revenueOrders =
+      await prisma.order.findMany({
+        where: {
+          ...revenueOrderFilter,
+
+          createdAt: {
+            gte:
+              revenueStartDate,
           },
-        }),
+        },
 
-        prisma.order.count({
-          where: {
-            paymentStatus:
-              PaymentStatus.PENDING,
-          },
-        }),
+        select: {
+          totalAmount: true,
+          createdAt: true,
+        },
 
-        prisma.order.count({
-          where: {
-            status:
-              OrderStatus.DELIVERED,
-          },
-        }),
+        orderBy: {
+          createdAt: "asc",
+        },
+      });
 
-        prisma.order.aggregate({
-          where:
-            revenueOrderFilter,
+    const recentOrders =
+      await prisma.order.findMany({
+        orderBy: {
+          createdAt: "desc",
+        },
 
-          _sum: {
-            totalAmount: true,
-          },
-        }),
+        take: 5,
 
-        prisma.order.findMany({
-          where: {
-            ...revenueOrderFilter,
+        select: {
+          id: true,
+          customerName: true,
+          totalAmount: true,
+          status: true,
+          createdAt: true,
+        },
+      });
 
-            createdAt: {
-              gte:
-                revenueStartDate,
+    /*
+     * A product is considered low stock
+     * when any active variant has 5 or
+     * fewer units remaining.
+     *
+     * Legacy products without active
+     * variants fall back to product.stock.
+     */
+    const lowStockProductRecords =
+      await prisma.product.findMany({
+        where: {
+          OR: [
+            {
+              variants: {
+                some: {
+                  isActive: true,
+
+                  stock: {
+                    lte:
+                      LOW_STOCK_THRESHOLD,
+                  },
+                },
+              },
             },
-          },
 
-          select: {
-            totalAmount: true,
-            createdAt: true,
-          },
-
-          orderBy: {
-            createdAt: "asc",
-          },
-        }),
-
-        prisma.order.findMany({
-          orderBy: {
-            createdAt: "desc",
-          },
-
-          take: 5,
-
-          select: {
-            id: true,
-            customerName: true,
-            totalAmount: true,
-            status: true,
-            createdAt: true,
-          },
-        }),
-
-        /*
-         * A product is considered low stock
-         * when any active variant has 5 or
-         * fewer units remaining.
-         *
-         * Legacy products without active
-         * variants fall back to product.stock.
-         */
-        prisma.product.findMany({
-          where: {
-            OR: [
-              {
-                variants: {
-                  some: {
-                    isActive: true,
-
-                    stock: {
-                      lte:
-                        LOW_STOCK_THRESHOLD,
+            {
+              AND: [
+                {
+                  variants: {
+                    none: {
+                      isActive:
+                        true,
                     },
                   },
                 },
-              },
-
-              {
-                AND: [
-                  {
-                    variants: {
-                      none: {
-                        isActive:
-                          true,
-                      },
-                    },
+                {
+                  stock: {
+                    lte:
+                      LOW_STOCK_THRESHOLD,
                   },
-                  {
-                    stock: {
-                      lte:
-                        LOW_STOCK_THRESHOLD,
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            stock: true,
-            image: true,
-            price: true,
-
-            variants: {
-              where: {
-                isActive: true,
-              },
-
-              orderBy: [
-                {
-                  stock: "asc",
-                },
-                {
-                  sortOrder:
-                    "asc",
-                },
-                {
-                  weightGrams:
-                    "asc",
                 },
               ],
+            },
+          ],
+        },
 
-              select: {
-                id: true,
-                label: true,
-                price: true,
-                stock: true,
-                weightGrams:
-                  true,
-                shippingWeightGrams:
-                  true,
-                isDefault: true,
-                sortOrder: true,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          stock: true,
+          image: true,
+          price: true,
+
+          variants: {
+            where: {
+              isActive: true,
+            },
+
+            orderBy: [
+              {
+                stock: "asc",
               },
+              {
+                sortOrder:
+                  "asc",
+              },
+              {
+                weightGrams:
+                  "asc",
+              },
+            ],
+
+            select: {
+              id: true,
+              label: true,
+              price: true,
+              stock: true,
+              weightGrams:
+                true,
+              shippingWeightGrams:
+                true,
+              isDefault: true,
+              sortOrder: true,
             },
           },
-        }),
+        },
+      });
 
-        /*
-         * Scan recent successful paid orders
-         * that have not been cancelled or
-         * refunded. Filtering into actual
-         * attention items happens below so
-         * Delhivery text statuses can also be
-         * inspected safely.
-         */
-        prisma.order.findMany({
-          where: {
-            paymentStatus:
-              PaymentStatus.SUCCESS,
+    /*
+     * Scan recent successful paid orders
+     * that have not been cancelled or
+     * refunded. Filtering into actual
+     * attention items happens below so
+     * Delhivery text statuses can also be
+     * inspected safely.
+     */
+    const attentionCandidates =
+      await prisma.order.findMany({
+        where: {
+          paymentStatus:
+            PaymentStatus.SUCCESS,
 
-            status: {
-              not:
-                OrderStatus.CANCELLED,
-            },
+          status: {
+            not:
+              OrderStatus.CANCELLED,
           },
+        },
 
-          orderBy: {
-            createdAt: "desc",
-          },
+        orderBy: {
+          createdAt: "desc",
+        },
 
-          take:
-            ATTENTION_SCAN_LIMIT,
+        take:
+          ATTENTION_SCAN_LIMIT,
 
-          select: {
-            id: true,
-            customerName: true,
-            totalAmount: true,
-            status: true,
-            paymentStatus: true,
-            shipmentStatus: true,
-            shippingProvider: true,
-            delhiveryWaybill: true,
-            delhiveryStatus: true,
-            shippingQuotedAt: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        }),
-      ]);
+        select: {
+          id: true,
+          customerName: true,
+          totalAmount: true,
+          status: true,
+          paymentStatus: true,
+          shipmentStatus: true,
+          shippingProvider: true,
+          delhiveryWaybill: true,
+          delhiveryStatus: true,
+          shippingQuotedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
 
     /*
      * Revenue chart
