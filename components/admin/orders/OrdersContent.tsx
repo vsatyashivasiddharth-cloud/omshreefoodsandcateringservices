@@ -17,6 +17,7 @@ import {
   Package,
   RefreshCw,
   ShoppingBag,
+  Trash2,
   Truck,
   User,
   XCircle,
@@ -379,6 +380,11 @@ export default function OrdersContent() {
   ] = useState<string | null>(null);
 
   const [
+    deletingOrderId,
+    setDeletingOrderId,
+  ] = useState<string | null>(null);
+
+  const [
     attentionOrderIds,
     setAttentionOrderIds,
   ] = useState<string[]>([]);
@@ -529,7 +535,8 @@ export default function OrdersContent() {
     if (
       !currentOrder ||
       currentOrder.status === status ||
-      updatingOrderId
+      updatingOrderId ||
+      deletingOrderId
     ) {
       return;
     }
@@ -613,6 +620,110 @@ export default function OrdersContent() {
       );
     } finally {
       setUpdatingOrderId(null);
+    }
+  }
+
+  async function deleteOrder(
+    orderId: string,
+  ) {
+    if (
+      updatingOrderId ||
+      deletingOrderId
+    ) {
+      return;
+    }
+
+    const currentOrder =
+      orders.find(
+        (order) =>
+          order.id === orderId,
+      );
+
+    if (!currentOrder) {
+      toast.error(
+        "Order not found.",
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Permanently delete order #${currentOrder.id.slice(
+          0,
+          8,
+        )}?\n\nOnly unpaid, unshipped pending or cancelled orders can be deleted. This action cannot be undone.`,
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingOrderId(
+      orderId,
+    );
+
+    try {
+      const response =
+        await fetch(
+          `/api/admin/orders/${encodeURIComponent(
+            orderId,
+          )}`,
+          {
+            method: "DELETE",
+          },
+        );
+
+      const data: unknown =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        const apiError =
+          isRecord(data)
+            ? (data as ApiError)
+            : null;
+
+        throw new Error(
+          apiError?.error ||
+            apiError?.message ||
+            "Failed to delete order.",
+        );
+      }
+
+      setOrders(
+        (currentOrders) =>
+          currentOrders.filter(
+            (order) =>
+              order.id !==
+              orderId,
+          ),
+      );
+
+      setAttentionOrderIds(
+        (currentIds) =>
+          currentIds.filter(
+            (id) =>
+              id !== orderId,
+          ),
+      );
+
+      toast.success(
+        "Order deleted successfully.",
+      );
+    } catch (deleteError) {
+      console.error(
+        "Order deletion error:",
+        deleteError,
+      );
+
+      toast.error(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete order.",
+      );
+    } finally {
+      setDeletingOrderId(null);
     }
   }
 
@@ -946,6 +1057,13 @@ export default function OrdersContent() {
               const isUpdating =
                 updatingOrderId === order.id;
 
+              const isDeleting =
+                deletingOrderId === order.id;
+
+              const canRequestDeletion =
+                order.status === "PENDING" ||
+                order.status === "CANCELLED";
+
               const needsAttention =
                 attentionIdSet.has(
                   order.id,
@@ -1062,9 +1180,14 @@ export default function OrdersContent() {
                         value={order.status}
                         disabled={
                           isUpdating ||
+                          isDeleting ||
                           Boolean(
                             updatingOrderId &&
                               !isUpdating,
+                          ) ||
+                          Boolean(
+                            deletingOrderId &&
+                              !isDeleting,
                           )
                         }
                         onChange={(event) => {
@@ -1111,6 +1234,37 @@ export default function OrdersContent() {
 
                         View Details
                       </Link>
+
+                      {canRequestDeletion && (
+                        <button
+                          type="button"
+                          disabled={
+                            isDeleting ||
+                            Boolean(
+                              updatingOrderId,
+                            ) ||
+                            Boolean(
+                              deletingOrderId &&
+                                !isDeleting,
+                            )
+                          }
+                          onClick={() =>
+                            void deleteOrder(
+                              order.id,
+                            )
+                          }
+                          className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-5 font-semibold text-red-700 transition-all duration-300 hover:-translate-y-0.5 hover:bg-red-100 focus:outline-none focus:ring-4 focus:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Trash2
+                            size={18}
+                            aria-hidden="true"
+                          />
+
+                          {isDeleting
+                            ? "Deleting..."
+                            : "Delete Order"}
+                        </button>
+                      )}
                     </div>
                   </div>
 

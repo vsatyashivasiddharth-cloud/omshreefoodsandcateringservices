@@ -4,7 +4,9 @@ import {
 } from "next/server";
 import {
   OrderStatus,
+  PaymentStatus,
   Prisma,
+  ShipmentStatus,
 } from "@prisma/client";
 
 import {
@@ -350,6 +352,246 @@ export async function PATCH(
 
     return errorResponse(
       "Failed to update order.",
+      500,
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  {
+    params,
+  }: RouteContext,
+) {
+  try {
+    const authentication =
+      await requireAdmin(
+        request,
+      );
+
+    if (
+      !authentication.authenticated
+    ) {
+      return errorResponse(
+        authentication.error,
+        authentication.status,
+      );
+    }
+
+    const {
+      id,
+    } = await params;
+
+    const orderId =
+      id.trim();
+
+    if (!orderId) {
+      return errorResponse(
+        "Order ID is required.",
+        400,
+      );
+    }
+
+    const result =
+      await prisma.$transaction(
+        async (transaction) => {
+          /*
+           * Payment processing and shipment creation
+           * use the same per-order advisory lock.
+           *
+           * This prevents deletion racing with either
+           * workflow for this Order.
+           */
+          await transaction.$executeRaw`
+            SELECT pg_advisory_xact_lock(
+              hashtext(${orderId})
+            )
+          `;
+
+          const order =
+            await transaction.order.findUnique({
+              where: {
+                id: orderId,
+              },
+
+              select: {
+                id: true,
+                status: true,
+                paymentStatus: true,
+
+                razorpayOrderId: true,
+                razorpayPaymentId: true,
+                razorpaySignature: true,
+
+                shipmentStatus: true,
+
+                delhiveryWaybill: true,
+                delhiveryShipmentId: true,
+                delhiveryOrderId: true,
+              },
+            });
+
+          if (!order) {
+            return {
+              deleted: false as const,
+              reason:
+                "NOT_FOUND" as const,
+            };
+          }
+
+          /*
+           * Permanent Admin cleanup is deliberately
+           * restricted to orders that are clearly
+           * unpaid and have not entered fulfilment.
+           *
+           * Financial/shipping history must not be
+           * removable through this convenience action.
+           */
+          const removableOrderStatus =
+            order.status ===
+              OrderStatus.PENDING ||
+            order.status ===
+              OrderStatus.CANCELLED;
+
+          const removablePaymentStatus =
+            order.paymentStatus ===
+              PaymentStatus.PENDING ||
+            order.paymentStatus ===
+              PaymentStatus.FAILED;
+
+          const hasStartedPayment =
+            Boolean(
+             order.razorpayOrderId,
+            ) ||
+            Boolean(
+              order.razorpayPaymentId,
+            ) ||
+            Boolean(
+             order.razorpaySignature,
+            );
+
+          const removableShipmentStatus =
+            order.shipmentStatus ===
+              ShipmentStatus.NOT_CREATED ||
+            order.shipmentStatus ===
+              ShipmentStatus.QUOTED;
+
+          const hasCreatedShipment =
+            Boolean(
+              order.delhiveryWaybill,
+            ) ||
+            Boolean(
+              order.delhiveryShipmentId,
+            ) ||
+            Boolean(
+              order.delhiveryOrderId,
+            );
+
+          if (
+            !removableOrderStatus ||
+            !removablePaymentStatus ||
+            hasStartedPayment ||
+            !removableShipmentStatus ||
+            hasCreatedShipment
+          ) {
+            return {
+              deleted: false as const,
+              reason:
+                "PROTECTED" as const,
+            };
+          }
+
+          await transaction.order.delete({
+            where: {
+              id: orderId,
+            },
+          });
+
+          return {
+            deleted: true as const,
+            reason: null,
+          };
+        },
+        {
+          isolationLevel:
+            Prisma
+              .TransactionIsolationLevel
+              .Serializable,
+        },
+      );
+
+    if (!result.deleted) {
+      if (
+        result.reason ===
+        "NOT_FOUND"
+      ) {
+        return errorResponse(
+          "Order not found.",
+          404,
+        );
+      }
+
+      return errorResponse(
+        "Only unpaid, unshipped pending or cancelled orders can be permanently deleted. Paid, refunded, fulfilled, or shipped orders are protected.",
+        409,
+      );
+    }
+
+    return NextResponse.json(
+      {
+        message:
+          "Order deleted successfully.",
+      },
+      {
+        status: 200,
+        headers:
+          noStoreHeaders(),
+      },
+    );
+  } catch (error) {
+    console.error(
+      "Failed to delete order:",
+      error,
+    );
+
+    if (
+      error instanceof
+        Prisma
+          .PrismaClientKnownRequestError
+    ) {
+      if (
+        error.code ===
+        "P2025"
+      ) {
+        return errorResponse(
+          "Order not found.",
+          404,
+        );
+      }
+
+      if (
+        error.code ===
+        "P2023"
+      ) {
+        return errorResponse(
+          "Invalid order ID.",
+          400,
+        );
+      }
+
+      if (
+        error.code ===
+        "P2034"
+      ) {
+        return errorResponse(
+          "The order changed while it was being deleted. Please try again.",
+          409,
+        );
+      }
+    }
+
+    return errorResponse(
+      "Failed to delete order.",
       500,
     );
   }
