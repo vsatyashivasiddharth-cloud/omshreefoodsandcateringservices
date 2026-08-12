@@ -841,99 +841,103 @@ export default function OrdersContent() {
         )
       : viewOrders;
 
-  const stats = useMemo(
-    () => ({
-      total: orders.length,
+ const stats = useMemo(
+  () => ({
+    total: orders.length,
 
-      pending: orders.filter(
+    successfulPayments:
+      orders.filter(
         (order) =>
-          order.status === "PENDING",
+          order.paymentStatus ===
+          "SUCCESS",
       ).length,
 
-      preparing: orders.filter(
+    pendingPayments:
+      orders.filter(
         (order) =>
-          order.status === "PAID" ||
-          order.status === "PREPARING" ||
-          order.status === "PACKED" ||
-          order.status ===
-            "OUT_FOR_DELIVERY",
+          order.paymentStatus ===
+          "PENDING",
       ).length,
 
-      delivered: orders.filter(
-        (order) =>
-          order.status === "DELIVERED",
-      ).length,
+    preparing: orders.filter(
+      (order) =>
+        order.status === "PAID" ||
+        order.status === "PREPARING" ||
+        order.status === "PACKED" ||
+        order.status ===
+          "OUT_FOR_DELIVERY",
+    ).length,
 
-      cancelled: orders.filter(
-        (order) =>
-          order.status === "CANCELLED",
-      ).length,
+    delivered: orders.filter(
+      (order) =>
+        order.status === "DELIVERED",
+    ).length,
 
-      overdue:
-        overdueOrders.length,
-    }),
-    [
-      orders,
+    overdue:
       overdueOrders.length,
-    ],
+  }),
+  [
+    orders,
+    overdueOrders.length,
+  ],
+);
+
+if (loading) {
+  return (
+    <section className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9]">
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <Spinner
+          size="lg"
+          text="Loading orders..."
+        />
+      </div>
+    </section>
   );
+}
 
-  if (loading) {
-    return (
-      <section className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9]">
-        <div className="flex min-h-[70vh] items-center justify-center">
-          <Spinner
-            size="lg"
-            text="Loading orders..."
+if (error) {
+  return (
+    <section className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9] py-12">
+      <Container>
+        <Card
+          padding="lg"
+          className="mx-auto max-w-xl border-red-200 bg-red-50 text-center"
+        >
+          <XCircle
+            size={42}
+            className="mx-auto text-red-500"
+            aria-hidden="true"
           />
-        </div>
-      </section>
-    );
-  }
 
-  if (error) {
-    return (
-      <section className="min-h-screen bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9] py-12">
-        <Container>
-          <Card
-            padding="lg"
-            className="mx-auto max-w-xl border-red-200 bg-red-50 text-center"
+          <h1 className="mt-5 text-2xl font-bold text-red-700">
+            Orders Unavailable
+          </h1>
+
+          <p className="mt-3 leading-7 text-red-600">
+            {error}
+          </p>
+
+          <Button
+            type="button"
+            variant="primary"
+            leftIcon={
+              <RefreshCw
+                size={18}
+                aria-hidden="true"
+              />
+            }
+            className="mt-6"
+            onClick={() =>
+              void fetchOrders()
+            }
           >
-            <XCircle
-              size={42}
-              className="mx-auto text-red-500"
-              aria-hidden="true"
-            />
-
-            <h1 className="mt-5 text-2xl font-bold text-red-700">
-              Orders Unavailable
-            </h1>
-
-            <p className="mt-3 leading-7 text-red-600">
-              {error}
-            </p>
-
-            <Button
-              type="button"
-              variant="primary"
-              leftIcon={
-                <RefreshCw
-                  size={18}
-                  aria-hidden="true"
-                />
-              }
-              className="mt-6"
-              onClick={() =>
-                void fetchOrders()
-              }
-            >
-              Try Again
-            </Button>
-          </Card>
-        </Container>
-      </section>
-    );
-  }
+            Try Again
+          </Button>
+        </Card>
+      </Container>
+    </section>
+  );
+}
 
   return (
     <section className="relative min-h-screen overflow-hidden bg-gradient-to-br from-[#FFFDF8] via-white to-[#FFF6E9] py-8 sm:py-10">
@@ -982,72 +986,76 @@ export default function OrdersContent() {
         </div>
 
         <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          <Stat
-            title="Total"
-            value={stats.total}
-            icon={
-              <ShoppingBag
-                size={24}
-                aria-hidden="true"
-              />
-            }
-          />
+  <Stat
+    title="Total"
+    value={stats.total}
+    icon={
+      <ShoppingBag
+        size={24}
+        aria-hidden="true"
+      />
+    }
+  />
 
-          <Stat
-            title="Pending"
-            value={stats.pending}
-            icon={
-              <Clock3
-                size={24}
-                aria-hidden="true"
-              />
-            }
-          />
+  <Stat
+    title="Payment Successful"
+    value={
+      stats.successfulPayments
+    }
+    icon={
+      <CheckCircle2
+        size={24}
+        aria-hidden="true"
+      />
+    }
+  />
 
-          <Stat
-            title="In Progress"
-            value={stats.preparing}
-            icon={
-              <Package
-                size={24}
-                aria-hidden="true"
-              />
-            }
-          />
+  <Stat
+    title="Pending Payments"
+    value={
+      stats.pendingPayments
+    }
+    icon={
+      <Clock3
+        size={24}
+        aria-hidden="true"
+      />
+    }
+  />
 
-          <Stat
-            title="Delivered"
-            value={stats.delivered}
-            icon={
-              <Truck
-                size={24}
-                aria-hidden="true"
-              />
-            }
-          />
+  <Stat
+    title="In Progress"
+    value={stats.preparing}
+    icon={
+      <Package
+        size={24}
+        aria-hidden="true"
+      />
+    }
+  />
 
-          <Stat
-            title="Cancelled"
-            value={stats.cancelled}
-            icon={
-              <XCircle
-                size={24}
-                aria-hidden="true"
-              />
-            }
-          />
+  <Stat
+    title="Delivered"
+    value={stats.delivered}
+    icon={
+      <Truck
+        size={24}
+        aria-hidden="true"
+      />
+    }
+  />
 
-          <Stat
-            title="Overdue Shipments"
-            value={stats.overdue}
-            icon={
-              <AlertTriangle
-                size={24}
-                aria-hidden="true"
-              />
-            }
-          />
-        </div>
+  <Stat
+    title="Overdue Shipments"
+    value={stats.overdue}
+    icon={
+      <AlertTriangle
+        size={24}
+        aria-hidden="true"
+      />
+    }
+  />
+</div>
 
         <Card
           padding="md"
