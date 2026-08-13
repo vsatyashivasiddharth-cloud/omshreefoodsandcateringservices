@@ -11,6 +11,7 @@ import type {
   CateringPlate,
 } from "@/lib/catering-plates";
 import { siteConfig } from "@/lib/site";
+import { whatsappUrl } from "@/lib/whatsapp";
 
 interface CateringPlateGridProps {
   plates: CateringPlate[];
@@ -32,26 +33,6 @@ export default function CateringPlateGrid({
       {plates.map((plate) => {
         const plateTypeLabel =
           getPlateTypeLabel(plate.type);
-
-        const whatsappMessage = [
-          `Hello ${siteConfig.shortName},`,
-          "",
-          `I am interested in the ${plate.name}.`,
-          `Category: ${plateTypeLabel}`,
-          "",
-          "Please share:",
-          "• Price per plate",
-          "• Minimum order quantity",
-          "• Available menu customisations",
-          "• Delivery and service details",
-          "",
-          "Thank you.",
-        ].join("\n");
-
-        const whatsappUrl =
-          `https://wa.me/${siteConfig.whatsapp}?text=${encodeURIComponent(
-            whatsappMessage,
-          )}`;
 
         return (
           <article

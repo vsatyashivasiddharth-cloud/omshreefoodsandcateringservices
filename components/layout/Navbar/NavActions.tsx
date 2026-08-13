@@ -9,7 +9,7 @@ import {
 
 import IconButton from "@/components/ui/IconButton";
 import { useCart } from "@/context/CartContext";
-import { siteConfig } from "@/lib/site";
+import { whatsappUrl } from "@/lib/whatsapp";
 
 export default function NavActions() {
   const { totalItems } = useCart();
@@ -63,7 +63,7 @@ export default function NavActions() {
       </Link>
 
       <a
-        href={`https://wa.me/${siteConfig.whatsapp}`}
+        href={whatsappUrl}
         target="_blank"
         rel="noopener noreferrer"
         className="hidden h-12 items-center justify-center gap-2 rounded-full bg-[#25D366] px-5 font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:bg-[#20BD5A] hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#25D366]/25 xl:inline-flex"

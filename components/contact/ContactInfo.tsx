@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { contact } from "@/lib/constants/contact";
+import { whatsappUrl } from "@/lib/whatsapp";
 
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
@@ -31,7 +32,7 @@ const cards = [
     icon: MessageCircle,
     title: "WhatsApp",
     value: contact.whatsapp,
-    href: `https://wa.me/${contact.whatsapp.replace(/\D/g, "")}`,
+    href: whatsappUrl,
   },
   {
     icon: MapPin,

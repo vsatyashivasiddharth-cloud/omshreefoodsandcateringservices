@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { contact } from "@/lib/constants/contact";
+import { whatsappUrl } from "@/lib/whatsapp";
 
 import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
@@ -35,8 +36,6 @@ const supportFeatures = [
     icon: HelpCircle,
   },
 ];
-
-const whatsappNumber = contact.whatsapp.replace(/\D/g, "");
 
 export default function FAQCTA() {
   return (
@@ -133,7 +132,7 @@ export default function FAQCTA() {
                 </Link>
 
                 <Link
-                  href={`https://wa.me/${whatsappNumber}`}
+                  href={whatsappUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex h-14 items-center justify-center gap-3 rounded-full border border-white/25 bg-white/10 px-8 text-lg font-semibold text-white backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white hover:text-[#6D2E00] focus:outline-none focus:ring-4 focus:ring-white/30 active:scale-95"

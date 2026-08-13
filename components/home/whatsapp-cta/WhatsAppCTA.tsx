@@ -11,6 +11,7 @@ import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 import Container from "@/components/ui/Container";
 import { siteConfig } from "@/lib/site";
+import { whatsappUrl } from "@/lib/whatsapp";
 
 const trustPoints = [
   "Freshly Prepared",
@@ -89,7 +90,7 @@ export default function WhatsAppCTA() {
 
               <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
                 <Link
-                  href={`https://wa.me/${siteConfig.whatsapp}`}
+                  href={whatsappUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex h-14 w-full items-center justify-center gap-3 rounded-full bg-[#25D366] px-8 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:-translate-y-1 hover:bg-[#20BD5A] hover:shadow-2xl focus:outline-none focus:ring-4 focus:ring-[#25D366]/30 active:scale-95 sm:w-auto"

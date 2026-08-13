@@ -19,6 +19,7 @@ import {
 import Container from "@/components/ui/Container";
 import { useCart } from "@/context/CartContext";
 import { siteConfig } from "@/lib/site";
+import { whatsappUrl } from "@/lib/whatsapp";
 
 import Logo from "./Logo";
 
@@ -367,7 +368,7 @@ export default function MobileNav() {
           </div>
 
           <a
-            href={`https://wa.me/${siteConfig.whatsapp}`}
+            href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
             onClick={closeNavigation}
