@@ -388,7 +388,7 @@ export default function ProductCard({
           const rect =
             card.getBoundingClientRect();
 
-          const topOffset = 120;
+          const topOffset = 80;
 
           window.scrollTo({
             top:
