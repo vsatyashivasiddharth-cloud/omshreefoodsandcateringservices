@@ -496,9 +496,11 @@ export async function GET(
             PaymentStatus.SUCCESS,
 
           status: {
-            not:
-              OrderStatus.CANCELLED,
-          },
+          notIn: [
+            OrderStatus.CANCELLED,
+            OrderStatus.DELIVERED,
+          ],
+        },
         },
 
         orderBy: {
