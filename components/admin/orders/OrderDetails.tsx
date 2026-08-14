@@ -43,6 +43,17 @@ type PaymentStatus =
   | "FAILED"
   | "REFUNDED";
 
+type ShippingProvider =
+  | "DELHIVERY"
+  | "MANUAL";
+
+type ManualShipmentStatus =
+  | "CREATED"
+  | "IN_TRANSIT"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED";
+
+
 interface OrderProduct {
   id: string;
   name: string;
@@ -178,6 +189,25 @@ interface SyncShipmentResponse {
   };
 }
 
+interface FulfilmentResponse {
+  success: true;
+  message: string;
+  order: {
+    id: string;
+    status: OrderStatus;
+    paymentStatus: PaymentStatus;
+    shippingProvider: ShippingProvider;
+    shippingMode?: string | null;
+    shipmentStatus: string;
+    delhiveryWaybill?: string | null;
+    delhiveryStatus?: string | null;
+    shippingQuotedAt?: string | null;
+    shippedAt?: string | null;
+    deliveredAt?: string | null;
+    updatedAt: string;
+  };
+}
+
 interface DetailItemProps {
   icon: ReactNode;
   label: string;
@@ -207,6 +237,15 @@ const validPaymentStatuses = new Set<PaymentStatus>([
   "FAILED",
   "REFUNDED",
 ]);
+
+const validManualShipmentStatuses =
+  new Set<ManualShipmentStatus>([
+    "CREATED",
+    "IN_TRANSIT",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+  ]);
+
 
 function isRecord(
   value: unknown,
@@ -255,6 +294,26 @@ function isPaymentStatus(
     typeof value === "string" &&
     validPaymentStatuses.has(
       value as PaymentStatus,
+    )
+  );
+}
+
+function isShippingProvider(
+  value: unknown,
+): value is ShippingProvider {
+  return (
+    value === "DELHIVERY" ||
+    value === "MANUAL"
+  );
+}
+
+function isManualShipmentStatus(
+  value: unknown,
+): value is ManualShipmentStatus {
+  return (
+    typeof value === "string" &&
+    validManualShipmentStatuses.has(
+      value as ManualShipmentStatus,
     )
   );
 }
@@ -431,6 +490,54 @@ function isSyncShipmentResponse(
       value.tracking.scanCount,
     ) &&
     value.tracking.scanCount >= 0
+  );
+}
+
+function isFulfilmentResponse(
+  value: unknown,
+): value is FulfilmentResponse {
+  if (
+    !isRecord(value) ||
+    !isRecord(value.order)
+  ) {
+    return false;
+  }
+
+  return (
+    value.success === true &&
+    typeof value.message === "string" &&
+    typeof value.order.id === "string" &&
+    isOrderStatus(
+      value.order.status,
+    ) &&
+    isPaymentStatus(
+      value.order.paymentStatus,
+    ) &&
+    isShippingProvider(
+      value.order.shippingProvider,
+    ) &&
+    typeof value.order.shipmentStatus ===
+      "string" &&
+    isNullableString(
+      value.order.shippingMode,
+    ) &&
+    isNullableString(
+      value.order.delhiveryWaybill,
+    ) &&
+    isNullableString(
+      value.order.delhiveryStatus,
+    ) &&
+    isNullableString(
+      value.order.shippingQuotedAt,
+    ) &&
+    isNullableString(
+      value.order.shippedAt,
+    ) &&
+    isNullableString(
+      value.order.deliveredAt,
+    ) &&
+    typeof value.order.updatedAt ===
+      "string"
   );
 }
 
@@ -916,6 +1023,28 @@ export default function OrderDetails({
     setShipmentSyncing,
   ] = useState(false);
 
+  const [
+    fulfilmentSaving,
+    setFulfilmentSaving,
+  ] = useState(false);
+
+  const [
+    fulfilmentProvider,
+    setFulfilmentProvider,
+  ] =
+    useState<ShippingProvider>(
+      "DELHIVERY",
+    );
+
+  const [
+    manualShipmentStatus,
+    setManualShipmentStatus,
+  ] =
+    useState<ManualShipmentStatus>(
+      "CREATED",
+    );
+
+
   const loadOrder =
     useCallback(
       async (
@@ -984,11 +1113,50 @@ export default function OrderDetails({
             );
           }
 
-          setOrder(
+          const normalizedOrder =
             normalizeOrder(
               data,
-            ),
+            );
+
+          setOrder(
+            normalizedOrder,
           );
+
+          const loadedProvider =
+            isShippingProvider(
+              normalizedOrder
+                .shippingProvider,
+            )
+              ? normalizedOrder
+                  .shippingProvider
+              : "DELHIVERY";
+
+          setFulfilmentProvider(
+            loadedProvider,
+          );
+
+          if (
+            isManualShipmentStatus(
+              normalizedOrder
+                .shipmentStatus,
+            )
+          ) {
+            setManualShipmentStatus(
+              normalizedOrder
+                .shipmentStatus,
+            );
+          } else if (
+            normalizedOrder.status ===
+            "DELIVERED"
+          ) {
+            setManualShipmentStatus(
+              "DELIVERED",
+            );
+          } else {
+            setManualShipmentStatus(
+              "CREATED",
+            );
+          }
         } catch (
           loadError
         ) {
@@ -1244,6 +1412,127 @@ export default function OrderDetails({
       [
         id,
         loadOrder,
+        shipmentSyncing,
+      ],
+    );
+
+  const saveFulfilment =
+    useCallback(
+      async () => {
+        if (
+          fulfilmentSaving ||
+          shipmentCreating ||
+          shipmentSyncing
+        ) {
+          return;
+        }
+
+        const orderId =
+          id.trim();
+
+        if (!orderId) {
+          toast.error(
+            "Order ID is required.",
+          );
+          return;
+        }
+
+        setFulfilmentSaving(true);
+
+        try {
+          const body =
+            fulfilmentProvider ===
+            "MANUAL"
+              ? {
+                  provider:
+                    fulfilmentProvider,
+                  shipmentStatus:
+                    manualShipmentStatus,
+                }
+              : {
+                  provider:
+                    fulfilmentProvider,
+                };
+
+          const response =
+            await fetch(
+              `/api/admin/orders/${encodeURIComponent(
+                orderId,
+              )}/fulfilment`,
+              {
+                method: "PATCH",
+                cache: "no-store",
+
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                },
+
+                body:
+                  JSON.stringify(
+                    body,
+                  ),
+              },
+            );
+
+          const data: unknown =
+            await response
+              .json()
+              .catch(() => null);
+
+          if (!response.ok) {
+            const apiError =
+              isRecord(data)
+                ? (data as ApiError)
+                : null;
+
+            throw new Error(
+              apiError?.error ||
+                apiError?.message ||
+                "Unable to update fulfilment.",
+            );
+          }
+
+          if (
+            !isFulfilmentResponse(
+              data,
+            )
+          ) {
+            throw new Error(
+              "The fulfilment response was invalid.",
+            );
+          }
+
+          toast.success(
+            data.message,
+          );
+
+          await loadOrder();
+        } catch (
+          fulfilmentError
+        ) {
+          console.error(
+            "Fulfilment update error:",
+            fulfilmentError,
+          );
+
+          toast.error(
+            fulfilmentError instanceof
+              Error
+              ? fulfilmentError.message
+              : "Unable to update fulfilment.",
+          );
+        } finally {
+          setFulfilmentSaving(false);
+        }
+      },
+      [
+        fulfilmentProvider,
+        fulfilmentSaving,
+        id,
+        loadOrder,
+        manualShipmentStatus,
+        shipmentCreating,
         shipmentSyncing,
       ],
     );
@@ -1716,9 +2005,11 @@ export default function OrderDetails({
                 </h2>
 
                 <p className="mt-1 text-sm text-gray-500">
-                  Package and Delhivery shipment
-                  details
-                </p>
+  {order.shippingProvider ===
+  "MANUAL"
+    ? "Local Logistics fulfilment details"
+    : "Package and Delhivery shipment details"}
+</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
@@ -1798,73 +2089,272 @@ export default function OrderDetails({
               </div>
             </div>
 
+            <div className="mt-7 rounded-2xl border border-[#F3DFC2] bg-[#FFFDF8] p-5">
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="fulfilment-provider"
+                    className="text-sm font-semibold text-[#6D2E00]"
+                  >
+                    Fulfilment Method
+                  </label>
+
+                  <select
+                    id="fulfilment-provider"
+                    value={
+                      fulfilmentProvider
+                    }
+                    disabled={
+                      fulfilmentSaving ||
+                      shipmentCreating ||
+                      shipmentSyncing
+                    }
+                    onChange={(event) => {
+                      const nextProvider =
+                        event.target.value;
+
+                      if (
+                        !isShippingProvider(
+                          nextProvider,
+                        )
+                      ) {
+                        return;
+                      }
+
+                      setFulfilmentProvider(
+                        nextProvider,
+                      );
+
+                      if (
+                        nextProvider ===
+                        "MANUAL"
+                      ) {
+                        if (
+                          order.status ===
+                          "DELIVERED"
+                        ) {
+                          setManualShipmentStatus(
+                            "DELIVERED",
+                          );
+                        } else if (
+                          isManualShipmentStatus(
+                            order.shipmentStatus,
+                          )
+                        ) {
+                          setManualShipmentStatus(
+                            order.shipmentStatus,
+                          );
+                        } else {
+                          setManualShipmentStatus(
+                            "CREATED",
+                          );
+                        }
+                      }
+                    }}
+                    className="mt-2 h-11 w-full rounded-xl border border-[#E5CFAE] bg-white px-3 text-sm font-semibold text-[#6D2E00] outline-none transition focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="DELHIVERY">
+                      Delhivery
+                    </option>
+
+                    <option
+                      value="MANUAL"
+                      disabled={Boolean(
+                        order
+                          .delhiveryWaybill
+                          ?.trim() ||
+                          order
+                            .delhiveryShipmentId
+                            ?.trim() ||
+                          order
+                            .delhiveryOrderId
+                            ?.trim(),
+                      )}
+                    >
+                      Local Logistics
+                    </option>
+                  </select>
+                </div>
+
+                {fulfilmentProvider ===
+                  "MANUAL" && (
+                  <div>
+                    <label
+                      htmlFor="manual-shipment-status"
+                      className="text-sm font-semibold text-[#6D2E00]"
+                    >
+                      Shipment Status
+                    </label>
+
+                    <select
+                      id="manual-shipment-status"
+                      value={
+                        manualShipmentStatus
+                      }
+                      disabled={
+                        fulfilmentSaving ||
+                        shipmentCreating ||
+                        shipmentSyncing
+                      }
+                      onChange={(event) => {
+                        const nextStatus =
+                          event.target.value;
+
+                        if (
+                          isManualShipmentStatus(
+                            nextStatus,
+                          )
+                        ) {
+                          setManualShipmentStatus(
+                            nextStatus,
+                          );
+                        }
+                      }}
+                      className="mt-2 h-11 w-full rounded-xl border border-[#E5CFAE] bg-white px-3 text-sm font-semibold text-[#6D2E00] outline-none transition focus:border-[#C89B3C] focus:ring-4 focus:ring-[#C89B3C]/15 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="CREATED">
+                        Ready for Dispatch
+                      </option>
+
+                      <option value="IN_TRANSIT">
+                        In Transit
+                      </option>
+
+                      <option value="OUT_FOR_DELIVERY">
+                        Out for Delivery
+                      </option>
+
+                      <option value="DELIVERED">
+                        Delivered
+                      </option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm leading-6 text-gray-500">
+                  {fulfilmentProvider ===
+                  "MANUAL"
+                    ? "Use Local Logistics for your own delivery arrangement or another local courier."
+                    : "Delhivery shipment creation and automatic tracking remain unchanged."}
+                </p>
+
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  loading={
+                    fulfilmentSaving
+                  }
+                  disabled={
+                    fulfilmentSaving ||
+                    shipmentCreating ||
+                    shipmentSyncing
+                  }
+                  onClick={() =>
+                    void saveFulfilment()
+                  }
+                >
+                  {fulfilmentSaving
+                    ? "Saving..."
+                    : "Save Fulfilment"}
+                </Button>
+              </div>
+            </div>
+
             <dl className="mt-7 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
               <SummaryRow label="Provider">
-                {order.shippingProvider
+              {order.shippingProvider ===
+              "MANUAL"
+                ? "Local Logistics"
+                : order.shippingProvider
                   ? formatStatus(
                       order.shippingProvider,
                     )
                   : "Not selected"}
-              </SummaryRow>
+            </SummaryRow>
 
-              <SummaryRow label="Shipping mode">
-                {order.shippingMode
-                  ? formatStatus(
-                      order.shippingMode,
-                    )
-                  : "Not selected"}
-              </SummaryRow>
+            {order.shippingProvider ===
+              "DELHIVERY" && (
+              <>
+                <SummaryRow label="Shipping mode">
+                  {order.shippingMode
+                    ? formatStatus(
+                        order.shippingMode,
+                      )
+                    : "Not selected"}
+                </SummaryRow>
 
-              <SummaryRow label="Waybill / AWB">
-                {order.delhiveryWaybill ||
-                  "Not assigned"}
-              </SummaryRow>
+                <SummaryRow label="Waybill / AWB">
+                  {order.delhiveryWaybill ||
+                    "Not assigned"}
+                </SummaryRow>
 
-              <SummaryRow label="Delhivery status">
-                {order.delhiveryStatus
-                  ? formatStatus(
-                      order.delhiveryStatus,
-                    )
-                  : "Not available"}
-              </SummaryRow>
+                <SummaryRow label="Delhivery status">
+                  {order.delhiveryStatus
+                    ? formatStatus(
+                        order.delhiveryStatus,
+                      )
+                    : "Not available"}
+                </SummaryRow>
+              </>
+            )}
 
-              <SummaryRow label="Package weight">
-                {order.packageWeightGrams
-                  ? `${order.packageWeightGrams.toLocaleString(
-                      "en-IN",
-                    )} g`
-                  : "Not recorded"}
-              </SummaryRow>
+            <SummaryRow label="Package weight">
+              {order.packageWeightGrams
+                ? `${order.packageWeightGrams.toLocaleString(
+                    "en-IN",
+                  )} g`
+                : "Not recorded"}
+            </SummaryRow>
 
-              <SummaryRow label="Package size">
-                {order.packageLengthCm &&
-                order.packageBreadthCm &&
-                order.packageHeightCm
-                  ? `${order.packageLengthCm} × ${order.packageBreadthCm} × ${order.packageHeightCm} cm`
-                  : "Not recorded"}
-              </SummaryRow>
+            <SummaryRow label="Package size">
+              {order.packageLengthCm &&
+              order.packageBreadthCm &&
+              order.packageHeightCm
+                ? `${order.packageLengthCm} × ${order.packageBreadthCm} × ${order.packageHeightCm} cm`
+                : "Not recorded"}
+            </SummaryRow>
 
-              <SummaryRow label="Quote created">
-                {formatDate(
-                  order.shippingQuotedAt,
-                )}
-              </SummaryRow>
+            {order.shippingProvider ===
+              "DELHIVERY" && (
+              <>
+                <SummaryRow label="Quote created">
+                  {formatDate(
+                    order.shippingQuotedAt,
+                  )}
+                </SummaryRow>
 
-              <SummaryRow label="Pickup scheduled">
-                {formatDate(
-                  order.pickupScheduledAt,
-                )}
-              </SummaryRow>
+                <SummaryRow label="Pickup scheduled">
+                  {formatDate(
+                    order.pickupScheduledAt,
+                  )}
+                </SummaryRow>
+              </>
+            )}
 
-              <SummaryRow
-                label="Estimated delivery"
-                withBorder={false}
-              >
-                {formatDate(
-                  order.estimatedDeliveryAt,
-                )}
-              </SummaryRow>
-            </dl>
+            <SummaryRow label="Shipped">
+              {formatDate(
+                order.shippedAt,
+              )}
+            </SummaryRow>
+
+            <SummaryRow label="Delivered">
+              {formatDate(
+                order.deliveredAt,
+              )}
+            </SummaryRow>
+
+            <SummaryRow
+              label="Estimated delivery"
+              withBorder={false}
+            >
+              {formatDate(
+                order.estimatedDeliveryAt,
+              )}
+            </SummaryRow>
+          </dl>
           </Card>
         )}
 

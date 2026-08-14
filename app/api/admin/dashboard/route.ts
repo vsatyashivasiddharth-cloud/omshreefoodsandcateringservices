@@ -198,6 +198,8 @@ function getAttentionReason(
   }
 
   if (
+    order.shippingProvider ===
+      "DELHIVERY" &&
     containsOperationalProblem(
       order.delhiveryStatus,
     )
@@ -215,6 +217,8 @@ function getAttentionReason(
   }
 
   if (
+    order.shippingProvider ===
+      "DELHIVERY" &&
     !order.delhiveryWaybill?.trim() &&
     (order.shipmentStatus ===
       ShipmentStatus.QUOTED ||
@@ -238,6 +242,27 @@ function getAttentionReason(
         "Paid order has been waiting for shipment creation for over one hour.",
       action:
         "Create the Delhivery shipment or review why fulfilment has not started.",
+      ageMinutes,
+    };
+  }
+
+  if (
+    order.shippingProvider ===
+      "MANUAL" &&
+    order.shipmentStatus ===
+      ShipmentStatus.CREATED
+  ) {
+    if (ageMinutes < 60) {
+      return null;
+    }
+
+    return {
+      severity:
+        "warning" as const,
+      reason:
+        "Local Logistics order has been waiting for dispatch for over one hour.",
+      action:
+        "Open the order and update the Local Logistics shipment status.",
       ageMinutes,
     };
   }
