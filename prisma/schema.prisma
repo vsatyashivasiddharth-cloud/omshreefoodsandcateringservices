@@ -89,9 +89,31 @@ model Admin {
   email    String @unique
   password String
 
+  pushSubscriptions PushSubscription[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([createdAt])
+}
+
+model PushSubscription {
+  id String @id @default(cuid())
+
+  adminId String
+  admin   Admin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  /// Browser user-agent snapshot used only to help identify the device.
+  userAgent String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([adminId])
   @@index([createdAt])
 }
 
