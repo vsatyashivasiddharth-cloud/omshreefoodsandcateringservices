@@ -93,6 +93,11 @@ type StaffOrderAction =
   | "PREPARING"
   | "PACKED";
 
+type LocalShipmentStatus =
+  | "IN_TRANSIT"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED";
+
 const tabs: Array<{
   value: StaffCategory;
   label: string;
@@ -287,6 +292,7 @@ export default function StaffOrdersPage() {
     useState<
       StaffOrderAction |
       "SHIPMENT" |
+      LocalShipmentStatus |
       null
     >(null);
 
@@ -475,6 +481,119 @@ export default function StaffOrdersPage() {
           Error
           ? shipmentError.message
           : "Unable to create the shipment.",
+      );
+    } finally {
+      setWorkingOrderId(
+        null,
+      );
+
+      setWorkingAction(
+        null,
+      );
+    }
+  }
+
+  async function updateLocalShipment(
+    orderId: string,
+    shipmentStatus: LocalShipmentStatus,
+  ) {
+    if (workingOrderId) {
+      return;
+    }
+
+    const confirmationMessage =
+      shipmentStatus === "IN_TRANSIT"
+        ? "Mark this Local Logistics order as dispatched?"
+        : shipmentStatus ===
+            "OUT_FOR_DELIVERY"
+          ? "Mark this Local Logistics order as out for delivery?"
+          : "Mark this Local Logistics order as delivered?";
+
+    if (
+      !window.confirm(
+        confirmationMessage,
+      )
+    ) {
+      return;
+    }
+
+    setWorkingOrderId(
+      orderId,
+    );
+
+    setWorkingAction(
+      shipmentStatus,
+    );
+
+    setError(null);
+
+    try {
+      const response =
+        await fetch(
+          `/api/admin/orders/${encodeURIComponent(
+            orderId,
+          )}/fulfilment`,
+          {
+            method: "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              provider: "MANUAL",
+              shipmentStatus,
+            }),
+
+            credentials:
+              "same-origin",
+
+            cache:
+              "no-store",
+          },
+        );
+
+      const data: unknown =
+        await response
+          .json()
+          .catch(
+            () => null,
+          );
+
+      if (!response.ok) {
+        const apiError =
+          data &&
+          typeof data ===
+            "object" &&
+          !Array.isArray(
+            data,
+          )
+            ? data as ApiError
+            : null;
+
+        throw new Error(
+          apiError?.error ||
+            "Unable to update Local Logistics.",
+        );
+      }
+
+      await loadOrders(
+        true,
+      );
+    } catch (
+      fulfilmentError
+    ) {
+      console.error(
+        "Staff Local Logistics error:",
+        fulfilmentError,
+      );
+
+      setError(
+        fulfilmentError instanceof
+          Error
+          ? fulfilmentError.message
+          : "Unable to update Local Logistics.",
       );
     } finally {
       setWorkingOrderId(
@@ -1038,9 +1157,122 @@ export default function StaffOrdersPage() {
                                     : "Create Shipment"}
                                 </button>
                               )}
+
+                            {order.status ===
+                              "PACKED" &&
+                              order.shippingProvider ===
+                                "MANUAL" &&
+                              order.shipmentStatus ===
+                                "CREATED" && (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    workingOrderId !==
+                                    null
+                                  }
+                                  onClick={() =>
+                                    void updateLocalShipment(
+                                      order.id,
+                                      "IN_TRANSIT",
+                                    )
+                                  }
+                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <Truck
+                                    size={17}
+                                    aria-hidden="true"
+                                  />
+
+                                  {workingOrderId ===
+                                    order.id &&
+                                  workingAction ===
+                                    "IN_TRANSIT"
+                                    ? "Marking Dispatched..."
+                                    : "Mark Dispatched"}
+                                </button>
+                              )}
                           </div>
                         </div>
                       )}
+
+                      {order.category ===
+                        "SHIPMENT_CREATED" &&
+                        order.shippingProvider ===
+                          "MANUAL" && (
+                          <div className="mt-4 rounded-xl border border-[#D6E6D8] bg-green-50 p-4">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                              Local Logistics Progress
+                            </p>
+
+                            <p className="mt-1 text-sm font-semibold text-gray-900">
+                              {formatStatus(
+                                order.shipmentStatus,
+                              )}
+                            </p>
+
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {order.shipmentStatus ===
+                                "IN_TRANSIT" && (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    workingOrderId !==
+                                    null
+                                  }
+                                  onClick={() =>
+                                    void updateLocalShipment(
+                                      order.id,
+                                      "OUT_FOR_DELIVERY",
+                                    )
+                                  }
+                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#A66A00] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8B5A00] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <Truck
+                                    size={17}
+                                    aria-hidden="true"
+                                  />
+
+                                  {workingOrderId ===
+                                    order.id &&
+                                  workingAction ===
+                                    "OUT_FOR_DELIVERY"
+                                    ? "Updating..."
+                                    : "Out for Delivery"}
+                                </button>
+                              )}
+
+                              {order.shipmentStatus ===
+                                "OUT_FOR_DELIVERY" && (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    workingOrderId !==
+                                    null
+                                  }
+                                  onClick={() =>
+                                    void updateLocalShipment(
+                                      order.id,
+                                      "DELIVERED",
+                                    )
+                                  }
+                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <CheckCircle2
+                                    size={17}
+                                    aria-hidden="true"
+                                  />
+
+                                  {workingOrderId ===
+                                    order.id &&
+                                  workingAction ===
+                                    "DELIVERED"
+                                    ? "Marking Delivered..."
+                                    : "Mark Delivered"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                       {order.printJob && (
                         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E4D4BA] bg-[#FFFCF7] p-4">
