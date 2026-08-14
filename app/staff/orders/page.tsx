@@ -652,19 +652,19 @@ export default function StaffOrdersPage() {
     );
 
   return (
-    <main className="min-h-screen bg-[#FFF9EF]">
-      <header className="border-b border-[#ECD7B5] bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+    <main className="min-h-screen bg-[#FFF9EF] pb-[env(safe-area-inset-bottom)]">
+      <header className="sticky top-0 z-30 border-b border-[#ECD7B5] bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#A66A00]">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A66A00] sm:text-xs">
               Om Shree Foods
             </p>
 
-            <h1 className="mt-1 text-3xl font-bold text-[#6D2E00]">
+            <h1 className="mt-0.5 text-xl font-bold leading-tight text-[#6D2E00] sm:text-2xl">
               Staff Orders
             </h1>
 
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="mt-0.5 hidden text-xs text-gray-600 sm:block">
               Packing and shipment
               operations
             </p>
@@ -680,7 +680,12 @@ export default function StaffOrdersPage() {
             disabled={
               refreshing
             }
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#D8B775] bg-white px-4 py-2.5 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#FFF4DE] disabled:cursor-not-allowed disabled:opacity-60"
+            aria-label={
+              refreshing
+                ? "Refreshing orders"
+                : "Refresh orders"
+            }
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-xl border border-[#D8B775] bg-white text-[#6D2E00] shadow-sm transition hover:bg-[#FFF4DE] disabled:cursor-not-allowed disabled:opacity-60 sm:size-auto sm:min-h-11 sm:gap-2 sm:px-4 sm:py-2.5 sm:text-sm sm:font-semibold"
           >
             <RefreshCw
               size={17}
@@ -692,15 +697,17 @@ export default function StaffOrdersPage() {
               aria-hidden="true"
             />
 
-            {refreshing
-              ? "Refreshing..."
-              : "Refresh Orders"}
+            <span className="hidden sm:inline">
+              {refreshing
+                ? "Refreshing..."
+                : "Refresh Orders"}
+            </span>
           </button>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-[#ECD7B5] bg-white p-2 shadow-sm">
+      <div className="mx-auto max-w-7xl px-3 py-3 sm:px-6 sm:py-5 lg:px-8">
+        <div className="grid grid-cols-3 gap-1.5 rounded-2xl border border-[#ECD7B5] bg-white p-1.5 shadow-sm sm:gap-2 sm:p-2">
           {tabs.map(
             (tab) => {
               const Icon =
@@ -723,8 +730,8 @@ export default function StaffOrdersPage() {
                   }
                   className={
                     active
-                      ? "flex min-h-16 items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-2 py-3 text-sm font-semibold text-white shadow-sm sm:px-4"
-                      : "flex min-h-16 items-center justify-center gap-2 rounded-xl px-2 py-3 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#FFF4DE] sm:px-4"
+                      ? "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl bg-[#6D2E00] px-1.5 py-2 text-xs font-semibold text-white shadow-sm sm:min-h-16 sm:flex-row sm:gap-2 sm:px-4 sm:py-3 sm:text-sm"
+                      : "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1.5 py-2 text-xs font-semibold text-[#6D2E00] transition hover:bg-[#FFF4DE] sm:min-h-16 sm:flex-row sm:gap-2 sm:px-4 sm:py-3 sm:text-sm"
                   }
                 >
                   <Icon
