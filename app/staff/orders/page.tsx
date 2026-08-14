@@ -88,6 +88,11 @@ interface ApiError {
   error?: string;
 }
 
+type StaffOrderAction =
+  | "SEEN"
+  | "PREPARING"
+  | "PACKED";
+
 const tabs: Array<{
   value: StaffCategory;
   label: string;
@@ -266,6 +271,221 @@ export default function StaffOrdersPage() {
       },
       [],
     );
+
+  const [
+    workingOrderId,
+    setWorkingOrderId,
+  ] =
+    useState<string | null>(
+      null,
+    );
+
+  const [
+    workingAction,
+    setWorkingAction,
+  ] =
+    useState<
+      StaffOrderAction |
+      "SHIPMENT" |
+      null
+    >(null);
+
+  async function runStaffAction(
+    orderId: string,
+    action: StaffOrderAction,
+  ) {
+    if (workingOrderId) {
+      return;
+    }
+
+    setWorkingOrderId(
+      orderId,
+    );
+
+    setWorkingAction(
+      action,
+    );
+
+    setError(null);
+
+    try {
+      const response =
+        await fetch(
+          `/api/staff/orders/${encodeURIComponent(
+            orderId,
+          )}`,
+          {
+            method: "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              action,
+            }),
+
+            credentials:
+              "same-origin",
+
+            cache:
+              "no-store",
+          },
+        );
+
+      const data: unknown =
+        await response
+          .json()
+          .catch(
+            () => null,
+          );
+
+      if (!response.ok) {
+        const apiError =
+          data &&
+          typeof data ===
+            "object" &&
+          !Array.isArray(
+            data,
+          )
+            ? data as ApiError
+            : null;
+
+        throw new Error(
+          apiError?.error ||
+            "Unable to update the order.",
+        );
+      }
+
+      await loadOrders(
+        true,
+      );
+    } catch (
+      actionError
+    ) {
+      console.error(
+        "Staff Order action error:",
+        actionError,
+      );
+
+      setError(
+        actionError instanceof
+          Error
+          ? actionError.message
+          : "Unable to update the order.",
+      );
+    } finally {
+      setWorkingOrderId(
+        null,
+      );
+
+      setWorkingAction(
+        null,
+      );
+    }
+  }
+
+  async function createShipment(
+    orderId: string,
+  ) {
+    if (workingOrderId) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "Create the Delhivery shipment for this packed order?",
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setWorkingOrderId(
+      orderId,
+    );
+
+    setWorkingAction(
+      "SHIPMENT",
+    );
+
+    setError(null);
+
+    try {
+      const response =
+        await fetch(
+          `/api/orders/${encodeURIComponent(
+            orderId,
+          )}/shipment`,
+          {
+            method: "POST",
+
+            credentials:
+              "same-origin",
+
+            cache:
+              "no-store",
+          },
+        );
+
+      const data: unknown =
+        await response
+          .json()
+          .catch(
+            () => null,
+          );
+
+      if (!response.ok) {
+        const apiError =
+          data &&
+          typeof data ===
+            "object" &&
+          !Array.isArray(
+            data,
+          )
+            ? data as ApiError
+            : null;
+
+        throw new Error(
+          apiError?.error ||
+            "Unable to create the shipment.",
+        );
+      }
+
+      /*
+       * The Staff list API derives its tab
+       * from shipment state, so refreshing
+       * moves this order automatically into
+       * Shipment Created after success.
+       */
+      await loadOrders(
+        true,
+      );
+    } catch (
+      shipmentError
+    ) {
+      console.error(
+        "Staff shipment creation error:",
+        shipmentError,
+      );
+
+      setError(
+        shipmentError instanceof
+          Error
+          ? shipmentError.message
+          : "Unable to create the shipment.",
+      );
+    } finally {
+      setWorkingOrderId(
+        null,
+      );
+
+      setWorkingAction(
+        null,
+      );
+    }
+  }
 
   useEffect(() => {
     void loadOrders();
@@ -679,6 +899,148 @@ export default function StaffOrdersPage() {
                           ),
                         )}
                       </div>
+
+                      {order.category ===
+                        "NEW" && (
+                        <div className="mt-4 rounded-xl border border-[#E4D4BA] bg-[#FFF8EE] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-[#A66A00]">
+                            Order Progress
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold text-[#6D2E00]">
+                            {order.status ===
+                            "PAID"
+                              ? "Paid - ready to prepare"
+                              : order.status ===
+                                  "PREPARING"
+                                ? "Preparing"
+                                : order.status ===
+                                    "PACKED"
+                                  ? "Packed - ready for shipment"
+                                  : formatStatus(
+                                      order.status,
+                                    )}
+                          </p>
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {!order.staffSeenAt && (
+                              <button
+                                type="button"
+                                disabled={
+                                  workingOrderId !==
+                                  null
+                                }
+                                onClick={() =>
+                                  void runStaffAction(
+                                    order.id,
+                                    "SEEN",
+                                  )
+                                }
+                                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#D8B775] bg-white px-4 py-2.5 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#FFF4DE] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {workingOrderId ===
+                                  order.id &&
+                                workingAction ===
+                                  "SEEN"
+                                  ? "Marking Seen..."
+                                  : "Mark Seen"}
+                              </button>
+                            )}
+
+                            {order.status ===
+                              "PAID" && (
+                              <button
+                                type="button"
+                                disabled={
+                                  workingOrderId !==
+                                  null
+                                }
+                                onClick={() =>
+                                  void runStaffAction(
+                                    order.id,
+                                    "PREPARING",
+                                  )
+                                }
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#A66A00] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8B5A00] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <Clock3
+                                  size={17}
+                                  aria-hidden="true"
+                                />
+
+                                {workingOrderId ===
+                                  order.id &&
+                                workingAction ===
+                                  "PREPARING"
+                                  ? "Starting..."
+                                  : "Start Preparing"}
+                              </button>
+                            )}
+
+                            {order.status ===
+                              "PREPARING" && (
+                              <button
+                                type="button"
+                                disabled={
+                                  workingOrderId !==
+                                  null
+                                }
+                                onClick={() =>
+                                  void runStaffAction(
+                                    order.id,
+                                    "PACKED",
+                                  )
+                                }
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8B4513] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <Package
+                                  size={17}
+                                  aria-hidden="true"
+                                />
+
+                                {workingOrderId ===
+                                  order.id &&
+                                workingAction ===
+                                  "PACKED"
+                                  ? "Marking Packed..."
+                                  : "Mark Packed"}
+                              </button>
+                            )}
+
+                            {order.status ===
+                              "PACKED" &&
+                              order.shippingProvider ===
+                                "DELHIVERY" &&
+                              !order.delhiveryWaybill && (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    workingOrderId !==
+                                    null
+                                  }
+                                  onClick={() =>
+                                    void createShipment(
+                                      order.id,
+                                    )
+                                  }
+                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <Truck
+                                    size={17}
+                                    aria-hidden="true"
+                                  />
+
+                                  {workingOrderId ===
+                                    order.id &&
+                                  workingAction ===
+                                    "SHIPMENT"
+                                    ? "Creating Shipment..."
+                                    : "Create Shipment"}
+                                </button>
+                              )}
+                          </div>
+                        </div>
+                      )}
 
                       {order.printJob && (
                         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E4D4BA] bg-[#FFFCF7] p-4">
