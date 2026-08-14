@@ -3,6 +3,7 @@ import type {
   Viewport,
 } from "next";
 import type { ReactNode } from "react";
+import StaffPwaRuntime from "./StaffPwaRuntime";
 
 export const metadata: Metadata = {
   applicationName:
@@ -79,5 +80,10 @@ interface StaffLayoutProps {
 export default function StaffLayout({
   children,
 }: Readonly<StaffLayoutProps>) {
-  return children;
+  return (
+    <>
+      <StaffPwaRuntime />
+      {children}
+    </>
+  );
 }
