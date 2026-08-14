@@ -825,16 +825,16 @@ export default function StaffOrdersPage() {
             </p>
           </div>
         ) : (
-          <div className="mt-6 space-y-4">
+          <div className="mt-3 space-y-3 sm:mt-5 sm:space-y-4">
             {visibleOrders.map(
               (order) => (
                 <article
                   key={
                     order.id
                   }
-                  className="overflow-hidden rounded-2xl border border-[#ECD7B5] bg-white shadow-sm"
+                  className="overflow-hidden rounded-2xl border border-[#ECD7B5] bg-white shadow-sm shadow-[#6D2E00]/5"
                 >
-                  <div className="flex flex-col gap-4 border-b border-[#F1E4CF] bg-[#FFFDF8] p-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start justify-between gap-3 border-b border-[#F1E4CF] bg-[#FFFDF8] p-4 sm:p-5">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="font-bold text-[#6D2E00]">
@@ -865,8 +865,8 @@ export default function StaffOrdersPage() {
                       </div>
                     </div>
 
-                    <div className="text-left sm:text-right">
-                      <div className="flex items-center gap-1 text-xl font-bold text-[#6D2E00] sm:justify-end">
+                    <div className="shrink-0 text-right">
+                      <div className="flex items-center justify-end gap-1 text-lg font-bold text-[#6D2E00] sm:text-xl">
                         <IndianRupee
                           size={18}
                           aria-hidden="true"
@@ -886,8 +886,8 @@ export default function StaffOrdersPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-6 p-5 lg:grid-cols-[1fr_1.4fr]">
-                    <div className="space-y-5">
+                  <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[1fr_1.4fr] lg:gap-6">
+                    <div className="space-y-4 sm:space-y-5">
                       <div>
                         <div className="flex items-center gap-2 text-sm font-bold text-[#6D2E00]">
                           <UserRound
@@ -932,7 +932,7 @@ export default function StaffOrdersPage() {
                         </p>
                       </div>
 
-                      <div className="rounded-xl bg-[#FFF4DE] p-4">
+                      <div className="rounded-xl border border-[#ECD7B5] bg-[#FFF4DE] p-3.5 sm:p-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-[#A66A00]">
                           Fulfilment
                         </p>
@@ -982,14 +982,14 @@ export default function StaffOrdersPage() {
                         Products
                       </div>
 
-                      <div className="mt-3 divide-y divide-[#F1E4CF] rounded-xl border border-[#F1E4CF]">
+                      <div className="mt-2.5 divide-y divide-[#F1E4CF] overflow-hidden rounded-xl border border-[#F1E4CF]">
                         {order.items.map(
                           (item) => (
                             <div
                               key={
                                 item.id
                               }
-                              className="flex gap-3 p-4"
+                              className="flex gap-3 p-3.5 sm:p-4"
                             >
                               <div className="min-w-0 flex-1">
                                 <p className="font-semibold text-gray-900">
@@ -1028,7 +1028,7 @@ export default function StaffOrdersPage() {
 
                       {order.category ===
                         "NEW" && (
-                        <div className="mt-4 rounded-xl border border-[#E4D4BA] bg-[#FFF8EE] p-4">
+                        <div className="mt-4 rounded-xl border border-[#E4D4BA] bg-[#FFF8EE] p-3.5 sm:p-4">
                           <p className="text-xs font-semibold uppercase tracking-wide text-[#A66A00]">
                             Order Progress
                           </p>
@@ -1048,7 +1048,7 @@ export default function StaffOrdersPage() {
                                     )}
                           </p>
 
-                          <div className="mt-4 flex flex-wrap gap-2">
+                          <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
                             {!order.staffSeenAt && (
                               <button
                                 type="button"
@@ -1062,7 +1062,7 @@ export default function StaffOrdersPage() {
                                     "SEEN",
                                   )
                                 }
-                                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-[#D8B775] bg-white px-4 py-2.5 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#FFF4DE] disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex min-h-12 w-full items-center justify-center rounded-xl border border-[#D8B775] bg-white px-4 py-3 text-sm font-semibold text-[#6D2E00] transition hover:bg-[#FFF4DE] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-2.5"
                               >
                                 {workingOrderId ===
                                   order.id &&
@@ -1087,7 +1087,7 @@ export default function StaffOrdersPage() {
                                     "PREPARING",
                                   )
                                 }
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#A66A00] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8B5A00] disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#A66A00] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#8B5A00] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-2.5"
                               >
                                 <Clock3
                                   size={17}
@@ -1117,7 +1117,7 @@ export default function StaffOrdersPage() {
                                     "PACKED",
                                   )
                                 }
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8B4513] disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#6D2E00] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#8B4513] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-2.5"
                               >
                                 <Package
                                   size={17}
@@ -1149,7 +1149,7 @@ export default function StaffOrdersPage() {
                                       order.id,
                                     )
                                   }
-                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-2.5"
                                 >
                                   <Truck
                                     size={17}
@@ -1183,7 +1183,7 @@ export default function StaffOrdersPage() {
                                       "IN_TRANSIT",
                                     )
                                   }
-                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-2.5"
                                 >
                                   <Truck
                                     size={17}
@@ -1206,7 +1206,7 @@ export default function StaffOrdersPage() {
                         "SHIPMENT_CREATED" &&
                         order.shippingProvider ===
                           "MANUAL" && (
-                          <div className="mt-4 rounded-xl border border-[#D6E6D8] bg-green-50 p-4">
+                          <div className="mt-4 rounded-xl border border-[#D6E6D8] bg-green-50 p-3.5 sm:p-4">
                             <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
                               Local Logistics Progress
                             </p>
@@ -1217,7 +1217,7 @@ export default function StaffOrdersPage() {
                               )}
                             </p>
 
-                            <div className="mt-4 flex flex-wrap gap-2">
+                            <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
                               {order.shipmentStatus ===
                                 "IN_TRANSIT" && (
                                 <button
@@ -1232,7 +1232,7 @@ export default function StaffOrdersPage() {
                                       "OUT_FOR_DELIVERY",
                                     )
                                   }
-                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#A66A00] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#8B5A00] disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#A66A00] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#8B5A00] disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-2.5"
                                 >
                                   <Truck
                                     size={17}
@@ -1262,7 +1262,7 @@ export default function StaffOrdersPage() {
                                       "DELIVERED",
                                     )
                                   }
-                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-semibold text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:w-auto sm:py-2.5"
                                 >
                                   <CheckCircle2
                                     size={17}
@@ -1282,7 +1282,7 @@ export default function StaffOrdersPage() {
                         )}
 
                       {order.printJob && (
-                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E4D4BA] bg-[#FFFCF7] p-4">
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#E4D4BA] bg-[#FFFCF7] p-3.5 sm:p-4">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                               Ecommerce
