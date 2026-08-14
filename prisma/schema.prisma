@@ -30,6 +30,18 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum PrintJobType {
+  ECOMMERCE_LABEL
+}
+
+enum PrintJobStatus {
+  PENDING
+  PRINTING
+  PRINTED
+  FAILED
+}
+
+
 enum ShippingProvider {
   DELHIVERY
   MANUAL
@@ -286,6 +298,9 @@ model Order {
 
   paymentStatus PaymentStatus @default(PENDING)
 
+  /// When staff first acknowledged this paid order.
+  staffSeenAt DateTime?
+
   paymentMethod String?
 
   razorpayOrderId   String?
@@ -321,7 +336,8 @@ model Order {
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  items OrderItem[]
+  items     OrderItem[]
+  printJobs PrintJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -334,6 +350,7 @@ model Order {
   @@index([pincode])
   @@index([status])
   @@index([paymentStatus])
+  @@index([staffSeenAt])
   @@index([shippingProvider])
   @@index([shippingMode])
   @@index([shipmentStatus])
@@ -384,6 +401,38 @@ model OrderItem {
   @@index([createdAt])
   @@index([orderId, productId])
   @@index([orderId, variantId])
+}
+
+model PrintJob {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  type   PrintJobType
+  status PrintJobStatus @default(PENDING)
+
+  /// Number of actual print attempts made by a staff print client.
+  attemptCount Int @default(0)
+
+  /// When a print client most recently started processing this job.
+  claimedAt DateTime?
+
+  /// When the label was successfully printed.
+  printedAt DateTime?
+
+  /// Most recent printer or print-client error.
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Guarantees one automatic ecommerce-label job per order.
+  @@unique([orderId, type])
+
+  @@index([orderId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
 }
 
 model ContactInquiry {

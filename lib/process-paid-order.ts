@@ -4,6 +4,7 @@ import {
   OrderStatus,
   PaymentStatus,
   Prisma,
+  PrintJobType,
 } from "@prisma/client";
 
 import prisma from "@/lib/prisma";
@@ -770,6 +771,39 @@ export async function processPaidOrder({
             updatedAt: true,
           },
         });
+
+      /*
+       * Queue the ecommerce packing label only after
+       * payment and inventory finalization succeeded.
+       *
+       * The advisory lock serializes browser verification
+       * and webhook processing for this order, while the
+       * database unique constraint on (orderId, type)
+       * provides final duplicate protection.
+       */
+      await transaction.printJob.upsert({
+        where: {
+          orderId_type: {
+            orderId:
+              updatedOrder.id,
+
+            type:
+              PrintJobType
+                .ECOMMERCE_LABEL,
+          },
+        },
+
+        update: {},
+
+        create: {
+          orderId:
+            updatedOrder.id,
+
+          type:
+            PrintJobType
+              .ECOMMERCE_LABEL,
+        },
+      });
 
       return {
         alreadyProcessed:
