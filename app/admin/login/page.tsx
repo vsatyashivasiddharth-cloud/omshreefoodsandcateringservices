@@ -41,7 +41,6 @@ function getSafeDestination() {
 
   if (
     !next ||
-    !next.startsWith("/admin/") ||
     next.startsWith("//") ||
     next.startsWith(
       "/admin/login",
@@ -50,7 +49,14 @@ function getSafeDestination() {
     return "/admin/dashboard";
   }
 
-  return next;
+  if (
+    next.startsWith("/admin/") ||
+    next.startsWith("/staff/")
+  ) {
+    return next;
+  }
+
+  return "/admin/dashboard";
 }
 
 export default function LoginPage() {

@@ -73,6 +73,34 @@ function createLoginUrl(
   return loginUrl;
 }
 
+function isSafeAuthenticatedDestination(
+  destination: string | null,
+) {
+  if (
+    !destination ||
+    destination.startsWith("//")
+  ) {
+    return false;
+  }
+
+  if (
+    destination.startsWith(
+      "/admin/login",
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    destination.startsWith(
+      "/admin/",
+    ) ||
+    destination.startsWith(
+      "/staff/",
+    )
+  );
+}
+
 export async function proxy(
   request: NextRequest,
 ) {
@@ -88,11 +116,12 @@ export async function proxy(
     );
 
   /*
-   * Login page:
+   * Admin login page:
    *
    * - unauthenticated users may see it
-   * - authenticated administrators do not
-   *   need to log in again
+   * - authenticated administrators may
+   *   continue to either an Admin route
+   *   or the Staff Orders interface
    */
   if (isLoginPage) {
     if (!authenticated) {
@@ -100,35 +129,30 @@ export async function proxy(
     }
 
     const requestedDestination =
-      request.nextUrl.searchParams.get(
-        "next",
-      );
+  request.nextUrl.searchParams.get(
+    "next",
+  );
 
-    const safeDestination =
-      requestedDestination &&
-      requestedDestination.startsWith(
-        "/admin/",
-      ) &&
-      !requestedDestination.startsWith(
-        "//",
-      ) &&
-      !requestedDestination.startsWith(
-        "/admin/login",
-      )
-        ? requestedDestination
-        : "/admin/dashboard";
+const safeDestination =
+  requestedDestination &&
+  isSafeAuthenticatedDestination(
+    requestedDestination,
+  )
+    ? requestedDestination
+    : "/admin/dashboard";
 
-    return NextResponse.redirect(
-      new URL(
-        safeDestination,
-        request.url,
-      ),
-    );
+return NextResponse.redirect(
+  new URL(
+    safeDestination,
+    request.url,
+  ),
+);
   }
 
   /*
-   * Every other /admin route requires
-   * a valid administrator session.
+   * Both /admin and /staff routes use
+   * the existing authenticated Admin
+   * session.
    */
   if (!authenticated) {
     const response =
@@ -168,5 +192,8 @@ export async function proxy(
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/staff/:path*",
+  ],
 };
