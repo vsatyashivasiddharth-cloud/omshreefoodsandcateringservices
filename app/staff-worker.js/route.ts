@@ -4,6 +4,7 @@ import {
 
 const workerSource = `
 const STAFF_SCOPE = "/staff/";
+const STAFF_ORDERS_URL = "/staff/orders";
 
 self.addEventListener(
   "install",
@@ -17,6 +18,96 @@ self.addEventListener(
   (event) => {
     event.waitUntil(
       self.clients.claim(),
+    );
+  },
+);
+
+self.addEventListener(
+  "push",
+  (event) => {
+    event.waitUntil(
+      self.registration.showNotification(
+        "New paid order",
+        {
+          body:
+            "A new order is ready in Staff Orders.",
+
+          icon:
+            "/staff-app/icon-192.png",
+
+          data: {
+            url:
+              STAFF_ORDERS_URL,
+          },
+        },
+      ),
+    );
+  },
+);
+
+self.addEventListener(
+  "notificationclick",
+  (event) => {
+    event.notification.close();
+
+    const targetUrl =
+      new URL(
+        STAFF_ORDERS_URL,
+        self.location.origin,
+      ).href;
+
+    event.waitUntil(
+      (async () => {
+        const windowClients =
+          await self.clients.matchAll({
+            type:
+              "window",
+
+            includeUncontrolled:
+              true,
+          });
+
+        for (
+          const client of
+            windowClients
+        ) {
+          if (
+            !client.url.startsWith(
+              self.location.origin +
+                STAFF_SCOPE,
+            )
+          ) {
+            continue;
+          }
+
+          if (
+            client.url !==
+              targetUrl &&
+            "navigate" in client
+          ) {
+            try {
+              await client.navigate(
+                targetUrl,
+              );
+            } catch {
+              // Focusing the existing
+              // Staff window is still
+              // preferable if navigation
+              // is unavailable.
+            }
+          }
+
+          if (
+            "focus" in client
+          ) {
+            return client.focus();
+          }
+        }
+
+        return self.clients.openWindow(
+          targetUrl,
+        );
+      })(),
     );
   },
 );
