@@ -7,6 +7,7 @@ import {
   PaymentStatus,
   PrintJobType,
   ShipmentStatus,
+  ShippingProvider,
 } from "@prisma/client";
 
 import { requireAdmin } from "@/lib/auth";
@@ -189,23 +190,29 @@ export async function GET(
         const shipmentCreated =
           !delivered &&
           (
-            Boolean(
-              order.delhiveryWaybill?.trim(),
-            ) ||
-            order.shipmentStatus ===
-              ShipmentStatus.CREATED ||
-            order.shipmentStatus ===
-              ShipmentStatus.PICKUP_SCHEDULED ||
-            order.shipmentStatus ===
-              ShipmentStatus.IN_TRANSIT ||
-            order.shipmentStatus ===
-              ShipmentStatus.OUT_FOR_DELIVERY ||
-            order.shipmentStatus ===
-              ShipmentStatus.RTO ||
-            order.shipmentStatus ===
-              ShipmentStatus.FAILED ||
-            order.shipmentStatus ===
-              ShipmentStatus.CANCELLED
+            order.shippingProvider ===
+            ShippingProvider.MANUAL
+              ? order.shipmentStatus ===
+                  ShipmentStatus.IN_TRANSIT ||
+                order.shipmentStatus ===
+                  ShipmentStatus.OUT_FOR_DELIVERY
+              : Boolean(
+                    order.delhiveryWaybill?.trim(),
+                  ) ||
+                order.shipmentStatus ===
+                  ShipmentStatus.CREATED ||
+                order.shipmentStatus ===
+                  ShipmentStatus.PICKUP_SCHEDULED ||
+                order.shipmentStatus ===
+                  ShipmentStatus.IN_TRANSIT ||
+                order.shipmentStatus ===
+                  ShipmentStatus.OUT_FOR_DELIVERY ||
+                order.shipmentStatus ===
+                  ShipmentStatus.RTO ||
+                order.shipmentStatus ===
+                  ShipmentStatus.FAILED ||
+                order.shipmentStatus ===
+                  ShipmentStatus.CANCELLED
           );
 
         const category =
