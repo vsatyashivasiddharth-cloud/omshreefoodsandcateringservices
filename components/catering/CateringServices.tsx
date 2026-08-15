@@ -1,5 +1,4 @@
 import {
-  ArrowRight,
   Building2,
   Cake,
   Heart,
@@ -100,10 +99,9 @@ export default function CateringServices() {
               <Card
                 key={service.title}
                 padding="lg"
-                hover
-                className="group flex h-full flex-col bg-white/90 backdrop-blur-sm"
+                className="flex h-full flex-col bg-white/90 backdrop-blur-sm"
               >
-                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-[#FFF4DE] to-[#FFE8BF] transition-transform duration-300 group-hover:scale-110">
+                <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-[#FFF4DE] to-[#FFE8BF]">
                   <Icon
                     size={34}
                     className="text-[#C89B3C]"
@@ -115,27 +113,9 @@ export default function CateringServices() {
                   {service.title}
                 </h3>
 
-                <p className="mt-4 flex-1 leading-8 text-gray-600">
+                <p className="mt-4 leading-8 text-gray-600">
                   {service.description}
                 </p>
-
-                <div
-                  aria-hidden="true"
-                  className="my-6 h-px bg-gradient-to-r from-[#C89B3C] via-[#F3DFC2] to-transparent"
-                />
-
-                <div className="flex items-center justify-between gap-4">
-                  <span className="text-sm font-medium text-gray-500">
-                    Customized Packages
-                  </span>
-
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FFF4DE] text-[#C89B3C] transition-all duration-300 group-hover:translate-x-1 group-hover:bg-[#C89B3C] group-hover:text-white">
-                    <ArrowRight
-                      size={19}
-                      aria-hidden="true"
-                    />
-                  </span>
-                </div>
               </Card>
             );
           })}
