@@ -291,10 +291,19 @@ export default function StaffOrdersPage() {
   ] =
     useState<
       StaffOrderAction |
-      "SHIPMENT" |
+      "DELHIVERY_SHIPMENT" |
+      "LOCAL_SHIPMENT" |
       LocalShipmentStatus |
       null
     >(null);
+
+  const [
+    shipmentChoiceOrderId,
+    setShipmentChoiceOrderId,
+  ] =
+    useState<string | null>(
+      null,
+    );
 
   async function runStaffAction(
     orderId: string,
@@ -399,21 +408,13 @@ export default function StaffOrdersPage() {
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        "Create the Delhivery shipment for this packed order?",
-      );
-
-    if (!confirmed) {
-      return;
-    }
 
     setWorkingOrderId(
       orderId,
     );
 
     setWorkingAction(
-      "SHIPMENT",
+      "DELHIVERY_SHIPMENT",
     );
 
     setError(null);
@@ -465,6 +466,10 @@ export default function StaffOrdersPage() {
        * moves this order automatically into
        * Shipment Created after success.
        */
+      setShipmentChoiceOrderId(
+        null,
+      );
+
       await loadOrders(
         true,
       );
@@ -481,6 +486,107 @@ export default function StaffOrdersPage() {
           Error
           ? shipmentError.message
           : "Unable to create the shipment.",
+      );
+    } finally {
+      setWorkingOrderId(
+        null,
+      );
+
+      setWorkingAction(
+        null,
+      );
+    }
+  }
+
+  async function createLocalShipment(
+    orderId: string,
+  ) {
+    if (workingOrderId) {
+      return;
+    }
+
+    setWorkingOrderId(
+      orderId,
+    );
+
+    setWorkingAction(
+      "LOCAL_SHIPMENT",
+    );
+
+    setError(null);
+
+    try {
+      const response =
+        await fetch(
+          `/api/admin/orders/${encodeURIComponent(
+            orderId,
+          )}/fulfilment`,
+          {
+            method: "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              provider: "MANUAL",
+              shipmentStatus:
+                "CREATED",
+            }),
+
+            credentials:
+              "same-origin",
+
+            cache:
+              "no-store",
+          },
+        );
+
+      const data: unknown =
+        await response
+          .json()
+          .catch(
+            () => null,
+          );
+
+      if (!response.ok) {
+        const apiError =
+          data &&
+          typeof data ===
+            "object" &&
+          !Array.isArray(
+            data,
+          )
+            ? data as ApiError
+            : null;
+
+        throw new Error(
+          apiError?.error ||
+            "Unable to create the Local shipment.",
+        );
+      }
+
+      setShipmentChoiceOrderId(
+        null,
+      );
+
+      await loadOrders(
+        true,
+      );
+    } catch (
+      fulfilmentError
+    ) {
+      console.error(
+        "Staff Local shipment creation error:",
+        fulfilmentError,
+      );
+
+      setError(
+        fulfilmentError instanceof
+          Error
+          ? fulfilmentError.message
+          : "Unable to create the Local shipment.",
       );
     } finally {
       setWorkingOrderId(
@@ -1145,7 +1251,7 @@ export default function StaffOrdersPage() {
                                     null
                                   }
                                   onClick={() =>
-                                    void createShipment(
+                                    setShipmentChoiceOrderId(
                                       order.id,
                                     )
                                   }
@@ -1156,12 +1262,7 @@ export default function StaffOrdersPage() {
                                     aria-hidden="true"
                                   />
 
-                                  {workingOrderId ===
-                                    order.id &&
-                                  workingAction ===
-                                    "SHIPMENT"
-                                    ? "Creating Shipment..."
-                                    : "Create Shipment"}
+                                  Create Shipment
                                 </button>
                               )}
 
@@ -1319,6 +1420,130 @@ export default function StaffOrdersPage() {
           </div>
         )}
       </div>
+      {shipmentChoiceOrderId && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center sm:p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shipment-choice-title"
+            className="w-full max-w-md rounded-2xl border border-[#ECD7B5] bg-white p-5 shadow-2xl sm:p-6"
+          >
+            <div className="text-center">
+              <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-[#FFF4DE] text-[#6D2E00]">
+                <Truck
+                  size={22}
+                  aria-hidden="true"
+                />
+              </div>
+
+              <h2
+                id="shipment-choice-title"
+                className="mt-3 text-xl font-bold text-[#6D2E00]"
+              >
+                Create Shipment
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                Choose how this packed order
+                will be shipped.
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <button
+                type="button"
+                disabled={
+                  workingOrderId !==
+                  null
+                }
+                onClick={() =>
+                  void createLocalShipment(
+                    shipmentChoiceOrderId,
+                  )
+                }
+                className="flex min-h-16 w-full items-center gap-3 rounded-xl border border-[#D8B775] bg-[#FFF9EF] px-4 py-3 text-left transition hover:bg-[#FFF4DE] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white text-[#A66A00] shadow-sm">
+                  <Package
+                    size={20}
+                    aria-hidden="true"
+                  />
+                </span>
+
+                <span>
+                  <span className="block font-bold text-[#6D2E00]">
+                    {workingOrderId ===
+                      shipmentChoiceOrderId &&
+                    workingAction ===
+                      "LOCAL_SHIPMENT"
+                      ? "Creating Local Shipment..."
+                      : "Local Shipment"}
+                  </span>
+
+                  <span className="mt-0.5 block text-xs leading-5 text-gray-600">
+                    Use Local Logistics and
+                    our own packing label.
+                  </span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  workingOrderId !==
+                  null
+                }
+                onClick={() =>
+                  void createShipment(
+                    shipmentChoiceOrderId,
+                  )
+                }
+                className="flex min-h-16 w-full items-center gap-3 rounded-xl bg-green-700 px-4 py-3 text-left text-white transition hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                  <Truck
+                    size={20}
+                    aria-hidden="true"
+                  />
+                </span>
+
+                <span>
+                  <span className="block font-bold">
+                    {workingOrderId ===
+                      shipmentChoiceOrderId &&
+                    workingAction ===
+                      "DELHIVERY_SHIPMENT"
+                      ? "Creating Delhivery Shipment..."
+                      : "Delhivery"}
+                  </span>
+
+                  <span className="mt-0.5 block text-xs leading-5 text-white/80">
+                    Create the Delhivery
+                    shipment and AWB.
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              disabled={
+                workingOrderId !==
+                null
+              }
+              onClick={() =>
+                setShipmentChoiceOrderId(
+                  null,
+                )
+              }
+              className="mt-4 min-h-11 w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
