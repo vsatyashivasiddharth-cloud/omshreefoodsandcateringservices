@@ -1,30 +1,10 @@
 import {
-  Mail,
-  MessageCircle,
   PhoneCall,
   Sparkles,
 } from "lucide-react";
 
 import Badge from "@/components/ui/Badge";
 import Container from "@/components/ui/Container";
-
-const contactMethods = [
-  {
-    title: "Call Us",
-    description: "Speak directly with our team.",
-    icon: PhoneCall,
-  },
-  {
-    title: "Email Support",
-    description: "Send us your questions anytime.",
-    icon: Mail,
-  },
-  {
-    title: "WhatsApp",
-    description: "Get quick assistance from our team.",
-    icon: MessageCircle,
-  },
-];
 
 export default function ContactHero() {
   return (
@@ -90,37 +70,6 @@ export default function ContactHero() {
             event or simply have a question, our team is ready to help with
             friendly service and prompt support.
           </p>
-
-          {/* Contact methods */}
-
-          <div className="mt-14 grid gap-5 sm:mt-16 md:grid-cols-3 md:gap-6">
-            {contactMethods.map((method) => {
-              const Icon = method.icon;
-
-              return (
-                <div
-                  key={method.title}
-                  className="group rounded-3xl border border-white/15 bg-white/10 p-6 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:bg-white/15 hover:shadow-xl"
-                >
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 transition-transform duration-300 group-hover:scale-110">
-                    <Icon
-                      size={30}
-                      className="text-[#FFE4A3]"
-                      aria-hidden="true"
-                    />
-                  </div>
-
-                  <h2 className="mt-5 text-xl font-bold">
-                    {method.title}
-                  </h2>
-
-                  <p className="mt-2 text-sm leading-6 text-white/80 sm:text-base">
-                    {method.description}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
         </div>
       </Container>
     </section>
