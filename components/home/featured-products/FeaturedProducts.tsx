@@ -37,6 +37,23 @@ export default async function FeaturedProducts() {
             image: true,
           },
         },
+
+        variants: {
+          where: {
+            isActive: true,
+          },
+
+          orderBy: [
+            {
+              sortOrder:
+                "asc",
+            },
+            {
+              weightGrams:
+                "asc",
+            },
+          ],
+        },
       },
 
       orderBy: {
@@ -198,6 +215,44 @@ export default async function FeaturedProducts() {
                             .category
                             .image,
                       },
+
+                      variants:
+                        product.variants.map(
+                          (variant) => ({
+                            ...variant,
+
+                            price:
+                              Number(
+                                variant.price,
+                              ),
+
+                            stock:
+                              Math.max(
+                                0,
+                                Math.floor(
+                                  variant.stock,
+                                ),
+                              ),
+
+                            weightGrams:
+                              Math.max(
+                                0,
+                                Math.floor(
+                                  variant
+                                    .weightGrams,
+                                ),
+                              ),
+
+                            shippingWeightGrams:
+                              Math.max(
+                                0,
+                                Math.floor(
+                                  variant
+                                    .shippingWeightGrams,
+                                ),
+                              ),
+                          }),
+                        ),
                     }}
                   />
                 ),
