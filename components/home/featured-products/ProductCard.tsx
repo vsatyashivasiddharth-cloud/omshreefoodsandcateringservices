@@ -154,7 +154,7 @@ function getPriceLabel(
 
   return `${formatCurrency(
     minimum,
-  )} â€“ ${formatCurrency(
+  )} – ${formatCurrency(
     maximum,
   )}`;
 }
