@@ -4,7 +4,11 @@ import {
 } from "next/server";
 import { jwtVerify } from "jose";
 
-const ADMIN_COOKIE_NAME = "admin_token";
+const ADMIN_COOKIE_NAME =
+  "admin_token";
+
+const STAFF_DEVICE_COOKIE_NAME =
+  "staff_device_token";
 
 function getAuthSecret() {
   const value =
@@ -16,15 +20,21 @@ function getAuthSecret() {
     );
   }
 
-  return new TextEncoder().encode(value);
+  return new TextEncoder().encode(
+    value,
+  );
 }
 
-async function hasValidAdminSession(
+async function hasValidTypedSession(
   request: NextRequest,
+  options: {
+    cookieName: string;
+    type: "ADMIN" | "STAFF_DEVICE";
+  },
 ) {
   const token =
     request.cookies.get(
-      ADMIN_COOKIE_NAME,
+      options.cookieName,
     )?.value;
 
   if (!token) {
@@ -37,7 +47,9 @@ async function hasValidAdminSession(
         token,
         getAuthSecret(),
         {
-          algorithms: ["HS256"],
+          algorithms: [
+            "HS256",
+          ],
         },
       );
 
@@ -47,7 +59,8 @@ async function hasValidAdminSession(
       typeof payload.email ===
         "string" &&
       payload.email.length > 0 &&
-      payload.type === "ADMIN"
+      payload.type ===
+        options.type
     );
   } catch {
     return false;
@@ -57,10 +70,11 @@ async function hasValidAdminSession(
 function createLoginUrl(
   request: NextRequest,
 ) {
-  const loginUrl = new URL(
-    "/admin/login",
-    request.url,
-  );
+  const loginUrl =
+    new URL(
+      "/admin/login",
+      request.url,
+    );
 
   const requestedPath =
     `${request.nextUrl.pathname}${request.nextUrl.search}`;
@@ -101,6 +115,32 @@ function isSafeAuthenticatedDestination(
   );
 }
 
+function clearCookie(
+  response: NextResponse,
+  cookieName: string,
+) {
+  response.cookies.set(
+    cookieName,
+    "",
+    {
+      httpOnly: true,
+
+      secure:
+        process.env.NODE_ENV ===
+        "production",
+
+      sameSite: "lax",
+
+      path: "/",
+
+      maxAge: 0,
+
+      expires:
+        new Date(0),
+    },
+  );
+}
+
 export async function proxy(
   request: NextRequest,
 ) {
@@ -108,80 +148,124 @@ export async function proxy(
     request.nextUrl.pathname;
 
   const isLoginPage =
-    pathname === "/admin/login";
+    pathname ===
+    "/admin/login";
 
-  const authenticated =
-    await hasValidAdminSession(
-      request,
+  const isStaffRoute =
+    pathname.startsWith(
+      "/staff/",
     );
 
-  /*
-   * Admin login page:
-   *
-   * - unauthenticated users may see it
-   * - authenticated administrators may
-   *   continue to either an Admin route
-   *   or the Staff Orders interface
-   */
+  const adminAuthenticated =
+    await hasValidTypedSession(
+      request,
+      {
+        cookieName:
+          ADMIN_COOKIE_NAME,
+        type:
+          "ADMIN",
+      },
+    );
+
+  const staffAuthenticated =
+    await hasValidTypedSession(
+      request,
+      {
+        cookieName:
+          STAFF_DEVICE_COOKIE_NAME,
+        type:
+          "STAFF_DEVICE",
+      },
+    );
+
   if (isLoginPage) {
-    if (!authenticated) {
+    const requestedDestination =
+      request.nextUrl
+        .searchParams
+        .get("next");
+
+    const safeDestination =
+      requestedDestination &&
+      isSafeAuthenticatedDestination(
+        requestedDestination,
+      )
+        ? requestedDestination
+        : "/admin/dashboard";
+
+    const destinationIsStaff =
+      safeDestination.startsWith(
+        "/staff/",
+      );
+
+    if (
+      (
+        destinationIsStaff &&
+        (
+          staffAuthenticated ||
+          adminAuthenticated
+        )
+      ) ||
+      (
+        !destinationIsStaff &&
+        adminAuthenticated
+      )
+    ) {
+      return NextResponse.redirect(
+        new URL(
+          safeDestination,
+          request.url,
+        ),
+      );
+    }
+
+    return NextResponse.next();
+  }
+
+  if (isStaffRoute) {
+    if (
+      staffAuthenticated ||
+      adminAuthenticated
+    ) {
       return NextResponse.next();
     }
 
-    const requestedDestination =
-  request.nextUrl.searchParams.get(
-    "next",
-  );
-
-const safeDestination =
-  requestedDestination &&
-  isSafeAuthenticatedDestination(
-    requestedDestination,
-  )
-    ? requestedDestination
-    : "/admin/dashboard";
-
-return NextResponse.redirect(
-  new URL(
-    safeDestination,
-    request.url,
-  ),
-);
-  }
-
-  /*
-   * Both /admin and /staff routes use
-   * the existing authenticated Admin
-   * session.
-   */
-  if (!authenticated) {
     const response =
       NextResponse.redirect(
         createLoginUrl(request),
       );
 
-    /*
-     * Remove an invalid/expired cookie
-     * before showing login again.
-     */
+    if (
+      request.cookies.has(
+        STAFF_DEVICE_COOKIE_NAME,
+      )
+    ) {
+      clearCookie(
+        response,
+        STAFF_DEVICE_COOKIE_NAME,
+      );
+    }
+
+    return response;
+  }
+
+  /*
+   * Admin routes intentionally continue to
+   * accept only the short-lived Admin token.
+   */
+  if (!adminAuthenticated) {
+    const response =
+      NextResponse.redirect(
+        createLoginUrl(request),
+      );
+
     if (
       request.cookies.has(
         ADMIN_COOKIE_NAME,
       )
     ) {
-      response.cookies.set(
+      clearCookie(
+        response,
         ADMIN_COOKIE_NAME,
-        "",
-        {
-          httpOnly: true,
-          secure:
-            process.env.NODE_ENV ===
-            "production",
-          sameSite: "lax",
-          path: "/",
-          maxAge: 0,
-          expires: new Date(0),
-        },
       );
     }
 

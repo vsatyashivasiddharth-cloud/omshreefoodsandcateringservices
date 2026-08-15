@@ -106,6 +106,7 @@ export default function LoginPage() {
       setError(
         "Enter your email and password.",
       );
+
       return;
     }
 
@@ -113,6 +114,24 @@ export default function LoginPage() {
     setError(null);
 
     try {
+      /*
+       * Determine the authenticated area
+       * before creating the session.
+       *
+       * Staff receives its persistent
+       * device session while Admin keeps
+       * its existing short-lived session.
+       */
+      const destination =
+        getSafeDestination();
+
+      const sessionType =
+        destination.startsWith(
+          "/staff/",
+        )
+          ? "STAFF_DEVICE"
+          : "ADMIN";
+
       const response =
         await fetch(
           "/api/admin/login",
@@ -128,6 +147,7 @@ export default function LoginPage() {
               email:
                 normalizedEmail,
               password,
+              sessionType,
             }),
 
             credentials:
@@ -151,15 +171,14 @@ export default function LoginPage() {
       }
 
       /*
-       * The HTTP-only admin cookie has now
-       * been created by /api/admin/login.
+       * The server has now created either:
        *
-       * Return to the exact admin route
+       * - the normal Admin session, or
+       * - the persistent Staff device session.
+       *
+       * Continue to the exact protected route
        * originally requested.
        */
-      const destination =
-        getSafeDestination();
-
       router.replace(destination);
       router.refresh();
     } catch (loginError) {

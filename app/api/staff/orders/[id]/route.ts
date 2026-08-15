@@ -10,7 +10,7 @@ import {
   ShipmentStatus,
 } from "@prisma/client";
 
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 interface RouteContext {
@@ -83,7 +83,7 @@ export async function PATCH(
   { params }: RouteContext,
 ) {
   const authentication =
-    await requireAdmin(request);
+    await requireStaff(request);
 
   if (!authentication.authenticated) {
     return errorResponse(

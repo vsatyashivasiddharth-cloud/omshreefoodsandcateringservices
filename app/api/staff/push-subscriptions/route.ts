@@ -4,7 +4,7 @@ import {
 } from "next/server";
 
 import {
-  requireAdmin,
+  requireStaff,
 } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
@@ -176,7 +176,7 @@ export async function POST(
   request: NextRequest,
 ) {
   const authentication =
-    await requireAdmin(
+    await requireStaff(
       request,
     );
 
@@ -295,7 +295,7 @@ export async function DELETE(
   request: NextRequest,
 ) {
   const authentication =
-    await requireAdmin(
+    await requireStaff(
       request,
     );
 

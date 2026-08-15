@@ -6,6 +6,9 @@ import { compare } from "bcrypt";
 
 import {
   ADMIN_COOKIE_NAME,
+  STAFF_DEVICE_COOKIE_NAME,
+  STAFF_DEVICE_MAX_AGE_SECONDS,
+  createStaffDeviceToken,
   createToken,
 } from "@/lib/auth";
 import prisma from "@/lib/prisma";
@@ -13,7 +16,12 @@ import prisma from "@/lib/prisma";
 interface LoginRequestBody {
   email?: unknown;
   password?: unknown;
+  sessionType?: unknown;
 }
+
+type LoginSessionType =
+  | "ADMIN"
+  | "STAFF_DEVICE";
 
 function isRecord(
   value: unknown,
@@ -68,6 +76,13 @@ export async function POST(
       "string"
         ? body.password
         : "";
+
+    const sessionType:
+      LoginSessionType =
+        body.sessionType ===
+        "STAFF_DEVICE"
+          ? "STAFF_DEVICE"
+          : "ADMIN";
 
     if (!email || !password) {
       return NextResponse.json(
@@ -124,6 +139,7 @@ export async function POST(
         where: {
           email,
         },
+
         select: {
           id: true,
           email: true,
@@ -172,17 +188,30 @@ export async function POST(
     }
 
     const token =
-      await createToken({
-        id: admin.id,
-        email: admin.email,
-      });
+      sessionType ===
+      "STAFF_DEVICE"
+        ? await createStaffDeviceToken({
+            id:
+              admin.id,
+            email:
+              admin.email,
+          })
+        : await createToken({
+            id:
+              admin.id,
+            email:
+              admin.email,
+          });
 
     const response =
       NextResponse.json(
         {
           success: true,
           message:
-            "Login successful.",
+            sessionType ===
+            "STAFF_DEVICE"
+              ? "Staff login successful."
+              : "Login successful.",
         },
         {
           status: 200,
@@ -191,34 +220,58 @@ export async function POST(
         },
       );
 
-    /*
-     * IMPORTANT:
-     *
-     * There is intentionally no maxAge or
-     * expires value here.
-     *
-     * This makes admin_token a browser
-     * session cookie rather than a cookie
-     * deliberately persisted for 7 days.
-     *
-     * The JWT itself still has its own
-     * server-verified expiration.
-     */
-    response.cookies.set(
-      ADMIN_COOKIE_NAME,
-      token,
-      {
-        httpOnly: true,
+    if (
+      sessionType ===
+      "STAFF_DEVICE"
+    ) {
+      /*
+       * Staff PWA device session.
+       *
+       * This cookie deliberately persists
+       * across normal browser/PWA restarts.
+       */
+      response.cookies.set(
+        STAFF_DEVICE_COOKIE_NAME,
+        token,
+        {
+          httpOnly: true,
 
-        secure:
-          process.env.NODE_ENV ===
-          "production",
+          secure:
+            process.env.NODE_ENV ===
+            "production",
 
-        sameSite: "lax",
+          sameSite: "lax",
 
-        path: "/",
-      },
-    );
+          path: "/",
+
+          maxAge:
+            STAFF_DEVICE_MAX_AGE_SECONDS,
+        },
+      );
+    } else {
+      /*
+       * Keep the Admin panel's existing
+       * session-cookie behavior unchanged.
+       *
+       * There is intentionally no maxAge
+       * or expires value for admin_token.
+       */
+      response.cookies.set(
+        ADMIN_COOKIE_NAME,
+        token,
+        {
+          httpOnly: true,
+
+          secure:
+            process.env.NODE_ENV ===
+            "production",
+
+          sameSite: "lax",
+
+          path: "/",
+        },
+      );
+    }
 
     return response;
   } catch (error) {

@@ -10,7 +10,7 @@ import {
   ShippingProvider,
 } from "@prisma/client";
 
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
 function noStoreHeaders() {
@@ -46,7 +46,7 @@ export async function GET(
      * separate Staff interface.
      */
     const authentication =
-      await requireAdmin(request);
+      await requireStaff(request);
 
     if (!authentication.authenticated) {
       return errorResponse(

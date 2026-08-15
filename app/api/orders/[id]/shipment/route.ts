@@ -11,7 +11,7 @@ import {
   ShippingProvider,
 } from "@prisma/client";
 
-import { requireAdmin } from "@/lib/auth";
+import { requireStaff } from "@/lib/auth";
 import {
   createDelhiveryShipment,
   DelhiveryShipmentError,
@@ -95,7 +95,7 @@ export async function POST(
   { params }: RouteContext,
 ) {
   const authentication =
-    await requireAdmin(request);
+    await requireStaff(request);
 
   if (!authentication.authenticated) {
     return errorResponse(
