@@ -19,6 +19,10 @@ import {
   processPaidOrder,
 } from "@/lib/process-paid-order";
 
+import {
+  sendStaffNewOrderPush,
+} from "@/lib/staff-push";
+
 interface RazorpayWebhookPayload {
   entity?: unknown;
   event?: unknown;
@@ -652,6 +656,29 @@ export async function POST(
         razorpaySignature:
           null,
       });
+
+    if (
+      !result.requiresRefund &&
+      !result.alreadyProcessed
+    ) {
+      try {
+        await sendStaffNewOrderPush();
+      } catch (error) {
+        console.error(
+          "Staff push notification failed after successful Razorpay webhook payment:",
+          {
+            websiteOrderId:
+              result.order.id,
+
+            eventId:
+              eventId ||
+              null,
+
+            error,
+          },
+        );
+      }
+    }
 
     /*
      * A captured payment can require refund

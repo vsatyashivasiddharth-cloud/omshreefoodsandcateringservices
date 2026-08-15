@@ -22,6 +22,10 @@ import {
 } from "@/lib/process-paid-order";
 
 import {
+  sendStaffNewOrderPush,
+} from "@/lib/staff-push";
+
+import {
   getRazorpayClient,
   rupeesToPaise,
 } from "@/lib/razorpay";
@@ -599,6 +603,25 @@ export async function POST(
 
         razorpaySignature,
       });
+
+    if (
+      !result.requiresRefund &&
+      !result.alreadyProcessed
+    ) {
+      try {
+        await sendStaffNewOrderPush();
+      } catch (error) {
+        console.error(
+          "Staff push notification failed after successful payment verification:",
+          {
+            websiteOrderId:
+              result.order.id,
+
+            error,
+          },
+        );
+      }
+    }
 
     /*
      * A captured payment can require refund

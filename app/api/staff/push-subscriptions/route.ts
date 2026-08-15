@@ -102,6 +102,30 @@ function parseBody(
     return endpoint;
   }
 
+  try {
+    const endpointUrl =
+      new URL(
+        endpoint.value,
+      );
+
+    if (
+      endpointUrl.protocol !==
+      "https:"
+    ) {
+      return {
+        ok: false as const,
+        error:
+          "Push endpoint must use HTTPS.",
+      };
+    }
+  } catch {
+    return {
+      ok: false as const,
+      error:
+        "Push endpoint is invalid.",
+    };
+  }
+
   const p256dh =
     getRequiredString(
       body.keys?.p256dh,
