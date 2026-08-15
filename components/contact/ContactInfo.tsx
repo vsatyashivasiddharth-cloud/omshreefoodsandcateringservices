@@ -42,12 +42,6 @@ const cards = [
   },
 ];
 
-const highlights = [
-  "Fresh Homemade Food",
-  "Catering Specialists",
-  "Friendly Customer Support",
-];
-
 export default function ContactInfo() {
   return (
     <section className="relative overflow-hidden bg-[#FFFDF8] py-20 sm:py-24">
@@ -123,54 +117,6 @@ export default function ContactInfo() {
             );
           })}
         </div>
-
-        {/* Address card */}
-
-        <Card
-          variant="glass"
-          padding="lg"
-          className="mt-16 bg-white/90 shadow-xl backdrop-blur-sm sm:mt-20"
-        >
-          <div className="flex flex-col gap-8 md:flex-row md:items-center">
-            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-[#6D2E00] to-[#C89B3C] text-white shadow-lg">
-              <MapPin
-                size={40}
-                aria-hidden="true"
-              />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <h3 className="text-3xl font-bold text-[#6D2E00]">
-                Visit Our Store
-              </h3>
-
-              <address className="mt-5 not-italic text-lg leading-9 text-gray-600">
-                {contact.address.line1}
-                <br />
-                {contact.address.line2}
-                <br />
-                {contact.address.city}, {contact.address.state}
-                <br />
-                {contact.address.pincode}
-              </address>
-            </div>
-          </div>
-
-          {/* Highlights */}
-
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            {highlights.map((highlight) => (
-              <div
-                key={highlight}
-                className="rounded-2xl border border-[#F3DFC2] bg-[#FFF4DE] p-5 text-center"
-              >
-                <h4 className="font-bold text-[#6D2E00]">
-                  {highlight}
-                </h4>
-              </div>
-            ))}
-          </div>
-        </Card>
       </Container>
     </section>
   );
