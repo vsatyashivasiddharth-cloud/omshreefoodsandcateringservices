@@ -11,20 +11,20 @@ import { cateringServices } from "./cateringData";
 
 const galleryImages = [
   {
-    src: "/gallery/catering1.jpg",
-    alt: "Wedding catering service",
+    src: "/images/catering/wedding.jpg",
+    alt: "Wedding catering event",
     className: "row-span-2",
     sizes: "(max-width: 1024px) 100vw, 25vw",
   },
   {
-    src: "/gallery/catering2.jpg",
-    alt: "Buffet catering arrangement",
+    src: "/images/catering/birthday.jpg",
+    alt: "Birthday catering event",
     className: "",
     sizes: "(max-width: 1024px) 50vw, 25vw",
   },
   {
-    src: "/gallery/pickles.jpg",
-    alt: "Traditional homemade food",
+    src: "/images/catering/corporate.jpg",
+    alt: "Corporate catering event",
     className: "",
     sizes: "(max-width: 1024px) 50vw, 25vw",
   },
