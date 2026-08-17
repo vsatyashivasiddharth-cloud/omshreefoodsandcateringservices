@@ -421,24 +421,7 @@ export default async function CategoriesPage() {
                           className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent"
                         />
 
-                        <div className="absolute bottom-4 left-4">
-                          <Badge
-                            variant="warning"
-                            rounded
-                          >
-                            {
-                              category
-                                ._count
-                                .products
-                            }{" "}
-                            {category
-                              ._count
-                              .products ===
-                            1
-                              ? "Product"
-                              : "Products"}
-                          </Badge>
-                        </div>
+
                       </div>
 
                       <div className="p-5">

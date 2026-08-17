@@ -9,10 +9,8 @@ import Link from "next/link";
 import {
   ArrowRight,
   ImageOff,
-  Package,
 } from "lucide-react";
 
-import Badge from "@/components/ui/Badge";
 import Card from "@/components/ui/Card";
 
 interface CategoryCardProps {
@@ -29,23 +27,7 @@ export default function CategoryCard({
   name,
   image,
   href,
-  productCount = 0,
 }: CategoryCardProps) {
-  const safeProductCount =
-    Math.max(
-      0,
-      Math.floor(
-        Number(
-          productCount,
-        ) || 0,
-      ),
-    );
-
-  const productLabel =
-    safeProductCount === 1
-      ? "Product"
-      : "Products";
-
   const rawImage =
     image?.trim() ?? "";
 
@@ -125,24 +107,6 @@ export default function CategoryCard({
               />
             </>
           )}
-
-          {/* Product count */}
-
-          <div className="absolute left-5 top-5">
-            <Badge
-              variant="warning"
-              rounded
-              className="gap-2 shadow-lg"
-            >
-              <Package
-                size={14}
-                aria-hidden="true"
-              />
-
-              {safeProductCount}{" "}
-              {productLabel}
-            </Badge>
-          </div>
 
           {/* Category title */}
 
