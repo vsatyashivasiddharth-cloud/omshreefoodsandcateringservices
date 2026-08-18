@@ -303,13 +303,6 @@ model Order {
   /// Cost of products before shipping.
   subtotalAmount Decimal @default(0) @db.Decimal(10, 2)
 
-  /// Coupon code accepted when this order was created.
-  couponCode String?
-
-  /// Store-funded discount applied to the product subtotal.
-  /// Shipping discounts are tracked separately.
-  productDiscountAmount Decimal @default(0) @db.Decimal(10, 2)
-
   /// Shipping estimate before applying any store-funded discount.
   shippingEstimatedAmount Decimal @default(0) @db.Decimal(10, 2)
 
@@ -364,9 +357,8 @@ model Order {
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  items               OrderItem[]
-  printJobs           PrintJob[]
-  promotionRedemption PromotionRedemption?
+  items     OrderItem[]
+  printJobs PrintJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -391,43 +383,6 @@ model Order {
   @@index([razorpayPaymentId])
   @@index([delhiveryShipmentId])
   @@index([delhiveryOrderId])
-}
-
-model PromotionRedemption {
-  id String @id @default(cuid())
-
-  /// Promotion identifier.
-  /// For the launch promotion this is "omshree99".
-  code String
-
-  /// Digits-only Indian mobile number used to enforce
-  /// one redemption per phone number for this promotion.
-  phoneNormalized String
-
-  /// Order currently holding or having redeemed this promotion.
-  /// One order can reserve or redeem the promotion only once.
-  orderId String @unique
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  /// When this checkout reserved one of the limited promotion slots.
-  reservedAt DateTime @default(now())
-
-  /// Reservation deadline while payment is still pending.
-  expiresAt DateTime
-
-  /// Set only after successful paid-order finalization.
-  redeemedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  /// Prevents the same normalized phone number from using
-  /// the same promotion more than once at a time or after redemption.
-  @@unique([code, phoneNormalized])
-  @@index([code, expiresAt])
-  @@index([code, redeemedAt])
-  @@index([redeemedAt])
-  @@index([createdAt])
 }
 
 model OrderItem {
