@@ -501,3 +501,40 @@ model ShippingQuoteAttempt {
   @@index([ipHash, createdAt])
   @@index([createdAt])
 }
+
+model Coupon {
+  id String @id @default(cuid())
+
+  /// Exact customer-facing coupon code.
+  /// Coupon matching is case-sensitive.
+  code String @unique
+
+  /// Percentage discount applied to the product subtotal.
+  /// Example: 10.00 represents 10%.
+  discountPercent Decimal @db.Decimal(5, 2)
+
+  /// Maximum number of successful redemptions
+  /// allowed for this coupon.
+  maxUses Int
+
+  /// Allows an administrator to enable or disable
+  /// new use of this coupon.
+  isActive Boolean @default(true)
+
+  /// When enabled, one normalized mobile number
+  /// may redeem this particular coupon only once.
+  oneUsePerPhone Boolean @default(true)
+
+  /// Coupon validity window.
+  startsAt DateTime
+  endsAt   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([startsAt])
+  @@index([endsAt])
+  @@index([isActive, startsAt, endsAt])
+  @@index([createdAt])
+}
