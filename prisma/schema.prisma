@@ -64,6 +64,13 @@ enum ShipmentStatus {
   FAILED
 }
 
+enum CouponRedemptionStatus {
+  RESERVED
+  REDEEMED
+  RELEASED
+  EXPIRED
+}
+
 model User {
   id       String  @id @default(cuid())
   name     String
@@ -303,6 +310,26 @@ model Order {
   /// Cost of products before shipping.
   subtotalAmount Decimal @default(0) @db.Decimal(10, 2)
 
+  /// Coupon campaign used for this order.
+  ///
+  /// Nullable so historical order snapshots remain valid even
+  /// if an unused coupon can later be deleted.
+  couponId String?
+  coupon   Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  /// Purchase-time coupon snapshots.
+  ///
+  /// These values must never be recalculated from the live
+  /// Coupon row after the order has been created.
+  couponCode            String?
+  couponDiscountPercent Decimal @default(0) @db.Decimal(5, 2)
+
+  /// Discount applied only to the product subtotal.
+  ///
+  /// Shipping promotions remain separate and continue to use
+  /// shippingDiscountAmount.
+  productDiscountAmount Decimal @default(0) @db.Decimal(10, 2)
+
   /// Shipping estimate before applying any store-funded discount.
   shippingEstimatedAmount Decimal @default(0) @db.Decimal(10, 2)
 
@@ -357,14 +384,17 @@ model Order {
   userId String?
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  items     OrderItem[]
-  printJobs PrintJob[]
+  items            OrderItem[]
+  printJobs        PrintJob[]
+  couponRedemption CouponRedemption?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([packageId])
+  @@index([couponId])
+  @@index([couponCode])
   @@index([phone])
   @@index([phoneNormalized])
   @@index([phoneNormalized, createdAt])
@@ -529,6 +559,9 @@ model Coupon {
   startsAt DateTime
   endsAt   DateTime
 
+  orders      Order[]
+  redemptions CouponRedemption[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -536,5 +569,61 @@ model Coupon {
   @@index([startsAt])
   @@index([endsAt])
   @@index([isActive, startsAt, endsAt])
+  @@index([createdAt])
+}
+
+model CouponRedemption {
+  id String @id @default(cuid())
+
+  /// Coupon campaign whose capacity is being held or redeemed.
+  ///
+  /// Restrict deletion once reservation/redemption history exists.
+  couponId String
+  coupon   Coupon @relation(fields: [couponId], references: [id], onDelete: Restrict)
+
+  /// One website order may hold at most one coupon reservation.
+  ///
+  /// Nullable so redemption history can survive if an old order
+  /// is ever removed.
+  orderId String? @unique
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  /// Normalized Indian mobile number used for campaign-level
+  /// one-use-per-phone enforcement.
+  phoneNormalized String
+
+  /// Purchase-time discount snapshots.
+  ///
+  /// These remain unchanged if an administrator later edits
+  /// the live Coupon configuration.
+  discountPercent Decimal @db.Decimal(5, 2)
+  discountAmount  Decimal @db.Decimal(10, 2)
+
+  status CouponRedemptionStatus @default(RESERVED)
+
+  /// When coupon capacity was reserved for this checkout.
+  reservedAt DateTime @default(now())
+
+  /// Until when an unpaid reservation consumes coupon capacity.
+  expiresAt DateTime
+
+  /// Set only when payment succeeds and this becomes a
+  /// permanent successful redemption.
+  redeemedAt DateTime?
+
+  /// Set when an unpaid reservation is deliberately released.
+  releasedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([couponId])
+  @@index([orderId])
+  @@index([phoneNormalized])
+  @@index([couponId, status])
+  @@index([couponId, status, expiresAt])
+  @@index([couponId, phoneNormalized, status])
+  @@index([status, expiresAt])
+  @@index([redeemedAt])
   @@index([createdAt])
 }
