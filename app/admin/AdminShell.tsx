@@ -18,6 +18,7 @@ import {
   Package,
   PackageSearch,
   ShoppingBag,
+  Tags,
 } from "lucide-react";
 
 interface AdminLayoutProps {
@@ -94,6 +95,16 @@ export default function AdminShell({
         href: "/admin/categories",
         icon: (
           <FolderTree
+            size={19}
+            aria-hidden="true"
+          />
+        ),
+      },
+      {
+        label: "Coupons",
+        href: "/admin/coupons",
+        icon: (
+          <Tags
             size={19}
             aria-hidden="true"
           />
