@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import Image from "next/image";
@@ -162,6 +163,11 @@ function getPriceLabel(
 export default function ProductCard({
   product,
 }: ProductCardProps) {
+  const cardRef =
+    useRef<HTMLDivElement | null>(
+      null,
+    );
+
   const {
     addToCart,
   } = useCart();
@@ -400,6 +406,30 @@ export default function ProductCard({
 
       setPickerOpen(true);
 
+      window.requestAnimationFrame(
+        () => {
+          const card =
+            cardRef.current;
+
+          if (!card) {
+            return;
+          }
+
+          const rect =
+            card.getBoundingClientRect();
+
+          const topOffset = 80;
+
+          window.scrollTo({
+            top:
+              window.scrollY +
+              rect.top -
+              topOffset,
+            behavior: "smooth",
+          });
+        },
+      );
+
       return;
     }
 
@@ -414,7 +444,10 @@ export default function ProductCard({
     >
       {/* Product image */}
 
-      <div className="relative h-60 overflow-hidden bg-[#FFF8EE] sm:h-64">
+      <div
+        ref={cardRef}
+        className="relative h-60 overflow-hidden bg-[#FFF8EE] sm:h-64"
+      >
         <Link
           href={productHref}
           aria-label={`View ${product.name}`}
