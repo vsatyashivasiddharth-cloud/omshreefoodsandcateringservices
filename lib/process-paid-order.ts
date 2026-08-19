@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  CouponRedemptionStatus,
   OrderStatus,
   PaymentStatus,
   Prisma,
@@ -59,6 +60,7 @@ type InventoryCheckResult =
 export type PaidOrderRefundReason =
   | "ORDER_CANCELLED"
   | "STOCK_UNAVAILABLE"
+  | "COUPON_RESERVATION_EXPIRED"
   | null;
 
 export interface ProcessPaidOrderResult {
@@ -415,6 +417,7 @@ export async function processPaidOrder({
           select: {
             id: true,
             totalAmount: true,
+            couponId: true,
             status: true,
             paymentStatus: true,
             paymentMethod: true,
@@ -485,6 +488,51 @@ export async function processPaidOrder({
         );
       }
 
+      let couponRedemption:
+        | {
+            id: string;
+            status:
+              CouponRedemptionStatus;
+            expiresAt: Date;
+          }
+        | null = null;
+
+      if (order.couponId) {
+        /*
+         * Order creation serializes coupon capacity
+         * with this same coupon-scoped advisory lock.
+         *
+         * Acquire it before reading or changing the
+         * reservation so an expired reservation cannot
+         * be simultaneously replaced by another order
+         * while this captured payment is finalized.
+         */
+        await transaction.$executeRaw`
+          SELECT pg_advisory_xact_lock(
+            hashtext(
+              'coupon-redemption'
+            ),
+            hashtext(${order.couponId})
+          )
+        `;
+
+        couponRedemption =
+          await transaction
+            .couponRedemption
+            .findUnique({
+              where: {
+                orderId:
+                  order.id,
+              },
+
+              select: {
+                id: true,
+                status: true,
+                expiresAt: true,
+              },
+            });
+      }
+
       /*
        * Exact-payment idempotency.
        *
@@ -511,7 +559,12 @@ export async function processPaidOrder({
 
           refundReason:
             cancelled
-              ? "ORDER_CANCELLED"
+              ? couponRedemption
+                    ?.status ===
+                  CouponRedemptionStatus
+                    .EXPIRED
+                ? "COUPON_RESERVATION_EXPIRED"
+                : "ORDER_CANCELLED"
               : null,
 
           stockUnavailable:
@@ -584,6 +637,40 @@ export async function processPaidOrder({
         order.status ===
         OrderStatus.CANCELLED
       ) {
+        if (
+          couponRedemption?.status ===
+          CouponRedemptionStatus.RESERVED
+        ) {
+          const releaseResult =
+            await transaction
+              .couponRedemption
+              .updateMany({
+                where: {
+                  id:
+                    couponRedemption.id,
+
+                  status:
+                    CouponRedemptionStatus
+                      .RESERVED,
+                },
+
+                data: {
+                  status:
+                    CouponRedemptionStatus
+                      .RELEASED,
+
+                  releasedAt:
+                    new Date(),
+                },
+              });
+
+          if (releaseResult.count !== 1) {
+            throw new Error(
+              "COUPON_RESERVATION_RELEASE_FAILED",
+            );
+          }
+        }
+
         const cancelledOrder =
           await transaction.order.update({
             where: {
@@ -643,6 +730,110 @@ export async function processPaidOrder({
         };
       }
 
+      if (order.couponId) {
+        const reservationActive =
+          couponRedemption?.status ===
+            CouponRedemptionStatus
+              .RESERVED &&
+          couponRedemption.expiresAt >
+            new Date();
+
+        if (!reservationActive) {
+          if (
+            couponRedemption?.status ===
+            CouponRedemptionStatus.RESERVED
+          ) {
+            const expireResult =
+              await transaction
+                .couponRedemption
+                .updateMany({
+                  where: {
+                    id:
+                      couponRedemption.id,
+
+                    status:
+                      CouponRedemptionStatus
+                        .RESERVED,
+                  },
+
+                  data: {
+                    status:
+                      CouponRedemptionStatus
+                        .EXPIRED,
+                  },
+                });
+
+            if (expireResult.count !== 1) {
+              throw new Error(
+                "COUPON_RESERVATION_EXPIRE_FAILED",
+              );
+            }
+          }
+
+          /*
+           * Razorpay has already captured the money,
+           * but this coupon reservation can no longer
+           * be redeemed. Record the payment, cancel the
+           * order, leave inventory untouched, and require
+           * a refund.
+           */
+          const cancelledOrder =
+            await transaction.order.update({
+              where: {
+                id: order.id,
+              },
+
+              data: {
+                paymentStatus:
+                  PaymentStatus.SUCCESS,
+
+                status:
+                  OrderStatus.CANCELLED,
+
+                razorpayPaymentId,
+
+                ...(razorpaySignature
+                  ? {
+                      razorpaySignature,
+                    }
+                  : {}),
+              },
+
+              select: {
+                id: true,
+                totalAmount: true,
+                status: true,
+                paymentStatus: true,
+                paymentMethod: true,
+                razorpayOrderId: true,
+                razorpayPaymentId: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+            });
+
+          return {
+            alreadyProcessed:
+              false,
+
+            requiresRefund:
+              true,
+
+            refundReason:
+              "COUPON_RESERVATION_EXPIRED",
+
+            stockUnavailable:
+              false,
+
+            unavailableProduct:
+              null,
+
+            order:
+              cancelledOrder,
+          };
+        }
+      }
+
       const inventoryRequirements =
         aggregateInventoryRequirements(
           order.items,
@@ -661,6 +852,40 @@ export async function processPaidOrder({
       if (
         inventoryCheck.unavailable
       ) {
+        if (
+          couponRedemption?.status ===
+          CouponRedemptionStatus.RESERVED
+        ) {
+          const releaseResult =
+            await transaction
+              .couponRedemption
+              .updateMany({
+                where: {
+                  id:
+                    couponRedemption.id,
+
+                  status:
+                    CouponRedemptionStatus
+                      .RESERVED,
+                },
+
+                data: {
+                  status:
+                    CouponRedemptionStatus
+                      .RELEASED,
+
+                  releasedAt:
+                    new Date(),
+                },
+              });
+
+          if (releaseResult.count !== 1) {
+            throw new Error(
+              "COUPON_RESERVATION_RELEASE_FAILED",
+            );
+          }
+        }
+
         /*
          * Payment is already captured, but stock
          * disappeared before finalization.
@@ -771,6 +996,40 @@ export async function processPaidOrder({
             updatedAt: true,
           },
         });
+
+      if (
+        couponRedemption?.status ===
+        CouponRedemptionStatus.RESERVED
+      ) {
+        const redeemResult =
+          await transaction
+            .couponRedemption
+            .updateMany({
+              where: {
+                id:
+                  couponRedemption.id,
+
+                status:
+                  CouponRedemptionStatus
+                    .RESERVED,
+              },
+
+              data: {
+                status:
+                  CouponRedemptionStatus
+                    .REDEEMED,
+
+                redeemedAt:
+                  new Date(),
+              },
+            });
+
+        if (redeemResult.count !== 1) {
+          throw new Error(
+            "COUPON_RESERVATION_REDEEM_FAILED",
+          );
+        }
+      }
 
       /*
        * Queue the ecommerce packing label only after

@@ -682,12 +682,10 @@ export async function POST(
 
     /*
      * A captured payment can require refund
-     * because:
-     *
-     * 1. stock disappeared before finalization,
-     * or
-     *
-     * 2. the order had already been cancelled.
+     * because stock disappeared, the order
+     * had already been cancelled, or the
+     * coupon reservation expired before
+     * finalization.
      *
      * processPaidOrder() records the captured
      * payment but does not deduct inventory.
@@ -720,6 +718,25 @@ export async function POST(
             unavailableProduct:
               result
                 .unavailableProduct,
+          },
+        );
+      } else if (
+        result.refundReason ===
+        "COUPON_RESERVATION_EXPIRED"
+      ) {
+        console.error(
+          "Captured Razorpay payment arrived after the coupon reservation expired:",
+          {
+            eventId:
+              eventId ||
+              null,
+
+            websiteOrderId:
+              result.order.id,
+
+            razorpayOrderId,
+
+            razorpayPaymentId,
           },
         );
       } else {
@@ -777,7 +794,10 @@ export async function POST(
           result.refundReason ===
           "STOCK_UNAVAILABLE"
             ? "Payment recorded, but stock became unavailable and the order requires refund processing."
-            : "Payment recorded, but the order was already cancelled and requires refund processing.",
+            : result.refundReason ===
+                "COUPON_RESERVATION_EXPIRED"
+              ? "Payment recorded, but the coupon reservation expired and the order requires refund processing."
+              : "Payment recorded, but the order was already cancelled and requires refund processing.",
       });
     }
 

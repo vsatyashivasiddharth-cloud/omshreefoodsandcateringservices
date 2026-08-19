@@ -9,6 +9,7 @@ import {
 } from "next/server";
 
 import {
+  CouponRedemptionStatus,
   OrderStatus,
   PaymentStatus,
   Prisma,
@@ -281,6 +282,12 @@ export async function POST(
           razorpayOrderId: true,
           razorpayPaymentId: true,
 
+          couponRedemption: {
+            select: {
+              status: true,
+            },
+          },
+
           createdAt: true,
           updatedAt: true,
         },
@@ -345,8 +352,21 @@ export async function POST(
         OrderStatus.CANCELLED;
 
       if (requiresRefund) {
+        const refundReason =
+          order.couponRedemption
+            ?.status ===
+          CouponRedemptionStatus.EXPIRED
+            ? "COUPON_RESERVATION_EXPIRED"
+            : "ORDER_CANCELLED";
+
+        const message =
+          refundReason ===
+          "COUPON_RESERVATION_EXPIRED"
+            ? "Your payment was captured after the coupon reservation expired. The order was cancelled and the payment requires refund processing. Please contact support."
+            : "This payment was captured, but the order is cancelled and requires refund processing. Please contact support.";
+
         return errorResponse(
-          "This payment was captured, but the order is cancelled and requires refund processing. Please contact support.",
+          message,
           409,
           {
             paymentCaptured:
@@ -355,8 +375,7 @@ export async function POST(
             requiresRefund:
               true,
 
-            refundReason:
-              "ORDER_CANCELLED",
+            refundReason,
 
             order: {
               id:
@@ -625,15 +644,13 @@ export async function POST(
 
     /*
      * A captured payment can require refund
-     * for two supported reasons:
+     * when the order was already cancelled,
+     * inventory became unavailable, or the
+     * coupon reservation expired before
+     * payment finalization.
      *
-     * 1. The order was already cancelled
-     *    before payment finalization.
-     *
-     * 2. Inventory became unavailable after
-     *    Checkout started.
-     *
-     * Neither case should deduct inventory.
+     * None of these cases should deduct
+     * inventory.
      */
     if (
       result.requiresRefund
@@ -645,7 +662,10 @@ export async function POST(
               result.unavailableProduct ??
               "A product"
             } became unavailable after payment. Your payment was recorded and the order was cancelled for refund processing. Please contact support.`
-          : "Your payment was captured after this order had already been cancelled. No inventory was deducted. The payment requires refund processing. Please contact support.";
+          : result.refundReason ===
+              "COUPON_RESERVATION_EXPIRED"
+            ? "Your payment was captured after the coupon reservation expired. The order was cancelled and the payment requires refund processing. Please contact support."
+            : "Your payment was captured after this order had already been cancelled. No inventory was deducted. The payment requires refund processing. Please contact support.";
 
       return errorResponse(
         message,

@@ -3,6 +3,7 @@ import {
   NextResponse,
 } from "next/server";
 import {
+  CouponRedemptionStatus,
   PaymentStatus,
   Prisma,
 } from "@prisma/client";
@@ -82,6 +83,10 @@ export async function POST(
     const result =
       await prisma.$transaction(
         async (transaction) => {
+          /*
+           * Serialize all payment-order creation and
+           * reuse attempts for this website order.
+           */
           await transaction.$executeRaw`
             SELECT pg_advisory_xact_lock(
               hashtext(${orderId})
@@ -98,11 +103,17 @@ export async function POST(
                 customerName: true,
                 phone: true,
                 email: true,
+
                 totalAmount: true,
+
+                couponId: true,
+
                 paymentMethod: true,
                 paymentStatus: true,
+
                 razorpayOrderId: true,
                 razorpayPaymentId: true,
+
                 createdAt: true,
               },
             });
@@ -140,6 +151,70 @@ export async function POST(
             );
           }
 
+          /*
+           * A coupon-backed order may start or reopen
+           * Razorpay Checkout only while its reservation
+           * is still active.
+           *
+           * Use the same coupon-scoped advisory lock as
+           * order reservation and payment finalization.
+           * This prevents payment initiation from racing
+           * with another order taking expired capacity.
+           */
+          if (order.couponId) {
+            await transaction.$executeRaw`
+              SELECT pg_advisory_xact_lock(
+                hashtext(
+                  'coupon-redemption'
+                ),
+                hashtext(${order.couponId})
+              )
+            `;
+
+            /*
+             * Read the redemption only after acquiring
+             * the coupon lock so this check is based on
+             * authoritative current state.
+             */
+            const couponRedemption =
+              await transaction
+                .couponRedemption
+                .findUnique({
+                  where: {
+                    orderId:
+                      order.id,
+                  },
+
+                  select: {
+                    status: true,
+                    expiresAt: true,
+                  },
+                });
+
+            const reservationNow =
+              new Date();
+
+            const reservationActive =
+              couponRedemption?.status ===
+                CouponRedemptionStatus
+                  .RESERVED &&
+              couponRedemption.expiresAt >
+                reservationNow;
+
+            if (!reservationActive) {
+              throw new Error(
+                "COUPON_RESERVATION_EXPIRED",
+              );
+            }
+          }
+
+          /*
+           * The persisted website-order total is the
+           * authoritative payment amount.
+           *
+           * Razorpay must never independently calculate
+           * product, coupon, or shipping discounts.
+           */
           const totalAmount =
             Number(order.totalAmount);
 
@@ -159,6 +234,12 @@ export async function POST(
               totalAmount,
             );
 
+          /*
+           * Reuse is allowed only after the coupon
+           * reservation check above. This prevents an
+           * old Razorpay order from reopening Checkout
+           * after the 30-minute reservation expired.
+           */
           if (order.razorpayOrderId) {
             return {
               reused: true,
@@ -333,6 +414,12 @@ export async function POST(
         case "ORDER_REFUNDED":
           return errorResponse(
             "A payment cannot be started for a refunded order.",
+            409,
+          );
+
+        case "COUPON_RESERVATION_EXPIRED":
+          return errorResponse(
+            "The coupon reservation for this order has expired. Please return to checkout and place the order again.",
             409,
           );
 

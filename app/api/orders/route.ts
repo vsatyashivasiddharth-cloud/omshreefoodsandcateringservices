@@ -3,6 +3,7 @@ import {
   NextResponse,
 } from "next/server";
 import {
+  CouponRedemptionStatus,
   Prisma,
   ShippingMode,
   ShippingProvider,
@@ -34,6 +35,7 @@ interface CreateOrderBody {
   pincode?: unknown;
 
   paymentMode?: unknown;
+  couponCode?: unknown;
   items?: unknown;
 }
 
@@ -62,6 +64,7 @@ interface ResolvedOrderLine {
 
 const MAX_ORDER_ITEMS = 100;
 const MAX_QUANTITY_PER_ITEM = 100;
+const COUPON_RESERVATION_MINUTES = 30;
 
 const SHIPPING_DISCOUNT_TIER_ONE_THRESHOLD = 999;
 const SHIPPING_DISCOUNT_TIER_TWO_THRESHOLD = 1499;
@@ -393,6 +396,22 @@ function roundMoney(
   );
 }
 
+class CouponReservationError extends Error {
+  status: number;
+
+  constructor(
+    message: string,
+    status: number,
+  ) {
+    super(message);
+
+    this.name =
+      "CouponReservationError";
+
+    this.status = status;
+  }
+}
+
 function noStoreHeaders() {
   return {
     "Cache-Control":
@@ -476,6 +495,35 @@ export async function POST(
       parsePaymentMode(
         body.paymentMode,
       );
+
+    const rawCouponCode =
+      body.couponCode;
+
+    let couponCode:
+      | string
+      | null = null;
+
+    if (
+      rawCouponCode !== undefined &&
+      rawCouponCode !== null
+    ) {
+      if (
+        typeof rawCouponCode !==
+        "string"
+      ) {
+        return errorResponse(
+          "Enter a valid coupon code.",
+          400,
+        );
+      }
+
+      const trimmedCouponCode =
+        rawCouponCode.trim();
+
+      couponCode =
+        trimmedCouponCode ||
+        null;
+    }
 
     const items =
       parseItems(body.items);
@@ -1197,13 +1245,16 @@ export async function POST(
       );
 
     /*
-     * The promotion applies only to the
-     * courier charge. Product subtotal is
-     * never discounted.
+     * The shipping promotion applies only to
+     * the courier charge.
      *
-     * Cap the applied discount at the
-     * Delhivery estimate so the charged
-     * shipping amount can never be negative.
+     * Shipping-discount eligibility is always
+     * based on the original product subtotal,
+     * before any product coupon discount.
+     *
+     * Cap the applied shipping discount at the
+     * Delhivery estimate so the charged shipping
+     * amount can never be negative.
      */
     const shippingDiscountNumber =
       roundMoney(
@@ -1222,12 +1273,6 @@ export async function POST(
         ),
       );
 
-    const totalAmountNumber =
-      roundMoney(
-        subtotalNumber +
-          chargedShippingNumber,
-      );
-
     const shippingEstimatedAmount =
       decimalMoney(
         estimatedShippingNumber,
@@ -1243,11 +1288,6 @@ export async function POST(
         shippingDiscountNumber,
       );
 
-    const totalAmount =
-      decimalMoney(
-        totalAmountNumber,
-      );
-
     const shippingMode =
       shippingRate.shippingMode ===
       "EXPRESS"
@@ -1258,12 +1298,39 @@ export async function POST(
       new Date();
 
     /*
-     * The unpaid order stores immutable product and
-     * variant snapshots. Inventory is intentionally
-     * not deducted until Razorpay payment succeeds.
+     * The unpaid order stores immutable product
+     * and variant snapshots.
+     *
+     * Inventory is intentionally not deducted
+     * until Razorpay payment succeeds.
+     *
+     * Coupon validation performed by the public
+     * preview endpoint is advisory only. If a
+     * coupon is supplied here, capacity and
+     * per-phone eligibility are checked again
+     * inside a serializable transaction while
+     * holding a coupon-scoped advisory lock.
      */
-    const order =
-      await prisma.order.create({
+    type CouponSnapshot = {
+      id: string;
+      code: string;
+      discountPercent:
+        Prisma.Decimal;
+      productDiscountAmount:
+        Prisma.Decimal;
+      totalAmount:
+        Prisma.Decimal;
+    } | null;
+
+    const createOrderRecord = (
+      database: Pick<
+        Prisma.TransactionClient,
+        "order"
+      >,
+      couponSnapshot:
+        CouponSnapshot,
+    ) =>
+      database.order.create({
         data: {
           customerName,
           phone,
@@ -1279,11 +1346,36 @@ export async function POST(
 
           subtotalAmount,
 
+          couponId:
+            couponSnapshot?.id ??
+            null,
+
+          couponCode:
+            couponSnapshot?.code ??
+            null,
+
+          couponDiscountPercent:
+            couponSnapshot
+              ?.discountPercent ??
+            new Prisma.Decimal(0),
+
+          productDiscountAmount:
+            couponSnapshot
+              ?.productDiscountAmount ??
+            new Prisma.Decimal(0),
+
           shippingEstimatedAmount,
           shippingChargedAmount,
           shippingDiscountAmount,
 
-          totalAmount,
+          totalAmount:
+            couponSnapshot
+              ?.totalAmount ??
+            decimalMoney(
+              subtotalAmount.plus(
+                shippingChargedAmount,
+              ),
+            ),
 
           paymentMethod:
             "Prepaid",
@@ -1398,6 +1490,343 @@ export async function POST(
         },
       });
 
+    let order;
+
+    if (!couponCode) {
+      order =
+        await createOrderRecord(
+          prisma,
+          null,
+        );
+    } else {
+      const requestedCouponCode =
+        couponCode;
+
+      order =
+        await prisma.$transaction(
+          async (transaction) => {
+            /*
+             * First resolve the exact,
+             * case-sensitive coupon code.
+             */
+            const initialCoupon =
+              await transaction
+                .coupon
+                .findUnique({
+                  where: {
+                    code:
+                      requestedCouponCode,
+                  },
+
+                  select: {
+                    id: true,
+                  },
+                });
+
+            if (!initialCoupon) {
+              throw new CouponReservationError(
+                "Enter a valid coupon code.",
+                400,
+              );
+            }
+
+            /*
+             * Namespace the advisory lock so
+             * coupon locks remain separate from
+             * the per-order advisory locks used
+             * by payment/shipment workflows.
+             */
+            await transaction
+              .$executeRaw`
+                SELECT pg_advisory_xact_lock(
+                  hashtext(
+                    'coupon-redemption'
+                  ),
+                  hashtext(
+                    ${initialCoupon.id}
+                  )
+                )
+              `;
+
+            /*
+             * Re-read only after acquiring the
+             * coupon lock. All authoritative
+             * eligibility checks use this live
+             * row.
+             */
+            const coupon =
+              await transaction
+                .coupon
+                .findUnique({
+                  where: {
+                    id:
+                      initialCoupon.id,
+                  },
+
+                  select: {
+                    id: true,
+                    code: true,
+
+                    discountPercent:
+                      true,
+
+                    maxUses: true,
+
+                    isActive: true,
+
+                    oneUsePerPhone:
+                      true,
+
+                    startsAt: true,
+                    endsAt: true,
+                  },
+                });
+
+            if (
+              !coupon ||
+              coupon.code !==
+                requestedCouponCode
+            ) {
+              throw new CouponReservationError(
+                "Enter a valid coupon code.",
+                400,
+              );
+            }
+
+            const reservationNow =
+              new Date();
+
+            if (!coupon.isActive) {
+              throw new CouponReservationError(
+                "This coupon is currently unavailable.",
+                409,
+              );
+            }
+
+            if (
+              reservationNow.getTime() <
+              coupon.startsAt.getTime()
+            ) {
+              throw new CouponReservationError(
+                "Coupon is not active yet.",
+                409,
+              );
+            }
+
+            if (
+              reservationNow.getTime() >
+              coupon.endsAt.getTime()
+            ) {
+              throw new CouponReservationError(
+                "Coupon expired.",
+                409,
+              );
+            }
+
+            const consumedCapacity =
+              await transaction
+                .couponRedemption
+                .count({
+                  where: {
+                    couponId:
+                      coupon.id,
+
+                    OR: [
+                      {
+                        status:
+                          CouponRedemptionStatus
+                            .REDEEMED,
+                      },
+                      {
+                        status:
+                          CouponRedemptionStatus
+                            .RESERVED,
+
+                        expiresAt: {
+                          gt:
+                            reservationNow,
+                        },
+                      },
+                    ],
+                  },
+                });
+
+            if (
+              consumedCapacity >=
+              coupon.maxUses
+            ) {
+              throw new CouponReservationError(
+                "This coupon has reached its usage limit.",
+                409,
+              );
+            }
+
+            if (
+              coupon.oneUsePerPhone
+            ) {
+              const existingPhoneUse =
+                await transaction
+                  .couponRedemption
+                  .findFirst({
+                    where: {
+                      couponId:
+                        coupon.id,
+
+                      phoneNormalized,
+
+                      OR: [
+                        {
+                          status:
+                            CouponRedemptionStatus
+                              .REDEEMED,
+                        },
+                        {
+                          status:
+                            CouponRedemptionStatus
+                              .RESERVED,
+
+                          expiresAt: {
+                            gt:
+                              reservationNow,
+                          },
+                        },
+                      ],
+                    },
+
+                    select: {
+                      id: true,
+                    },
+                  });
+
+              if (existingPhoneUse) {
+                throw new CouponReservationError(
+                  "This coupon has already been applied for this mobile number.",
+                  409,
+                );
+              }
+            }
+
+            const discountPercentNumber =
+              Number(
+                coupon.discountPercent,
+              );
+
+            if (
+              !Number.isFinite(
+                discountPercentNumber,
+              ) ||
+              discountPercentNumber <=
+                0 ||
+              discountPercentNumber >
+                100
+            ) {
+              console.error(
+                "Coupon has invalid discount percentage:",
+                coupon.id,
+              );
+
+              throw new CouponReservationError(
+                "This coupon is currently unavailable.",
+                500,
+              );
+            }
+
+            const productDiscountAmount =
+              decimalMoney(
+                subtotalAmount
+                  .mul(
+                    coupon
+                      .discountPercent,
+                  )
+                  .div(100),
+              );
+
+            const totalAmount =
+              decimalMoney(
+                subtotalAmount
+                  .minus(
+                    productDiscountAmount,
+                  )
+                  .plus(
+                    shippingChargedAmount,
+                  ),
+              );
+
+            const couponSnapshot:
+              CouponSnapshot = {
+              id:
+                coupon.id,
+
+              code:
+                coupon.code,
+
+              discountPercent:
+                coupon
+                  .discountPercent,
+
+              productDiscountAmount,
+
+              totalAmount,
+            };
+
+            const createdOrder =
+              await createOrderRecord(
+                transaction,
+                couponSnapshot,
+              );
+
+            const expiresAt =
+              new Date(
+                reservationNow.getTime() +
+                  COUPON_RESERVATION_MINUTES *
+                    60 *
+                    1000,
+              );
+
+            await transaction
+              .couponRedemption
+              .create({
+                data: {
+                  couponId:
+                    coupon.id,
+
+                  orderId:
+                    createdOrder.id,
+
+                  phoneNormalized,
+
+                  discountPercent:
+                    coupon
+                      .discountPercent,
+
+                  discountAmount:
+                    productDiscountAmount,
+
+                  status:
+                    CouponRedemptionStatus
+                      .RESERVED,
+
+                  reservedAt:
+                    reservationNow,
+
+                  expiresAt,
+                },
+              });
+
+            return createdOrder;
+          },
+          {
+            isolationLevel:
+              Prisma
+                .TransactionIsolationLevel
+                .Serializable,
+
+            maxWait: 10_000,
+            timeout: 30_000,
+          },
+        );
+    }
+
     return NextResponse.json(
       {
         id: order.id,
@@ -1436,6 +1865,21 @@ export async function POST(
         subtotalAmount:
           Number(
             order.subtotalAmount,
+          ),
+
+        couponCode:
+          order.couponCode,
+
+        couponDiscountPercent:
+          Number(
+            order
+              .couponDiscountPercent,
+          ),
+
+        productDiscountAmount:
+          Number(
+            order
+              .productDiscountAmount,
           ),
 
         shippingEstimatedAmount:
@@ -1641,6 +2085,16 @@ export async function POST(
 
     if (
       error instanceof
+      CouponReservationError
+    ) {
+      return errorResponse(
+        error.message,
+        error.status,
+      );
+    }
+
+    if (
+      error instanceof
       DelhiveryApiError
     ) {
       return errorResponse(
@@ -1660,7 +2114,7 @@ export async function POST(
       error.code === "P2034"
     ) {
       return errorResponse(
-        "Your order could not be completed because product availability changed. Please try again.",
+        "Your order could not be completed because availability changed. Please try again.",
         409,
       );
     }
