@@ -71,6 +71,22 @@ enum CouponRedemptionStatus {
   EXPIRED
 }
 
+enum OrderNotificationType {
+  ORDER_CONFIRMATION
+}
+
+enum OrderNotificationChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum OrderNotificationStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
 model User {
   id       String  @id @default(cuid())
   name     String
@@ -387,6 +403,7 @@ model Order {
   items            OrderItem[]
   printJobs        PrintJob[]
   couponRedemption CouponRedemption?
+  notifications    OrderNotification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -481,6 +498,37 @@ model PrintJob {
   /// Guarantees one automatic ecommerce-label job per order.
   @@unique([orderId, type])
   @@index([orderId, createdAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+}
+
+model OrderNotification {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  type    OrderNotificationType
+  channel OrderNotificationChannel
+  status  OrderNotificationStatus  @default(PENDING)
+
+  recipient String
+
+  providerMessageId String?
+
+  attemptCount Int @default(0)
+
+  lastAttemptAt DateTime?
+  sentAt        DateTime?
+
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderId, type, channel])
+  @@index([orderId])
+  @@index([status])
   @@index([status, createdAt])
   @@index([createdAt])
 }
