@@ -636,15 +636,38 @@ function parseDelhiveryDate(
   }
 
   /*
-   * Delhivery responses may contain ISO dates or strings such as:
+   * Delhivery returns timestamps representing India-local
+   * time without always including an explicit timezone,
+   * for example:
+   *
    * 2026-07-29T10:42:00
    * 2026-07-29 10:42:00
+   *
+   * Explicit timezone information must be preserved.
+   * Timezone-less values are interpreted as IST so parsing
+   * is consistent between local development and Vercel.
    */
   const normalized = text.includes(" ")
     ? text.replace(" ", "T")
     : text;
 
-  const date = new Date(normalized);
+  const hasExplicitTimezone =
+    /(?:Z|[+-]\d{2}:\d{2})$/i.test(
+      normalized,
+    );
+
+  const isDateOnly =
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      normalized,
+    );
+
+  const parseValue = hasExplicitTimezone
+    ? normalized
+    : isDateOnly
+      ? `${normalized}T00:00:00+05:30`
+      : `${normalized}+05:30`;
+
+  const date = new Date(parseValue);
 
   if (Number.isNaN(date.getTime())) {
     return null;
