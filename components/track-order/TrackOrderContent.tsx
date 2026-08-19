@@ -343,41 +343,6 @@ function getDeliveryMethod(mode: string | null) {
   }
 }
 
-function formatWeight(value: number | null) {
-  if (
-    value === null ||
-    !Number.isFinite(value) ||
-    value <= 0
-  ) {
-    return "Not available";
-  }
-
-  if (value >= 1000) {
-    return `${(value / 1000).toLocaleString(
-      "en-IN",
-      {
-        maximumFractionDigits: 2,
-      },
-    )} kg`;
-  }
-
-  return `${value.toLocaleString("en-IN")} g`;
-}
-
-function formatDimension(value: number | null) {
-  if (
-    value === null ||
-    !Number.isFinite(value) ||
-    value <= 0
-  ) {
-    return "â€”";
-  }
-
-  return value.toLocaleString("en-IN", {
-    maximumFractionDigits: 2,
-  });
-}
-
 function maskOrderId(value: string) {
   if (value.length <= 12) {
     return value;
@@ -1394,7 +1359,7 @@ export default function TrackOrderContent() {
                   </Card>
                 </div>
 
-                <div className="grid gap-8 lg:grid-cols-2">
+                <div className="grid gap-8">
                   <Card padding="lg" className="shadow-lg">
                     <div className="flex items-center gap-3">
                       <ShoppingBag
@@ -1477,51 +1442,6 @@ export default function TrackOrderContent() {
                     </div>
                   </Card>
 
-                  <Card padding="lg" className="shadow-lg">
-                    <div className="flex items-center gap-3">
-                      <Package
-                        size={24}
-                        className="text-[#C89B3C]"
-                        aria-hidden="true"
-                      />
-                      <h2 className="text-2xl font-bold text-[#6D2E00]">
-                        Package Information
-                      </h2>
-                    </div>
-
-                    {shipping.package ? (
-                      <div className="mt-7 space-y-5">
-                        <InfoRow
-                          label="Package"
-                          value={shipping.package.name}
-                        />
-                        <InfoRow
-                          label="Packed Weight"
-                          value={formatWeight(
-                            shipping.package
-                              .packedWeightGrams,
-                          )}
-                        />
-                        <InfoRow
-                          label="Dimensions"
-                          value={`${formatDimension(
-                            shipping.package.dimensions
-                              .lengthCm,
-                          )} Ã— ${formatDimension(
-                            shipping.package.dimensions
-                              .breadthCm,
-                          )} Ã— ${formatDimension(
-                            shipping.package.dimensions
-                              .heightCm,
-                          )} cm`}
-                        />
-                      </div>
-                    ) : (
-                      <p className="mt-7 leading-7 text-gray-600">
-                        Package information is not available yet.
-                      </p>
-                    )}
-                  </Card>
                 </div>
 
                 <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
