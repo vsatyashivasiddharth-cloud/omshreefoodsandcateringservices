@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -87,6 +88,15 @@ export type ShippingQuoteState =
       status: "error";
       message: string;
     };
+
+export interface AppliedCoupon {
+  code: string;
+  discountPercent: number;
+
+  subtotalAmount: number;
+  productDiscountAmount: number;
+  discountedSubtotalAmount: number;
+}
 
 interface QuoteErrorResponse {
   error?: string;
@@ -222,6 +232,41 @@ export default function CheckoutContent() {
   const [pincode, setPincode] =
     useState("");
 
+  const [phone, setPhone] =
+    useState("");
+
+  const [
+    appliedCoupon,
+    setAppliedCoupon,
+  ] = useState<AppliedCoupon | null>(
+    null,
+  );
+
+  const [
+    appliedCouponContextKey,
+    setAppliedCouponContextKey,
+  ] = useState<string | null>(null);
+
+  const [
+    websiteOrderCreated,
+    setWebsiteOrderCreated,
+  ] = useState(false);
+
+  const [
+    lockedCoupon,
+    setLockedCoupon,
+  ] = useState<AppliedCoupon | null>(
+    null,
+  );
+
+  const [
+    couponValidationPending,
+    setCouponValidationPending,
+  ] = useState(false);
+
+  const websiteOrderCreatedRef =
+    useRef(false);
+
   const [
     shippingQuoteState,
     setShippingQuoteState,
@@ -246,6 +291,104 @@ export default function CheckoutContent() {
       })),
     [cart],
   );
+
+  const couponContextKey =
+    useMemo(
+      () =>
+        JSON.stringify({
+          phone,
+          items: quoteItems,
+        }),
+      [
+        phone,
+        quoteItems,
+      ],
+    );
+
+  const couponContextKeyRef =
+    useRef(couponContextKey);
+
+  useEffect(() => {
+    couponContextKeyRef.current =
+      couponContextKey;
+  }, [couponContextKey]);
+
+  const displayedAppliedCoupon =
+    websiteOrderCreated
+      ? lockedCoupon
+      : appliedCouponContextKey ===
+          couponContextKey
+        ? appliedCoupon
+        : null;
+
+  useEffect(() => {
+    if (
+      websiteOrderCreated ||
+      !appliedCoupon ||
+      appliedCouponContextKey ===
+        couponContextKey
+    ) {
+      return;
+    }
+
+    setAppliedCoupon(null);
+    setAppliedCouponContextKey(
+      null,
+    );
+  }, [
+    appliedCoupon,
+    appliedCouponContextKey,
+    couponContextKey,
+    websiteOrderCreated,
+  ]);
+
+  function handleCouponApplied(
+    coupon: AppliedCoupon,
+    validationContextKey: string,
+  ) {
+    if (
+      websiteOrderCreatedRef.current ||
+      validationContextKey !==
+        couponContextKeyRef.current
+    ) {
+      return;
+    }
+
+    setAppliedCoupon(coupon);
+    setAppliedCouponContextKey(
+      validationContextKey,
+    );
+  }
+
+  function handleCouponRemoved() {
+    if (websiteOrderCreatedRef.current) {
+      return;
+    }
+
+    setAppliedCoupon(null);
+    setAppliedCouponContextKey(
+      null,
+    );
+  }
+
+  function handleWebsiteOrderCreated(
+    created: boolean,
+  ) {
+    websiteOrderCreatedRef.current =
+      created;
+
+    if (created) {
+      setLockedCoupon(
+        displayedAppliedCoupon,
+      );
+    } else {
+      setLockedCoupon(null);
+    }
+
+    setWebsiteOrderCreated(
+      created,
+    );
+  }
 
   useEffect(() => {
     if (
@@ -492,6 +635,20 @@ export default function CheckoutContent() {
             onPincodeChange={
               setPincode
             }
+            onPhoneChange={
+              setPhone
+            }
+            onWebsiteOrderCreated={
+              handleWebsiteOrderCreated
+            }
+            couponCode={
+              displayedAppliedCoupon
+                ?.code ??
+              null
+            }
+            couponValidationPending={
+              couponValidationPending
+            }
             shippingQuoteState={
               displayedShippingQuoteState
             }
@@ -503,6 +660,25 @@ export default function CheckoutContent() {
           className="xl:sticky xl:top-28 xl:self-start"
         >
           <OrderSummary
+            phone={phone}
+            appliedCoupon={
+              displayedAppliedCoupon
+            }
+            couponLocked={
+              websiteOrderCreated
+            }
+            couponContextKey={
+              couponContextKey
+            }
+            onCouponApplied={
+              handleCouponApplied
+            }
+            onCouponRemoved={
+              handleCouponRemoved
+            }
+            onCouponValidationChange={
+              setCouponValidationPending
+            }
             shippingQuoteState={
               displayedShippingQuoteState
             }

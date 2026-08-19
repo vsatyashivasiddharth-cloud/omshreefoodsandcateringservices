@@ -32,6 +32,18 @@ interface CheckoutFormProps {
     pincode: string,
   ) => void;
 
+  onPhoneChange: (
+    phone: string,
+  ) => void;
+
+  onWebsiteOrderCreated: (
+    created: boolean,
+  ) => void;
+
+  couponCode: string | null;
+
+  couponValidationPending: boolean;
+
   shippingQuoteState: ShippingQuoteState;
 }
 
@@ -456,6 +468,10 @@ function loadRazorpayScript() {
 
 export default function CheckoutForm({
   onPincodeChange,
+  onPhoneChange,
+  onWebsiteOrderCreated,
+  couponCode,
+  couponValidationPending,
   shippingQuoteState,
 }: CheckoutFormProps) {
   const router = useRouter();
@@ -496,6 +512,8 @@ export default function CheckoutForm({
     if (name === "phone") {
       nextValue =
         normalizePhone(value);
+
+      onPhoneChange(nextValue);
     }
 
     if (name === "pincode") {
@@ -516,6 +534,10 @@ export default function CheckoutForm({
     | null {
     if (cart.length === 0) {
       return "Your cart is empty.";
+    }
+
+    if (couponValidationPending) {
+      return "Please wait while your coupon is being validated.";
     }
 
     if (
@@ -672,6 +694,12 @@ export default function CheckoutForm({
           paymentMode:
             "Prepaid",
 
+          ...(couponCode
+            ? {
+                couponCode,
+              }
+            : {}),
+
           items: cart.map(
             (item) => ({
               productId: item.id,
@@ -718,6 +746,8 @@ export default function CheckoutForm({
 
     websiteOrderRef.current =
       orderAccess;
+
+    onWebsiteOrderCreated(true);
 
     return orderAccess;
   }
