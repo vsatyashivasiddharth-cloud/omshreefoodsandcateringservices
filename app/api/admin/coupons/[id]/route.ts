@@ -662,13 +662,25 @@ export async function DELETE(
     if (
       error instanceof
         Prisma
-          .PrismaClientKnownRequestError &&
-      error.code === "P2025"
+          .PrismaClientKnownRequestError
     ) {
-      return errorResponse(
-        "Coupon not found.",
-        404,
-      );
+      if (
+        error.code === "P2025"
+      ) {
+        return errorResponse(
+          "Coupon not found.",
+          404,
+        );
+      }
+
+      if (
+        error.code === "P2003"
+      ) {
+        return errorResponse(
+          "This coupon has usage history and cannot be deleted. Disable it instead.",
+          409,
+        );
+      }
     }
 
     return errorResponse(
