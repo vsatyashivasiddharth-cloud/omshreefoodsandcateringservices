@@ -1225,19 +1225,7 @@ export default function TrackOrderContent() {
                       </StatusNotice>
                     )}
 
-                  <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                    <SummaryCard
-                      icon={
-                        <Package
-                          size={21}
-                          aria-hidden="true"
-                        />
-                      }
-                      label="Order Status"
-                      value={formatStatus(
-                        selectedOrder.status,
-                      )}
-                    />
+                  <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                     <SummaryCard
                       icon={
                         <Truck
